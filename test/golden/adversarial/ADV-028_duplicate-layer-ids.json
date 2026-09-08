@@ -1,0 +1,1 @@
+{"contract":"ATLAS-LAYER-001","expected":{"rejection":{"category":"DUPLICATE_IDENTITY","mandatory":true}},"fixture_version":1,"id":"ADV-028","inputs":{"stack":["dup","dup"]},"notes":"PROVISIONAL stack rule (identity integrity): duplicate ids break referenceability (§4).","status":"PROPOSED","tolerance":null,"trace":"ATLAS-LAYER-001; AtlasLayerStack.validate"}

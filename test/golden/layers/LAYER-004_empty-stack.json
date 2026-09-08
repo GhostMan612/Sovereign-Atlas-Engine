@@ -1,0 +1,1 @@
+{"contract":"ATLAS-MAP-ORDER-001","expected":{"conforms":true,"valid":true,"visible_count":0},"fixture_version":1,"id":"LAYER-004","inputs":{"states":[]},"notes":"Empty stack is VALID (fail-secure boot: graticule-only map still starts).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-MAP-ORDER-001; offline invariant"}

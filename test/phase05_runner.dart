@@ -273,9 +273,179 @@ AtlasLayerDefinition _testDef(
   isPrivate: isPrivate,
 );
 
+AtlasLayerCategory? _category(String? name) => name == null
+    ? null
+    : AtlasLayerCategory.values.firstWhere((v) => v.name == name);
+
+Set<AtlasLayerCapability> _caps(List<dynamic> names) => {
+  for (final n in names.cast<String>())
+    AtlasLayerCapability.values.firstWhere((v) => v.name == n),
+};
+
 void _layers(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'LAYER-001') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final defs = [
+      for (final l in (inputs['layers'] as List).cast<Map<String, dynamic>>())
+        AtlasLayerDefinition(
+          id: AtlasId(l['id'] as String),
+          kind: AtlasLayerKind.raster,
+          providerId: l['provider'] as String,
+          datasetId: l['dataset'] as String,
+          title: l['title'] as String,
+        ),
+    ];
+    final stack = AtlasLayerStack([
+      for (final d in defs) AtlasLayerState(definition: d),
+    ]);
+    final ok =
+        defs[0].id != defs[1].id &&
+        defs[0] != defs[1] &&
+        stack.validate().isValid == (expected['stack_valid'] as bool);
+    _record(
+      id,
+      ok && (expected['distinct_ids'] as bool) ? Verdict.pass : Verdict.fail,
+      'same title, distinct ids; triple identity opaque',
+    );
+    return;
+  }
+  if (id == 'LAYER-002') {
+    final names = AtlasLayerCategory.values.map((v) => v.name).toSet();
+    final want = (expected['values'] as List).cast<String>().toSet();
+    final roundTrips = want.every((n) => _category(n) != null);
+    const unclassified = AtlasLayerDefinition(
+      id: AtlasId('x'),
+      kind: AtlasLayerKind.raster,
+      providerId: 'p',
+    );
+    final ok =
+        names.containsAll(want) &&
+        want.containsAll(names) &&
+        roundTrips &&
+        unclassified.category == null;
+    _record(
+      id,
+      ok && (expected['unclassified_valid'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'PROVISIONAL taxonomy; categories=$names',
+    );
+    return;
+  }
+  if (id == 'LAYER-003') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final def = AtlasLayerDefinition(
+      id: const AtlasId('c'),
+      kind: AtlasLayerKind.vector,
+      providerId: 'p',
+      capabilities: _caps(inputs['capabilities'] as List),
+    );
+    const bare = AtlasLayerDefinition(
+      id: AtlasId('b'),
+      kind: AtlasLayerKind.vector,
+      providerId: 'p',
+    );
+    final want = (expected['advertised'] as List).cast<String>().toSet();
+    final ok =
+        def.capabilities.map((v) => v.name).toSet().containsAll(want) &&
+        bare.capabilities.isEmpty == (expected['default_empty'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'PROVISIONAL flags; advertised-only, implements nothing',
+    );
+    return;
+  }
+  if (id == 'LAYER-004') {
+    const stack = AtlasLayerStack([]);
+    final ok =
+        stack.validate().isValid &&
+        stack.orderedVisible().isEmpty &&
+        stack.conformsToBaseline(AtlasBaselineRanks.rankOf);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'empty stack valid');
+    return;
+  }
+  if (id == 'LAYER-005') {
+    const start = AtlasLayerState(
+      definition: AtlasLayerDefinition(
+        id: AtlasId('s'),
+        kind: AtlasLayerKind.raster,
+        providerId: 'p',
+      ),
+    );
+    final flipped = start.toggled();
+    final dimmed = start.withOpacity(0.5);
+    final copied = start.copyWith(visible: false);
+    var threw = false;
+    try {
+      start.withOpacity(2.0);
+    } on AtlasRejectionException catch (e) {
+      threw = e.rejection.category == 'INVALID_LAYER_STATE';
+    }
+    final ok =
+        flipped.visible == false &&
+        dimmed.opacity == _num(expected['withOpacity_0_5']) &&
+        (copied.visible == false) ==
+            (expected['copyWith_visible_false'] as bool) &&
+        threw;
+    _record(
+      id,
+      ok && (expected['toggled_flips'] as bool) ? Verdict.pass : Verdict.fail,
+      'PROVISIONAL transitions; no clamping',
+    );
+    return;
+  }
+  if (id == 'LAYER-006') {
+    AtlasLayerDefinition def(String layerId, String title) =>
+        AtlasLayerDefinition(
+          id: AtlasId(layerId),
+          kind: AtlasLayerKind.raster,
+          providerId: 'p',
+          title: title,
+        );
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final a = def(
+      (inputs['a'] as Map<String, dynamic>)['id'] as String,
+      (inputs['a'] as Map<String, dynamic>)['title'] as String,
+    );
+    final b = def(
+      (inputs['b'] as Map<String, dynamic>)['id'] as String,
+      (inputs['b'] as Map<String, dynamic>)['title'] as String,
+    );
+    final c = def(
+      (inputs['c'] as Map<String, dynamic>)['id'] as String,
+      (inputs['c'] as Map<String, dynamic>)['title'] as String,
+    );
+    final ok =
+        (a == b) == (expected['different_title_still_equal'] as bool) &&
+        (a != c) == (expected['different_id_not_equal'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'title excluded from definition equality',
+    );
+    return;
+  }
+  if (id == 'LAYER-007') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final ids = (inputs['stack'] as List).cast<String>();
+    final stack = AtlasLayerStack([
+      for (final layerId in ids) AtlasLayerState(definition: _testDef(layerId)),
+    ]);
+    final got = stack
+        .orderedVisible()
+        .map((s) => s.definition.id.value)
+        .toList();
+    final want = (expected['order_preserved'] as List).cast<String>();
+    final ok =
+        got.join(',') == want.join(',') &&
+        stack.conformsToBaseline(AtlasBaselineRanks.rankOf) ==
+            (expected['conforms'] as bool);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'tie=insertion order');
+    return;
+  }
   if (id == 'ORDER-001') {
     final stack = AtlasLayerStack([
       for (final rank in AtlasBaselineRanks.ranks)
@@ -917,6 +1087,37 @@ void _adversarial(Map<String, dynamic> f) {
         !polygonCheck.isValid ? Verdict.pass : Verdict.fail,
         'rejection=${polygonCheck.rejection?.category}',
       );
+    case 'ADV-028':
+      final dupStack = AtlasLayerStack([
+        AtlasLayerState(definition: _testDef('dup')),
+        AtlasLayerState(definition: _testDef('dup')),
+      ]);
+      final dupCheck = dupStack.validate();
+      _record(
+        id,
+        !dupCheck.isValid ? Verdict.pass : Verdict.fail,
+        'PROVISIONAL rule; rejection=${dupCheck.rejection?.category}',
+      );
+    case 'ADV-029':
+      const opacityState = AtlasLayerState(
+        definition: AtlasLayerDefinition(
+          id: AtlasId('o'),
+          kind: AtlasLayerKind.raster,
+          providerId: 'p',
+        ),
+      );
+      try {
+        opacityState.withOpacity(-0.5);
+        _record(id, Verdict.fail, 'clamped or accepted without rejection');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'INVALID_LAYER_STATE'
+              ? Verdict.pass
+              : Verdict.fail,
+          'category=${e.rejection.category}',
+        );
+      }
     default:
       _record(
         id,

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-LAYER-001","expected":{"rejection":{"category":"INVALID_LAYER_STATE","mandatory":true}},"fixture_version":1,"id":"ADV-029","inputs":{"opacity":-0.5,"op":"withOpacity"},"notes":"Opacity outside [0,1] throws; clamping prohibited (no silent coercion).","status":"PROPOSED","tolerance":null,"trace":"ATLAS-LAYER-001; AtlasLayerState.withOpacity"}
