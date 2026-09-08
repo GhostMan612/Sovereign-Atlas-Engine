@@ -8,6 +8,8 @@
 // - Bearing convention 0° = true north, clockwise, [0, 360): PROPOSED.
 // - Coincident-point bearing: THROWS AtlasRejectionException(COINCIDENT_POINTS)
 //   as an explicit provisional until the contract decides (BRG-004 BLOCKED).
+//   Status: PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 3d/4; no fake 0°). Ownership:
+//   ATLAS-GEO-BRG-001 contract area; BRG-004 remains the open item (no new DEC).
 // Phase 0.5 slice. Depends on atlas_core (rejection) and dart:math only.
 
 import 'dart:math' as math;
@@ -36,8 +38,10 @@ abstract final class AtlasGeoMath {
   }
 
   /// Initial bearing in [0, 360). Throws [AtlasRejectionException]
-  /// (`COINCIDENT_POINTS`) for identical points — provisional behavior, the
-  /// contract shape is DECISION REQUIRED (BRG-004) and no silent 0 is returned.
+  /// (`COINCIDENT_POINTS`) for identical points.
+  ///
+  /// PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 4). BRG-004 stays BLOCKED;
+  /// no silent 0 is returned and no contract is settled by this throw.
   static double initialBearingDeg(AtlasCoordinate from, AtlasCoordinate to) {
     if (from.latitude == to.latitude &&
         from.longitude == to.longitude) {

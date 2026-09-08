@@ -55,7 +55,12 @@ abstract final class AtlasRangeRings {
   static const int ringsPerStep = 4;
   static const int verticesPerRing = 65;
 
-  /// Ring fractions of the step radius, inner → outer (PROPOSED layout).
+  /// Ring fractions of the step radius, inner → outer.
+  ///
+  /// PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 3c). Ownership:
+  /// ATLAS-GEO-RING-001 contract text (PROPOSED measurement-construction
+  /// sub-detail; no DEC assigned). RING-001 checks table/counts/radii-within-1%,
+  /// never exact vertices, so this layout is not enshrined by tests.
   static const List<double> ringFractions = [0.25, 0.5, 0.75, 1.0];
 
   static const double metersPerDegreeLatitude = 110540.0;

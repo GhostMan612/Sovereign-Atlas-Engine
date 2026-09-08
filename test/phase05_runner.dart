@@ -612,7 +612,7 @@ void _adversarial(Map<String, dynamic> f) {
       );
     case 'ADV-016':
       _record(id, Verdict.blocked,
-          'Fixture-contract tension: baseline is not universal law; needs architect ruling.');
+          '0.5A Ruling 2: baseline is not a validity law; flag-not-veto stands, fixture needs contract clarification.');
     case 'ADV-019':
       final v = AtlasCoordinates.validate(0.0, 0.0, crs: 'MARS-2000');
       _record(

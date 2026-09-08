@@ -11,8 +11,10 @@
 // - winding rules, empty-geometry legality beyond collections (ADV-010),
 // - tolerance-based equality (exact == used).
 // Empty feature collections ACCEPT as empty (PROPOSED, ADV-013/GEOM-003).
-// Zero-length flow segments REJECT as INVALID_GEOMETRY (PROPOSED, FLOW-003;
-// disclosed for architect audit).
+// Zero-length flow segments REJECT as INVALID_GEOMETRY.
+// Status: PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 3a). Ownership:
+// DEC-007 (geometry strictness), still open; re-verdict on its closure.
+// (FLOW-003/ADV-022 execute against this provisional.)
 // Phase 0.5 slice. Depends on atlas_core + coordinate.dart only.
 
 import '../../../../atlas_core/lib/atlas_core.dart';
@@ -108,6 +110,10 @@ final class AtlasFlowSegment {
 ///
 /// Returns the surviving members; [skippedIndices] reports positions so the
 /// DEC-006 reporting channel has data to carry once resolved.
+///
+/// Empty input yields empty output. Status: PROVISIONAL — NOT ATLAS-NORMATIVE
+/// (0.5A Ruling 3b). Ownership: DEC-007 ("Empty geometry legal?"), still open
+/// (ADV-013 executes against this provisional).
 final class AtlasCollectionScreening<T> {
   const AtlasCollectionScreening({
     required this.kept,

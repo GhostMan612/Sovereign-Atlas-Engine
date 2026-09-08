@@ -8,7 +8,10 @@ New decisions continue numbering. All below are DECISION REQUIRED; nothing is re
 - **Evidence:** Portable logic isolated in both source families (Phase 0.1/0.2); adapter languages observed (Kotlin SRC-A, Dart SRC-B/C) with no core implication.
 - **Choices:** (a) Dart core; (b) Kotlin core (possibly KMP); (c) Rust core + bindings; (d) TypeScript core; (e) polyglot neutral-core + adapters. See `language-evaluation.md` §3.
 - **Impact:** Workspace, hiring/ramp, GIS/3D ceiling, distribution, fixture-harness language.
-- **Status:** DECISION REQUIRED.
+- **Status:** DECISION REQUIRED — OPEN. Provisional implementation vehicle for the
+  Phase 0.5 slice only: dependency-free pure Dart (see
+  `blueprints/phase-0/phase-0.5A-reconciliation.md` Ruling 1). This vehicle
+  MUST NOT be read as the core-language decision.
 
 ## DEC-015 — Renderer abstraction and per-surface renderers
 

@@ -124,7 +124,8 @@ final class AtlasLayerState {
 ///
 /// Any explicit order is accepted — ordering intent belongs to the composer
 /// (adapter or spec). [conformsToBaseline] checks the canonical F-07 rank
-/// sequence without enforcing it.
+/// sequence without enforcing it: CANONICAL BASELINE ≠ VALIDITY CONSTRAINT
+/// (0.5A Ruling 2; ADV-016 stays BLOCKED pending contract clarification).
 final class AtlasLayerStack {
   const AtlasLayerStack(this.states);
 
