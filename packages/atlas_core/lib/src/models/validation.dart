@@ -13,14 +13,12 @@ import '../errors/rejection.dart';
 /// callers are expected to surface it, never to guess a replacement value.
 final class AtlasValidation {
   /// Successful validation. No information is attached.
-  const AtlasValidation.valid()
-      : isValid = true,
-        rejection = null;
+  const AtlasValidation.valid() : isValid = true, rejection = null;
 
   /// Failed validation. [rejection] explains the category and detail.
   const AtlasValidation.invalid(AtlasRejection rejection)
-      : isValid = false,
-        rejection = rejection;
+    : isValid = false,
+      rejection = rejection;
 
   final bool isValid;
 

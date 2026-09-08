@@ -84,15 +84,15 @@ final class AtlasLayerDefinition {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        kind,
-        providerId,
-        title,
-        minZoom,
-        maxZoom,
-        attribution,
-        isPrivate,
-      );
+    id,
+    kind,
+    providerId,
+    title,
+    minZoom,
+    maxZoom,
+    attribution,
+    isPrivate,
+  );
 }
 
 /// Per-layer runtime state. UI toggles WRITE this state from the adapter side
@@ -152,13 +152,9 @@ final class AtlasLayerStack {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is AtlasLayerStack &&
-          _equalStates(states, other.states);
+      other is AtlasLayerStack && _equalStates(states, other.states);
 
-  static bool _equalStates(
-    List<AtlasLayerState> a,
-    List<AtlasLayerState> b,
-  ) {
+  static bool _equalStates(List<AtlasLayerState> a, List<AtlasLayerState> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;

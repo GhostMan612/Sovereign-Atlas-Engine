@@ -32,7 +32,8 @@ abstract final class AtlasGeoMath {
     final lat2 = _radians(to.latitude);
     final dLat = _radians(to.latitude - from.latitude);
     final dLon = _radians(to.longitude - from.longitude);
-    final h = math.pow(math.sin(dLat / 2), 2) +
+    final h =
+        math.pow(math.sin(dLat / 2), 2) +
         math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLon / 2), 2);
     return 2 * radiusKm * math.asin(math.sqrt(h.toDouble()));
   }
@@ -43,8 +44,7 @@ abstract final class AtlasGeoMath {
   /// PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 4). BRG-004 stays BLOCKED;
   /// no silent 0 is returned and no contract is settled by this throw.
   static double initialBearingDeg(AtlasCoordinate from, AtlasCoordinate to) {
-    if (from.latitude == to.latitude &&
-        from.longitude == to.longitude) {
+    if (from.latitude == to.latitude && from.longitude == to.longitude) {
       throw const AtlasRejectionException(
         AtlasRejection(
           'COINCIDENT_POINTS',
@@ -56,7 +56,8 @@ abstract final class AtlasGeoMath {
     final lat2 = _radians(to.latitude);
     final dLon = _radians(to.longitude - from.longitude);
     final x = math.sin(dLon) * math.cos(lat2);
-    final y = math.cos(lat1) * math.sin(lat2) -
+    final y =
+        math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
     return (math.atan2(x, y) * 180.0 / math.pi + 360.0) % 360.0;
   }

@@ -63,18 +63,12 @@ abstract final class AtlasCoordinates {
   }) {
     if (!latitude.isFinite || !longitude.isFinite) {
       return const AtlasValidation.invalid(
-        AtlasRejection(
-          'NON_FINITE',
-          'Coordinates must be finite numbers.',
-        ),
+        AtlasRejection('NON_FINITE', 'Coordinates must be finite numbers.'),
       );
     }
     if (latitude < -90.0 || latitude > 90.0) {
       return const AtlasValidation.invalid(
-        AtlasRejection(
-          'OUT_OF_RANGE',
-          'Latitude must be within [-90, 90].',
-        ),
+        AtlasRejection('OUT_OF_RANGE', 'Latitude must be within [-90, 90].'),
       );
     }
     if (longitude < -180.0 || longitude > 180.0) {

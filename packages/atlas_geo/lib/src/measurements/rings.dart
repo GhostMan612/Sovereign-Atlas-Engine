@@ -38,11 +38,11 @@ final class AtlasRingSet {
 
   /// Empty set (null center or inactive step).
   static AtlasRingSet empty() => const AtlasRingSet(
-        center: AtlasCoordinate(latitude: 0, longitude: 0),
-        radiusKm: 0,
-        rings: [],
-        spokes: [],
-      );
+    center: AtlasCoordinate(latitude: 0, longitude: 0),
+    radiusKm: 0,
+    rings: [],
+    spokes: [],
+  );
 
   bool get isEmpty => rings.isEmpty && spokes.isEmpty;
 }
@@ -113,12 +113,14 @@ abstract final class AtlasRangeRings {
   ) {
     final radiusM = radiusKm * 1000.0;
     final latRad = center.latitude * math.pi / 180.0;
-    final dLat = radiusM *
+    final dLat =
+        radiusM *
         math.cos(bearingDeg * math.pi / 180.0) /
         metersPerDegreeLatitude;
     final metersPerDegreeLongitude =
         metersPerDegreeLatitude * math.max(math.cos(latRad), 0.01);
-    final dLon = radiusM *
+    final dLon =
+        radiusM *
         math.sin(bearingDeg * math.pi / 180.0) /
         metersPerDegreeLongitude;
     return AtlasCoordinate(

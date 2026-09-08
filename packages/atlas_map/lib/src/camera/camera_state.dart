@@ -42,11 +42,11 @@ final class AtlasCameraState {
   /// Mantle-derived home camera (39.83/-98.58/z3.0, SOURCE-VERIFIED F-03).
   /// Recorded as DATA. Not an Atlas-global default (DEC-008 open).
   factory AtlasCameraState.home() => const AtlasCameraState(
-        center: AtlasCoordinate(latitude: 39.83, longitude: -98.58),
-        zoom: 3.0,
-        bearing: 0.0,
-        pitch: 0.0,
-      );
+    center: AtlasCoordinate(latitude: 39.83, longitude: -98.58),
+    zoom: 3.0,
+    bearing: 0.0,
+    pitch: 0.0,
+  );
 
   final AtlasCoordinate center;
   final double zoom;
@@ -109,6 +109,7 @@ final class AtlasCameraState {
       }
       return value;
     }
+
     final latitude = parsePart(parts[0], 'latitude');
     final longitude = parsePart(parts[1], 'longitude');
     final zoom = parsePart(parts[2], 'zoom');

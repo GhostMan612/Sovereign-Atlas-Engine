@@ -42,9 +42,9 @@ Map<String, dynamic> _load(String path) =>
 double _num(dynamic value) => (value as num).toDouble();
 
 AtlasCoordinate _coord(Map<String, dynamic> m) => AtlasCoordinate(
-      latitude: _num(m['latitude']),
-      longitude: _num(m['longitude']),
-    );
+  latitude: _num(m['latitude']),
+  longitude: _num(m['longitude']),
+);
 
 bool _close(double actual, double expected, double tolerance) =>
     AtlasComparison.withinTolerance(actual, expected, tolerance);
@@ -65,8 +65,10 @@ void _geo(Map<String, dynamic> f) {
     // Boundary-case array: every listed pole position must validate.
     var ok = true;
     for (final c in (inputs['cases'] as List).cast<Map<String, dynamic>>()) {
-      if (!AtlasCoordinates.validate(_num(c['latitude']), _num(c['longitude']))
-          .isValid) {
+      if (!AtlasCoordinates.validate(
+        _num(c['latitude']),
+        _num(c['longitude']),
+      ).isValid) {
         ok = false;
       }
     }
@@ -95,8 +97,8 @@ void _distance(Map<String, dynamic> f) {
   final expected = f['expected'] as Map<String, dynamic>;
   final tolerance =
       ((f['tolerance'] as Map<String, dynamic>?)?['value'] as num?)
-              ?.toDouble() ??
-          0.0;
+          ?.toDouble() ??
+      0.0;
   final dist = AtlasGeoMath.haversineKm(
     _coord(inputs['from'] as Map<String, dynamic>),
     _coord(inputs['to'] as Map<String, dynamic>),
@@ -164,7 +166,8 @@ void _camera(Map<String, dynamic> f) {
   switch (id) {
     case 'CAM-001':
       final home = AtlasCameraState.home();
-      final ok = home.center.latitude == _num(expected['latitude']) &&
+      final ok =
+          home.center.latitude == _num(expected['latitude']) &&
           home.center.longitude == _num(expected['longitude']) &&
           home.zoom == _num(expected['zoom']);
       _record(id, ok ? Verdict.pass : Verdict.fail, home.serialize());
@@ -184,8 +187,9 @@ void _camera(Map<String, dynamic> f) {
         );
         _record(id, Verdict.fail, 'parsed without rejection');
       } on AtlasRejectionException catch (e) {
-        final want = (expected['rejection']
-            as Map<String, dynamic>)['category'] as String;
+        final want =
+            (expected['rejection'] as Map<String, dynamic>)['category']
+                as String;
         _record(
           id,
           e.rejection.category == want ? Verdict.pass : Verdict.fail,
@@ -217,10 +221,10 @@ void _camera(Map<String, dynamic> f) {
       }
       _record(id, ok ? Verdict.pass : Verdict.fail, 'bounds enforced');
     case 'CAM-006':
-      final natives =
-          (expected['provider_natives'] as Map<String, dynamic>).values
-              .map(_num)
-              .toList();
+      final natives = (expected['provider_natives'] as Map<String, dynamic>)
+          .values
+          .map(_num)
+          .toList();
       final distinct = natives.every((n) => n != AtlasCameraState.maxZoom);
       _record(
         id,
@@ -240,14 +244,13 @@ AtlasLayerDefinition _testDef(
   String id, {
   String attribution = '',
   bool isPrivate = false,
-}) =>
-    AtlasLayerDefinition(
-      id: AtlasId(id),
-      kind: AtlasLayerKind.raster,
-      providerId: 'test-provider',
-      attribution: attribution.isEmpty ? null : attribution,
-      isPrivate: isPrivate,
-    );
+}) => AtlasLayerDefinition(
+  id: AtlasId(id),
+  kind: AtlasLayerKind.raster,
+  providerId: 'test-provider',
+  attribution: attribution.isEmpty ? null : attribution,
+  isPrivate: isPrivate,
+);
 
 void _layers(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -257,9 +260,12 @@ void _layers(Map<String, dynamic> f) {
       for (final rank in AtlasBaselineRanks.ranks)
         AtlasLayerState(definition: _testDef(rank)),
     ]);
-    final ordered =
-        stack.orderedVisible().map((s) => s.definition.id.value).toList();
-    final want = (expected['order_significant'] as bool) &&
+    final ordered = stack
+        .orderedVisible()
+        .map((s) => s.definition.id.value)
+        .toList();
+    final want =
+        (expected['order_significant'] as bool) &&
         ordered.join(',') == AtlasBaselineRanks.ranks.join(',');
     _record(
       id,
@@ -275,28 +281,34 @@ void _layers(Map<String, dynamic> f) {
     // graticule compose the ordered core list (test-side composition policy
     // mirrors the fail-secure boot rule). Rank vocabulary comes from the
     // fixture's toggle_to_rank map (aligned to the ORDER-001 baseline).
-    final mapping = ((f['inputs'] as Map<String, dynamic>)['toggle_to_rank']
-            as Map)
-        .cast<String, String>();
+    final mapping =
+        ((f['inputs'] as Map<String, dynamic>)['toggle_to_rank'] as Map)
+            .cast<String, String>();
     final toggles =
         ((f['inputs'] as Map<String, dynamic>)['adapter_toggles'] as List)
             .cast<String>();
-    final orderedIds = <String>[
-      'offline-graticule',
-      for (final t in toggles) mapping[t]!,
-    ]..sort((a, b) => AtlasBaselineRanks.rankOf(a)!
-        .compareTo(AtlasBaselineRanks.rankOf(b)!));
+    final orderedIds =
+        <String>['offline-graticule', for (final t in toggles) mapping[t]!]
+          ..sort(
+            (a, b) =>
+                AtlasBaselineRanks.rankOf(a)!
+                    .compareTo(AtlasBaselineRanks.rankOf(b)!),
+          );
     final stack = AtlasLayerStack([
       for (final layerId in orderedIds)
         AtlasLayerState(definition: _testDef(layerId)),
     ]);
-    final got =
-        stack.orderedVisible().map((s) => s.definition.id.value).toList();
-    final want =
-        (expected['ordered_core_list'] as List).cast<String>().join(',');
+    final got = stack
+        .orderedVisible()
+        .map((s) => s.definition.id.value)
+        .toList();
+    final want = (expected['ordered_core_list'] as List).cast<String>().join(
+      ',',
+    );
     _record(
       id,
-      got.join(',') == want && stack.conformsToBaseline(AtlasBaselineRanks.rankOf)
+      got.join(',') == want &&
+              stack.conformsToBaseline(AtlasBaselineRanks.rankOf)
           ? Verdict.pass
           : Verdict.fail,
       'got=$got want=$want widgets_fixtured=${expected['toggle_widgets_fixtured']}',
@@ -305,18 +317,10 @@ void _layers(Map<String, dynamic> f) {
   }
   if (id == 'ATTR-001') {
     final stack = AtlasLayerStack([
-      AtlasLayerState(
-        definition: _testDef('esri-sat', attribution: 'Esri'),
-      ),
-      AtlasLayerState(
-        definition: _testDef('otm', attribution: 'OTM'),
-      ),
-      AtlasLayerState(
-        definition: _testDef('usgs', attribution: 'USGS'),
-      ),
-      AtlasLayerState(
-        definition: _testDef('imagery', isPrivate: true),
-      ),
+      AtlasLayerState(definition: _testDef('esri-sat', attribution: 'Esri')),
+      AtlasLayerState(definition: _testDef('otm', attribution: 'OTM')),
+      AtlasLayerState(definition: _testDef('usgs', attribution: 'USGS')),
+      AtlasLayerState(definition: _testDef('imagery', isPrivate: true)),
     ]);
     final got = AtlasAttribution.forVisible(stack);
     final ok = got.containsAll(['Esri', 'OTM', 'USGS']) && got.length == 3;
@@ -325,12 +329,8 @@ void _layers(Map<String, dynamic> f) {
   }
   if (id == 'ATTR-002') {
     final stack = AtlasLayerStack([
-      AtlasLayerState(
-        definition: _testDef('esri-dark', attribution: 'Esri'),
-      ),
-      AtlasLayerState(
-        definition: _testDef('otm', attribution: 'OTM'),
-      ),
+      AtlasLayerState(definition: _testDef('esri-dark', attribution: 'Esri')),
+      AtlasLayerState(definition: _testDef('otm', attribution: 'OTM')),
     ]);
     final got = AtlasAttribution.forVisible(stack);
     _record(
@@ -340,8 +340,11 @@ void _layers(Map<String, dynamic> f) {
     );
     return;
   }
-  _record(id, Verdict.notApplicable,
-      'ATLAS-PROV-DESC-001 descriptors belong to atlas_provider_api scope.');
+  _record(
+    id,
+    Verdict.notApplicable,
+    'ATLAS-PROV-DESC-001 descriptors belong to atlas_provider_api scope.',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -349,9 +352,9 @@ void _layers(Map<String, dynamic> f) {
 // ---------------------------------------------------------------------------
 
 List<AtlasCoordinate> _ring(List<dynamic> pts) => [
-      for (final p in pts.cast<List>())
-        AtlasCoordinate(latitude: _num(p[1]), longitude: _num(p[0])),
-    ];
+  for (final p in pts.cast<List>())
+    AtlasCoordinate(latitude: _num(p[1]), longitude: _num(p[0])),
+];
 
 void _geometry(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -389,12 +392,13 @@ void _geometry(Map<String, dynamic> f) {
       [-93.3, 44.9],
       [-93.2, 44.9],
     ]);
-    final result = AtlasCollectionScreening.screen<List<AtlasCoordinate>>(
-      [good, bad, good],
-      (m) => AtlasRings.validateRing(m).isValid,
-    );
-    final ok = result.kept.length == 2 &&
-        result.skippedIndices.join(',') == '1';
+    final result = AtlasCollectionScreening.screen<List<AtlasCoordinate>>([
+      good,
+      bad,
+      good,
+    ], (m) => AtlasRings.validateRing(m).isValid);
+    final ok =
+        result.kept.length == 2 && result.skippedIndices.join(',') == '1';
     _record(
       id,
       ok && (expected['member_rejected'] as bool) ? Verdict.pass : Verdict.fail,
@@ -407,8 +411,11 @@ void _geometry(Map<String, dynamic> f) {
 void _parcels(Map<String, dynamic> f) {
   final id = f['id'] as String;
   if (id == 'PAIRED-001') {
-    _record(id, Verdict.notApplicable,
-        'Authority precedence needs the atlas_data provenance model (reserved).');
+    _record(
+      id,
+      Verdict.notApplicable,
+      'Authority precedence needs the atlas_data provenance model (reserved).',
+    );
     return;
   }
   // PARCEL-002: two-vertex ring rejects.
@@ -428,8 +435,11 @@ void _migration(Map<String, dynamic> f) {
   if (id == 'FLOW-002') {
     // Null endpoints are unrepresentable in the non-nullable segment type:
     // malformed input cannot become a valid segment by construction.
-    _record(id, Verdict.pass,
-        'mechanism=non-nullable-type-guarantee (null unrepresentable)');
+    _record(
+      id,
+      Verdict.pass,
+      'mechanism=non-nullable-type-guarantee (null unrepresentable)',
+    );
     return;
   }
   if (id == 'FLOW-003') {
@@ -466,7 +476,8 @@ void _tactical(Map<String, dynamic> f) {
   final id = f['id'] as String;
   if (id == 'RING-001') {
     final expected = f['expected'] as Map<String, dynamic>;
-    final tableOk = AtlasRangeRings.steps.join(',') ==
+    final tableOk =
+        AtlasRangeRings.steps.join(',') ==
         ((expected['steps'] as List).map((v) => _num(v))).join(',');
     var ok = tableOk && AtlasRangeRings.ringsPerStep == 4;
     for (var i = 0; i < AtlasRangeRings.steps.length && ok; i++) {
@@ -487,7 +498,11 @@ void _tactical(Map<String, dynamic> f) {
         // not exact-vertex comparison — RING-001 tolerance model).
         final outer = set.rings[3][0];
         final d = AtlasGeoMath.haversineKm(set.center, outer);
-        if (!_close(d, AtlasRangeRings.steps[i], 0.01 * AtlasRangeRings.steps[i])) {
+        if (!_close(
+          d,
+          AtlasRangeRings.steps[i],
+          0.01 * AtlasRangeRings.steps[i],
+        )) {
           ok = false;
           break;
         }
@@ -502,8 +517,11 @@ void _tactical(Map<String, dynamic> f) {
     return;
   }
   if (id.startsWith('PIN-')) {
-    _record(id, Verdict.notApplicable,
-        'Pin codec/state belongs to atlas_tactical (reserved).');
+    _record(
+      id,
+      Verdict.notApplicable,
+      'Pin codec/state belongs to atlas_tactical (reserved).',
+    );
     return;
   }
   // MGRS-001
@@ -558,9 +576,7 @@ void _adversarial(Map<String, dynamic> f) {
           : AtlasCoordinates.validate(probe.latitude, double.infinity);
       _record(
         id,
-        !evil.isValid &&
-                evil.rejection?.category ==
-                    expected['category']
+        !evil.isValid && evil.rejection?.category == expected['category']
             ? Verdict.pass
             : Verdict.fail,
         'category=${evil.rejection?.category}',
@@ -611,8 +627,11 @@ void _adversarial(Map<String, dynamic> f) {
         'PROPOSED empty-accept executed',
       );
     case 'ADV-016':
-      _record(id, Verdict.blocked,
-          '0.5A Ruling 2: baseline is not a validity law; flag-not-veto stands, fixture needs contract clarification.');
+      _record(
+        id,
+        Verdict.blocked,
+        '0.5A Ruling 2: baseline is not a validity law; flag-not-veto stands, fixture needs contract clarification.',
+      );
     case 'ADV-019':
       final v = AtlasCoordinates.validate(0.0, 0.0, crs: 'MARS-2000');
       _record(
@@ -643,8 +662,11 @@ void _adversarial(Map<String, dynamic> f) {
         'PROPOSED zero-length rejection executed',
       );
     default:
-      _record(id, Verdict.notApplicable,
-          'Needs reserved package (tiles/cache/provenance/authority).');
+      _record(
+        id,
+        Verdict.notApplicable,
+        'Needs reserved package (tiles/cache/provenance/authority).',
+      );
   }
 }
 
@@ -655,15 +677,18 @@ void _adversarial(Map<String, dynamic> f) {
 void main() {
   final root = Directory('test/golden');
   if (!root.existsSync()) {
-    stderr.writeln('Run from the repository root: dart test/phase05_runner.dart');
+    stderr.writeln(
+      'Run from the repository root: dart test/phase05_runner.dart',
+    );
     exit(2);
   }
-  final files = root
-      .listSync(recursive: true)
-      .whereType<File>()
-      .where((f) => f.path.endsWith('.json'))
-      .toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
+  final files =
+      root
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.json'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
 
   const naDirs = {
     'tiles',
@@ -686,8 +711,7 @@ void main() {
       continue;
     }
     try {
-      if (dir == 'parcels' &&
-          (fixture['id'] as String) == 'PAIRED-001') {
+      if (dir == 'parcels' && (fixture['id'] as String) == 'PAIRED-001') {
         _parcels(fixture);
       } else if (naDirs.contains(dir)) {
         _record(
@@ -718,8 +742,11 @@ void main() {
           case 'adversarial':
             _adversarial(fixture);
           default:
-            _record(fixture['id'] as String, Verdict.fail,
-                'unknown fixture dir: $dir');
+            _record(
+              fixture['id'] as String,
+              Verdict.fail,
+              'unknown fixture dir: $dir',
+            );
         }
       }
     } catch (e) {
@@ -744,7 +771,8 @@ void main() {
   final na = _outcomes.where((o) => o.verdict == Verdict.notApplicable).length;
   stdout.writeln('---');
   stdout.writeln(
-      'SUMMARY total=${_outcomes.length} pass=$pass fail=$fail blocked=$blocked notApplicable=$na');
+    'SUMMARY total=${_outcomes.length} pass=$pass fail=$fail blocked=$blocked notApplicable=$na',
+  );
   if (fail > 0) {
     stdout.writeln('FAILURES:');
     for (final o in _outcomes.where((o) => o.verdict == Verdict.fail)) {

@@ -41,7 +41,10 @@ final class AtlasMapState {
           ),
         );
       }
-      for (final bound in [state.definition.minZoom, state.definition.maxZoom]) {
+      for (final bound in [
+        state.definition.minZoom,
+        state.definition.maxZoom,
+      ]) {
         if (bound != null && !bound.isFinite) {
           return const AtlasValidation.invalid(
             AtlasRejection(

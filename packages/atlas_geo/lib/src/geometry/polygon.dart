@@ -35,8 +35,7 @@ abstract final class AtlasRings {
       );
     }
     for (final point in ring) {
-      final member =
-          AtlasCoordinates.validate(point.latitude, point.longitude);
+      final member = AtlasCoordinates.validate(point.latitude, point.longitude);
       if (!member.isValid) return member;
     }
     if (ring.first != ring.last) {
@@ -61,8 +60,7 @@ abstract final class AtlasRings {
       );
     }
     for (final point in path) {
-      final member =
-          AtlasCoordinates.validate(point.latitude, point.longitude);
+      final member = AtlasCoordinates.validate(point.latitude, point.longitude);
       if (!member.isValid) return member;
     }
     return const AtlasValidation.valid();
@@ -81,8 +79,7 @@ final class AtlasFlowSegment {
   final AtlasCoordinate to;
 
   AtlasValidation validate() {
-    final fromCheck =
-        AtlasCoordinates.validate(from.latitude, from.longitude);
+    final fromCheck = AtlasCoordinates.validate(from.latitude, from.longitude);
     if (!fromCheck.isValid) return fromCheck;
     final toCheck = AtlasCoordinates.validate(to.latitude, to.longitude);
     if (!toCheck.isValid) return toCheck;
