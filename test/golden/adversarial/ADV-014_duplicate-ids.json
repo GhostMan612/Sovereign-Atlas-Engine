@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"abort_collection":false,"category":"DUPLICATE_IDENTITY","flag_raised":true,"silent_coercion_prohibited":true},"fixture_version":1,"id":"ADV-014","inputs":{"ids":["wp-1","wp-1"]},"notes":"Duplicates flagged; resolution pending DEC-013. Collection survives.","status":"PROPOSED","tolerance":null,"trace":"DEC-013; geometry-contract §5"}

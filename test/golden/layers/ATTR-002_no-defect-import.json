@@ -1,0 +1,1 @@
+{"contract":"ATLAS-ATTR-001","expected":{"esri_attributed":true,"otm_attributed":true,"reproduce_gap":false},"fixture_version":1,"id":"ATTR-002","inputs":{"visible":["esri-dark","opentopomap"]},"notes":"Recovery OSM-only attribution gap (SRC-B :1165-1169) MUST NOT recur.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"CAP-R02 evidence-matrix (attribution gap defect)"}

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-CACHE-001","expected":{"fields":["identity","stored_at","validated","source_version","integrity"]},"fixture_version":1,"id":"CACHE-007","inputs":{"shape":"cache-entry-metadata (PROPOSED)"},"notes":"Metadata shape PROPOSED; enables TTL/eviction later (DEC-009).","status":"PROPOSED","tolerance":null,"trace":"Source: none. Origin: architectural proposal."}

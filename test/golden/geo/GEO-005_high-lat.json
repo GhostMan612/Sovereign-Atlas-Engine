@@ -1,0 +1,1 @@
+{"contract":"ATLAS-COORD-001","expected":{"crs":"WGS84","latitude":70.0,"longitude":0.0,"valid":true},"fixture_version":1,"id":"GEO-005","inputs":{"crs":"WGS84","latitude":70.0,"longitude":0.0},"notes":"High-latitude position validates; polar behavior pending DEC-005.","status":"PROPOSED","tolerance":null,"trace":"Source: none for polar rule. Origin: architectural proposal."}

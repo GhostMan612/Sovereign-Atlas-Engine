@@ -1,0 +1,1 @@
+{"contract":"ATLAS-VALID-001","expected":{"category":"INVALID_COORDINATE","mandatory_reject":true,"normalization_allowed":false,"silent_coercion_prohibited":true},"fixture_version":1,"id":"ADV-002","inputs":{"coordinate":{"longitude":-93.265}},"notes":"Missing latitude must reject.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"coordinate-contract §2"}

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"accept":true,"category":"EMPTY-ACCEPT (PROPOSED)"},"fixture_version":1,"id":"ADV-013","inputs":{"members":[],"type":"FeatureCollection"},"notes":"Empty collection accepts as empty (PROPOSED).","status":"PROPOSED","tolerance":null,"trace":"Source: none. Origin: architectural proposal."}

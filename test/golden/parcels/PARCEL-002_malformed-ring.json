@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"reason":"insufficient-vertices","rejected":true},"fixture_version":1,"id":"PARCEL-002","inputs":{"ring":[[-93.3,44.9],[-93.2,44.9]],"type":"Polygon"},"notes":"Two-vertex ring rejected (matches blueprint skip precedent).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"CAP-026/F-05 SRC-A :2140-2141"}

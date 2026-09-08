@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"category":"INVALID_GEOMETRY","mandatory_reject":true,"silent_coercion_prohibited":true},"fixture_version":1,"id":"ADV-022","inputs":{"from_cell":"cell-A","to_cell":"cell-A"},"notes":"Zero-length flow rejects. Twin of FLOW-003.","status":"PROPOSED","tolerance":null,"trace":"migration catalog (O); FLOW-003"}

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"rejection":{"category":"INVALID_GEOMETRY","mandatory":true}},"fixture_version":1,"id":"FLOW-003","inputs":{"from_cell":"cell-A","to_cell":"cell-A"},"notes":"Zero-length flow rejected (PROPOSED rule; no source instance).","status":"PROPOSED","tolerance":null,"trace":"Source: none. Origin: architectural proposal."}

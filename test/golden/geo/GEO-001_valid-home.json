@@ -1,0 +1,1 @@
+{"contract":"ATLAS-COORD-001","expected":{"crs":"WGS84","latitude":39.83,"longitude":-98.58,"valid":true},"fixture_version":1,"id":"GEO-001","inputs":{"crs":"WGS84","latitude":39.83,"longitude":-98.58},"notes":"Mantle HOME center as DATA. Not an Atlas-global default (DEC-008).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"CAP-002/F-03 SRC-A LandSectorView.kt:307-309"}

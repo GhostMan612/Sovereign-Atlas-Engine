@@ -1,0 +1,1 @@
+{"contract":"ATLAS-PROV-001","expected":{"authority":"UNKNOWN","flag":"INCOMPLETE_PROVENANCE"},"fixture_version":1,"id":"PROV-003","inputs":{"object":"unsourced-feature"},"notes":"Missing source → UNKNOWN, never authoritative (ADV-018).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"provenance-contract §2; ADV-018"}

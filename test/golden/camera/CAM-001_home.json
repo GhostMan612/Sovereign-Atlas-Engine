@@ -1,0 +1,1 @@
+{"contract":"ATLAS-CORE-CAM-001","expected":{"bearing":0.0,"latitude":39.83,"longitude":-98.58,"tilt":0.0,"zoom":3.0},"fixture_version":1,"id":"CAM-001","inputs":{"preset":"HOME"},"notes":"Mantle HOME values as DATA. Not an Atlas-global default (DEC-008).","status":"SOURCE-VERIFIED","tolerance":null,"trace":"CAP-002/F-03 SRC-A LandSectorView.kt:307-309"}

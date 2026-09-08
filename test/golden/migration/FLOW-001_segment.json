@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEOM-001","expected":{"segments":1,"valid":true},"fixture_version":1,"id":"FLOW-001","inputs":{"from_cell":"cell-A (opaque)","to_cell":"cell-B (opaque)"},"notes":"Center-to-center deterministic segment (method SOURCE-VERIFIED; ids opaque).","status":"SOURCE-VERIFIED","tolerance":null,"trace":"CAP-010/F-05 SRC-A :2163-2172"}

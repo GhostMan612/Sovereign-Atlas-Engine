@@ -1,0 +1,1 @@
+{"contract":"ATLAS-COORD-001","expected":{"crs":"WGS84","latitude":0.0,"longitude":0.0,"valid":true},"fixture_version":1,"id":"GEO-002","inputs":{"crs":"WGS84","latitude":0.0,"longitude":0.0},"notes":"Equator/prime-meridian origin must validate.","status":"PROPOSED","tolerance":null,"trace":"Source: none. Origin: architectural proposal."}

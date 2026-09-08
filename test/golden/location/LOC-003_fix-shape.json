@@ -1,0 +1,1 @@
+{"contract":"ATLAS-LOC-002","expected":{"accuracy_m":true,"coordinate":true,"mock_flag":true,"timestamp":true},"fixture_version":1,"id":"LOC-003","inputs":{"shape":"fix-fields"},"notes":"Mock-awareness normative (attendance !isMocked gate SOURCE-VERIFIED). Field shapes PROPOSED.","status":"PROPOSED","tolerance":null,"trace":"CAP-R04/F-11 SRC-B :413/:427"}

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-PROV-001","expected":{"authority":"UNKNOWN","category":"INVALID_PROVENANCE","flag_raised":true,"silent_coercion_prohibited":true},"fixture_version":1,"id":"ADV-018","inputs":{"provenance":{}},"notes":"Missing source → UNKNOWN, never authoritative. Twin of PROV-003.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"provenance-contract §2; PROV-003"}
