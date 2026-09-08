@@ -7,4 +7,7 @@
 export 'src/coordinates/coordinate.dart';
 export 'src/coordinates/distance.dart';
 export 'src/geometry/polygon.dart';
+export 'src/geometry/polygon_types.dart';
+export 'src/geometry/polyline.dart';
 export 'src/measurements/rings.dart';
+export 'src/normalization/angles.dart';

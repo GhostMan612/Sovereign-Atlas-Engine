@@ -15,6 +15,7 @@
 import 'dart:math' as math;
 
 import '../../../../atlas_core/lib/atlas_core.dart';
+import '../normalization/angles.dart';
 import 'coordinate.dart';
 
 /// Deterministic spherical-approximation geodesy.
@@ -59,7 +60,42 @@ abstract final class AtlasGeoMath {
     final y =
         math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-    return (math.atan2(x, y) * 180.0 / math.pi + 360.0) % 360.0;
+    // Bearing-domain normalization (ATLAS-NORMATIVE extraction; identical math
+    // to the Phase 0 inline expression over atan2's (-180, 180] range).
+    return AtlasAngles.normalizeBearingDeg(math.atan2(x, y) * 180.0 / math.pi);
+  }
+
+  /// Destination point from [origin] travelling [distanceKm] on [bearingDeg].
+  ///
+  /// PROVISIONAL — NOT ATLAS-NORMATIVE (contract-owned measurement op, no DEC
+  /// assigned; generalizes the ring generator's helper). Spherical
+  /// approximation consistent with [haversineKm]; longitude wrapped to
+  /// (−180, 180] as pure math output (not validation policy).
+  static AtlasCoordinate destinationPoint(
+    AtlasCoordinate origin,
+    double distanceKm,
+    double bearingDeg, {
+    double radiusKm = referenceRadiusKm,
+  }) {
+    final angular = distanceKm / radiusKm;
+    final bearing =
+        AtlasAngles.normalizeBearingDeg(bearingDeg) * math.pi / 180.0;
+    final lat1 = _radians(origin.latitude);
+    final lon1 = _radians(origin.longitude);
+    final lat2 = math.asin(
+      math.sin(lat1) * math.cos(angular) +
+          math.cos(lat1) * math.sin(angular) * math.cos(bearing),
+    );
+    final lon2 =
+        lon1 +
+        math.atan2(
+          math.sin(bearing) * math.sin(angular) * math.cos(lat1),
+          math.cos(angular) - math.sin(lat1) * math.sin(lat2),
+        );
+    return AtlasCoordinate(
+      latitude: lat2 * 180.0 / math.pi,
+      longitude: AtlasAngles.normalizeSignedDeg(lon2 * 180.0 / math.pi),
+    );
   }
 
   /// Display format `<int> M` below 1 km else `<0.00> KM` (SOURCE-VERIFIED F-02:
