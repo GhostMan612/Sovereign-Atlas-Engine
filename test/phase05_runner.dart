@@ -184,6 +184,101 @@ void _bearing(Map<String, dynamic> f) {
 void _camera(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'TRANSITION-001') {
+    final base = AtlasMapState(
+      camera: AtlasCameraState.home(),
+      layers: const AtlasLayerStack([]),
+    );
+    final moved = base.copyWith(camera: base.camera.copyWith(zoom: 10.0));
+    final ok =
+        moved.camera.zoom == _num(expected['zoom']) &&
+        moved.layers == base.layers &&
+        moved.validate().isValid == (expected['valid'] as bool);
+    _record(
+      id,
+      ok && (expected['layers_preserved'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'pure recomposition, layers preserved',
+    );
+    return;
+  }
+  if (id == 'TRANSITION-002') {
+    final turned = AtlasCameraState.home().copyWith(bearing: 90.0);
+    final ok =
+        turned.bearing == _num(expected['bearing']) &&
+        turned.center == AtlasCameraState.home().center &&
+        turned.validate().isValid == (expected['valid'] as bool);
+    _record(
+      id,
+      ok && (expected['center_preserved'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'bearing=90, center preserved',
+    );
+    return;
+  }
+  if (id == 'EQUALITY-001') {
+    final a = AtlasMapState(
+      camera: AtlasCameraState.home(),
+      layers: const AtlasLayerStack([]),
+    );
+    final c = a.copyWith(camera: a.camera.copyWith(zoom: 10.0));
+    final ok =
+        (a ==
+                AtlasMapState(
+                  camera: AtlasCameraState.home(),
+                  layers: const AtlasLayerStack([]),
+                )) ==
+            (expected['identical_equal'] as bool) &&
+        (a != c) == (expected['different_zoom_not_equal'] as bool);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'structural equality');
+    return;
+  }
+  if (id == 'EQUALITY-002') {
+    AtlasLayerState titled(String layerId, String title) => AtlasLayerState(
+      definition: AtlasLayerDefinition(
+        id: AtlasId(layerId),
+        kind: AtlasLayerKind.raster,
+        providerId: 'p',
+        title: title,
+      ),
+    );
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    AtlasLayerStack stackOf(List<dynamic> layers) => AtlasLayerStack([
+      for (final l in layers.cast<Map<String, dynamic>>())
+        titled(l['id'] as String, l['title'] as String),
+    ]);
+    final a = AtlasMapState(
+      camera: AtlasCameraState.home(),
+      layers: stackOf(inputs['a_layers'] as List),
+    );
+    final b = AtlasMapState(
+      camera: AtlasCameraState.home(),
+      layers: stackOf(inputs['b_layers'] as List),
+    );
+    _record(
+      id,
+      (a == b) == (expected['equal'] as bool) ? Verdict.pass : Verdict.fail,
+      'title difference is not map-state difference',
+    );
+    return;
+  }
+  if (id == 'SERDE-001') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final once = AtlasCameraState.parse(inputs['serialized'] as String);
+    final twice = AtlasCameraState.parse(once.serialize());
+    final ok =
+        once.serialize() == expected['canonical'] &&
+        twice == once &&
+        (expected['round_trip_stable'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'canonical=${once.serialize()}',
+    );
+    return;
+  }
   switch (id) {
     case 'CAM-001':
       final home = AtlasCameraState.home();
@@ -1115,6 +1210,25 @@ void _adversarial(Map<String, dynamic> f) {
           e.rejection.category == 'INVALID_LAYER_STATE'
               ? Verdict.pass
               : Verdict.fail,
+          'category=${e.rejection.category}',
+        );
+      }
+    case 'ADV-030':
+      final tilted = AtlasCameraState.home().copyWith(pitch: 91.0);
+      final tiltedCheck = tilted.validate();
+      _record(
+        id,
+        !tiltedCheck.isValid ? Verdict.pass : Verdict.fail,
+        'rejection=${tiltedCheck.rejection?.category}',
+      );
+    case 'ADV-031':
+      try {
+        AtlasCameraState.parse('39.83|-98.58|3.0|NaN|0.0');
+        _record(id, Verdict.fail, 'accepted NaN bearing silently');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'NON_FINITE' ? Verdict.pass : Verdict.fail,
           'category=${e.rejection.category}',
         );
       }

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-CORE-CAM-001","expected":{"different_zoom_not_equal":true,"identical_equal":true},"fixture_version":1,"id":"EQUALITY-001","inputs":{"a":"home","b":"home","c":"home-zoom-10"},"notes":"Structural map equality: same state equal; zoom change not equal.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-CORE-CAM-001; equality doctrine (1.3-I)"}
