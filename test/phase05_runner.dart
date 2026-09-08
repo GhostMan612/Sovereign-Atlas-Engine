@@ -122,6 +122,27 @@ void _bearing(Map<String, dynamic> f) {
     _record(id, Verdict.blocked, 'Coincident-bearing shape undecided.');
     return;
   }
+  if (id == 'DEST-001') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final expected = f['expected'] as Map<String, dynamic>;
+    final tolerance = _num(
+      ((f['tolerance'] as Map<String, dynamic>)['value'] as num),
+    );
+    final got = AtlasGeoMath.destinationPoint(
+      _coord(inputs['origin'] as Map<String, dynamic>),
+      _num(inputs['distance_km']),
+      _num(inputs['bearing_deg']),
+    );
+    final ok =
+        _close(got.latitude, _num(expected['latitude']), tolerance) &&
+        _close(got.longitude, _num(expected['longitude']), tolerance);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'PROVISIONAL op; got=(${got.latitude}, ${got.longitude})',
+    );
+    return;
+  }
   final tolerance = _num(
     ((f['tolerance'] as Map<String, dynamic>)['value'] as num),
   );
@@ -359,6 +380,68 @@ List<AtlasCoordinate> _ring(List<dynamic> pts) => [
 void _geometry(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'POLY-001' || id == 'POLY-002') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final points = [
+      for (final p in (inputs['points'] as List).cast<Map<String, dynamic>>())
+        _coord(p),
+    ];
+    final line = AtlasPolyline(points);
+    final v = line.validateStructure();
+    final ok =
+        v.isValid &&
+        line.isLengthMeaningful == (expected['meaningful'] as bool) &&
+        line.lengthKm() == _num(expected['length_km']);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'PROVISIONAL type; valid=${v.isValid} meaningful=${line.isLengthMeaningful}',
+    );
+    return;
+  }
+  if (id == 'POLY-003') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final points = [
+      for (final p in (inputs['points'] as List).cast<Map<String, dynamic>>())
+        _coord(p),
+    ];
+    final line = AtlasPolyline(points);
+    final tolerance = _num(
+      ((f['tolerance'] as Map<String, dynamic>)['value'] as num),
+    );
+    final ok =
+        line.validateStructure().isValid &&
+        _close(line.lengthKm(), _num(expected['length_km']), tolerance);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'duplicates preserved; length=${line.lengthKm()}',
+    );
+    return;
+  }
+  if (id == 'GON-001' || id == 'GON-002') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final polygon = AtlasPolygon(exterior: _ring(inputs['exterior'] as List));
+    final v = polygon.validate();
+    if (id == 'GON-002') {
+      _record(
+        id,
+        !v.isValid ? Verdict.pass : Verdict.fail,
+        'rejection=${v.rejection?.category}',
+      );
+      return;
+    }
+    final boundsExpected = expected['bounds'] as Map<String, dynamic>;
+    final bounds = polygon.bounds;
+    final ok =
+        v.isValid &&
+        bounds.south == _num(boundsExpected['south']) &&
+        bounds.west == _num(boundsExpected['west']) &&
+        bounds.north == _num(boundsExpected['north']) &&
+        bounds.east == _num(boundsExpected['east']);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'valid+bounds exact');
+    return;
+  }
   if (id == 'GEOM-001') {
     final ring = _ring((f['inputs'] as Map<String, dynamic>)['rings'][0]);
     final v = AtlasRings.validateRing(ring);
@@ -529,6 +612,119 @@ void _tactical(Map<String, dynamic> f) {
 }
 
 // ---------------------------------------------------------------------------
+// ANGLES + BOXES (Phase 1.1 named ops and bounds)
+// ---------------------------------------------------------------------------
+
+void _angles(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'NORM-004') {
+    try {
+      AtlasAngles.normalizeBearingDeg(double.nan);
+      _record(id, Verdict.fail, 'normalized NaN without rejection');
+    } on AtlasRejectionException catch (e) {
+      _record(
+        id,
+        e.rejection.category ==
+                (expected['rejection'] as Map<String, dynamic>)['category']
+            ? Verdict.pass
+            : Verdict.fail,
+        'category=${e.rejection.category}',
+      );
+    }
+    return;
+  }
+  var ok = true;
+  final got = <String>[];
+  for (final c in (expected['cases'] as List).cast<Map<String, dynamic>>()) {
+    final input = _num(c['in']);
+    final value = id == 'NORM-001'
+        ? AtlasAngles.normalizeBearingDeg(input)
+        : id == 'NORM-002'
+        ? AtlasAngles.normalizeSignedDeg(input)
+        : AtlasAngles.normalizeLongitudeDeg(input);
+    got.add('$input->$value');
+    if (value != _num(c['out'])) ok = false;
+  }
+  _record(
+    id,
+    ok ? Verdict.pass : Verdict.fail,
+    '${id == 'NORM-003' ? 'PROVISIONAL op; ' : ''}${got.join(' ')}',
+  );
+}
+
+AtlasBoundingBox _box(Map<String, dynamic> m) => AtlasBoundingBox(
+  south: _num(m['south']),
+  west: _num(m['west']),
+  north: _num(m['north']),
+  east: _num(m['east']),
+);
+
+void _boxes(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'BOX-001') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final box = _box(inputs);
+    final inside = _coord({'latitude': 44.95, 'longitude': -93.25});
+    final outside = _coord({'latitude': 46.0, 'longitude': -93.25});
+    final ok =
+        box.validate().isValid &&
+        !box.crossesAntimeridian &&
+        box.contains(inside) &&
+        !box.contains(outside);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'valid+containment');
+    return;
+  }
+  if (id == 'BOX-002') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final box = _box(inputs);
+    final ok =
+        box.validate().isValid &&
+        box.crossesAntimeridian == (expected['crosses_antimeridian'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'crossing flagged, shape valid (not an error)',
+    );
+    return;
+  }
+  if (id == 'BOX-003') {
+    final inputs = f['inputs'] as Map<String, dynamic>;
+    final box = _box(inputs['box'] as Map<String, dynamic>);
+    try {
+      box.contains(_coord(inputs['point'] as Map<String, dynamic>));
+      _record(id, Verdict.fail, 'contained across antimeridian without ruling');
+    } on AtlasRejectionException catch (e) {
+      _record(
+        id,
+        e.rejection.category ==
+                (expected['rejection'] as Map<String, dynamic>)['category']
+            ? Verdict.pass
+            : Verdict.fail,
+        'DEC-005 open; category=${e.rejection.category}',
+      );
+    }
+    return;
+  }
+  // BOX-004: polygon bounds derivation.
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final polygon = AtlasPolygon(exterior: _ring(inputs['ring'] as List));
+  if (!polygon.validate().isValid) {
+    _record(id, Verdict.fail, 'fixture ring must validate');
+    return;
+  }
+  final boundsExpected = expected['bounds'] as Map<String, dynamic>;
+  final bounds = polygon.bounds;
+  final ok =
+      bounds.south == _num(boundsExpected['south']) &&
+      bounds.west == _num(boundsExpected['west']) &&
+      bounds.north == _num(boundsExpected['north']) &&
+      bounds.east == _num(boundsExpected['east']);
+  _record(id, ok ? Verdict.pass : Verdict.fail, 'bounds exact');
+}
+
+// ---------------------------------------------------------------------------
 // ADVERSARIAL
 // ---------------------------------------------------------------------------
 
@@ -661,6 +857,66 @@ void _adversarial(Map<String, dynamic> f) {
         !v.isValid ? Verdict.pass : Verdict.fail,
         'PROPOSED zero-length rejection executed',
       );
+    case 'ADV-024':
+      try {
+        AtlasAngles.normalizeBearingDeg(double.nan);
+        _record(id, Verdict.fail, 'normalized NaN without rejection');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'NON_FINITE' ? Verdict.pass : Verdict.fail,
+          'category=${e.rejection.category}',
+        );
+      }
+    case 'ADV-025':
+      const crossingBox = AtlasBoundingBox(
+        south: 44.0,
+        west: 170.0,
+        north: 45.0,
+        east: -170.0,
+      );
+      try {
+        crossingBox.contains(
+          const AtlasCoordinate(latitude: 44.5, longitude: 175.0),
+        );
+        _record(id, Verdict.fail, 'contained across antimeridian');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'UNRESOLVED_ANTIMERIDIAN'
+              ? Verdict.pass
+              : Verdict.fail,
+          'DEC-005 open; category=${e.rejection.category}',
+        );
+      }
+    case 'ADV-026':
+      const inverted = AtlasBoundingBox(
+        south: 45.0,
+        west: -93.3,
+        north: 44.9,
+        east: -93.2,
+      );
+      final invertedCheck = inverted.validate();
+      _record(
+        id,
+        !invertedCheck.isValid ? Verdict.pass : Verdict.fail,
+        'rejection=${invertedCheck.rejection?.category}',
+      );
+    case 'ADV-027':
+      final openPolygon = AtlasPolygon(
+        exterior: _ring([
+          [-93.3, 44.9],
+          [-93.2, 44.9],
+          [-93.2, 45.0],
+          [-93.3, 45.0],
+        ]),
+      );
+      final polygonCheck = openPolygon.validate();
+      _record(
+        id,
+        !polygonCheck.isValid ? Verdict.pass : Verdict.fail,
+        'rejection=${polygonCheck.rejection?.category}',
+      );
     default:
       _record(
         id,
@@ -723,6 +979,10 @@ void main() {
         switch (dir) {
           case 'geo':
             _geo(fixture);
+          case 'angles':
+            _angles(fixture);
+          case 'boxes':
+            _boxes(fixture);
           case 'distance':
             _distance(fixture);
           case 'bearing':

@@ -1,0 +1,1 @@
+{"contract":"ATLAS-VALID-001","expected":{"rejection":{"category":"NON_FINITE","mandatory":true}},"fixture_version":1,"id":"ADV-024","inputs":{"op":"normalizeBearingDeg","value":"NaN"},"notes":"Angle normalization refuses non-finite input (consistency with comparison policy).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-VALID-001; AtlasAngles guard"}
