@@ -22,6 +22,15 @@ final class AtlasMapState {
   final AtlasCameraState camera;
   final AtlasLayerStack layers;
 
+  /// Pure functional recomposition (1.3-H transition doctrine): "camera changed
+  /// from A to B" as deterministic data, never a gesture/animation pipeline.
+  /// Construction ≠ validation by design — use [validate] to check the result.
+  AtlasMapState copyWith({AtlasCameraState? camera, AtlasLayerStack? layers}) =>
+      AtlasMapState(
+        camera: camera ?? this.camera,
+        layers: layers ?? this.layers,
+      );
+
   /// Validates camera ranges and layer-field sanity. Baseline conformance is
   /// deliberately NOT part of validity (baseline is a compositional contract,
   /// checked via [AtlasLayerStack.conformsToBaseline], not a veto).

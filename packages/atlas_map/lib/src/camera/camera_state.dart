@@ -128,6 +128,21 @@ final class AtlasCameraState {
     return candidate;
   }
 
+  /// Pure functional recomposition (1.3-H transition doctrine): deterministic,
+  /// synchronous, no events/callbacks/animation/gestures. Construction ≠
+  /// validation by design — use [validate] to check the result.
+  AtlasCameraState copyWith({
+    AtlasCoordinate? center,
+    double? zoom,
+    double? bearing,
+    double? pitch,
+  }) => AtlasCameraState(
+    center: center ?? this.center,
+    zoom: zoom ?? this.zoom,
+    bearing: bearing ?? this.bearing,
+    pitch: pitch ?? this.pitch,
+  );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
