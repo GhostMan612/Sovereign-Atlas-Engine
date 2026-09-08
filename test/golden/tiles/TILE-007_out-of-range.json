@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-ID-001","expected":{"rejection":{"category":"INVALID_TILE","mandatory":true}},"fixture_version":1,"id":"TILE-007","inputs":{"coordinate":{"x":8,"y":0,"z":3}},"notes":"x=8 at z=3 (extent 8): out of [0, 2^z).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-TILE-ID-001; AtlasTileCoordinate.validate"}

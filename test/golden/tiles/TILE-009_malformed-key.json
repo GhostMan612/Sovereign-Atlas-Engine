@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-ID-001","expected":{"rejection":{"category":"MALFORMED","mandatory":true}},"fixture_version":1,"id":"TILE-009","inputs":{"key":"standard/3-1-2"},"notes":"Dash-separated key is malformed: no silent reinterpretation.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-TILE-ID-001; AtlasTileKey.parse"}

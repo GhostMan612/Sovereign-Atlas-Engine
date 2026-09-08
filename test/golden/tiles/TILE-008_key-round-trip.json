@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-ID-001","expected":{"round_trip":true},"fixture_version":1,"id":"TILE-008","inputs":{"key":"standard/3_1_2"},"notes":"Key parse→render round-trips exactly (structural, not just string compare).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-TILE-ID-001; AtlasTileKey"}

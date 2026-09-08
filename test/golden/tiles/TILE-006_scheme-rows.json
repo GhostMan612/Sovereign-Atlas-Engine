@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-ID-001","expected":{"row_tms":5,"row_xyz":2,"same_address":true,"scheme_differs":true},"fixture_version":1,"id":"TILE-006","inputs":{"coordinate":{"x":1,"y":2,"z":3}},"notes":"Same address, different scheme: identities differ; TMS row flips (2^3-1-2=5).","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-TILE-ID-001; AtlasTileScheme"}

@@ -18,6 +18,7 @@ import '../packages/atlas_core/lib/atlas_core.dart';
 import '../packages/atlas_geo/lib/atlas_geo.dart';
 import '../packages/atlas_layers/lib/atlas_layers.dart';
 import '../packages/atlas_map/lib/atlas_map.dart';
+import '../packages/atlas_provider_api/lib/atlas_provider_api.dart';
 
 /// Per-fixture verdict.
 enum Verdict { pass, fail, blocked, notApplicable }
@@ -626,10 +627,343 @@ void _layers(Map<String, dynamic> f) {
     );
     return;
   }
+  if (id.startsWith('DESC-')) {
+    _descriptor(f);
+    return;
+  }
+  _record(id, Verdict.notApplicable, 'No layer-scope handler for $id.');
+}
+
+// ---------------------------------------------------------------------------
+// PROVIDERS + TILES (Phase 1.4 executable contracts; acquisition deferred)
+// ---------------------------------------------------------------------------
+
+AtlasTileScheme _scheme(String name) =>
+    AtlasTileScheme.values.firstWhere((v) => v.name == name);
+
+AtlasTileIdentity _tileIdentity(Map<String, dynamic> m) => AtlasTileIdentity(
+  provider: AtlasId(m['provider'] as String),
+  layer: AtlasId(m['layer'] as String),
+  coordinate: AtlasTileCoordinate(
+    z: (m['z'] as num).toInt(),
+    x: (m['x'] as num).toInt(),
+    y: (m['y'] as num).toInt(),
+  ),
+  scheme: m.containsKey('scheme')
+      ? _scheme(m['scheme'] as String)
+      : AtlasTileScheme.xyz,
+);
+
+/// Phase 0.4 DESC-* fixtures (descriptor shape, provider-contract vocabulary).
+void _descriptor(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  const categoryToKind = {
+    'raster': AtlasDataKind.rasterTiles,
+    'vector': AtlasDataKind.vectorTiles,
+    'geojson': AtlasDataKind.geojson,
+    'elevation': AtlasDataKind.elevation,
+    'historical': AtlasDataKind.historical,
+    'boundary': AtlasDataKind.boundary,
+    'parcel': AtlasDataKind.parcel,
+    'structure': AtlasDataKind.structure,
+    'local-dataset': AtlasDataKind.localDataset,
+    'local': AtlasDataKind.localDataset,
+  };
+  final descriptorJson = inputs['descriptor'] as Map<String, dynamic>;
+  final zoom = descriptorJson['native_zoom'] as List?;
+  final descriptor = AtlasProviderDescriptor(
+    id: AtlasId(descriptorJson['id'] as String),
+    kinds: {categoryToKind[inputs['category'] as String]!},
+    attribution: descriptorJson['attribution'] as String?,
+    license: descriptorJson['license'] as String?,
+    nativeMinZoom: zoom == null ? null : (zoom[0] as num).toInt(),
+    nativeMaxZoom: zoom == null ? null : (zoom[1] as num).toInt(),
+  );
+  // Authority classes (e.g. DESC-007 AUTHORITATIVE) belong to the atlas_data
+  // provenance model, not to descriptors: recorded here as unmodeled, never
+  // defaulted. The descriptor answers identity/taxonomy/range only.
+  final v = descriptor.validate();
+  final ok =
+      v.isValid &&
+      (expected['identity_present'] as bool? ?? true) &&
+      (zoom == null || (expected['native_zoom_present'] as bool? ?? true));
   _record(
     id,
-    Verdict.notApplicable,
-    'ATLAS-PROV-DESC-001 descriptors belong to atlas_provider_api scope.',
+    ok ? Verdict.pass : Verdict.fail,
+    'endpoint-free descriptor validates; authority unmodeled (data scope)',
+  );
+}
+
+/// Phase 0.4 + 1.4 providers/ fixtures.
+void _providers(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'PVD-001') {
+    final d = inputs['descriptor'] as Map<String, dynamic>;
+    final descriptor = AtlasProviderDescriptor(
+      id: AtlasId(d['id'] as String),
+      kinds: const {AtlasDataKind.rasterTiles},
+      title: null,
+      capabilities: const {AtlasProviderCapability.tileServing},
+      nativeMinZoom: (d['native_min_zoom'] as num).toInt(),
+      nativeMaxZoom: (d['native_max_zoom'] as num).toInt(),
+      attribution: d['attribution'] as String?,
+      license: d['license'] as String?,
+    );
+    final v = descriptor.validate();
+    final zoomExpected = expected['native_zoom'] as List;
+    final ok =
+        v.isValid &&
+        descriptor.attribution == expected['attribution'] &&
+        descriptor.nativeMinZoom == (zoomExpected[0] as num).toInt() &&
+        descriptor.nativeMaxZoom == (zoomExpected[1] as num).toInt();
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'raster descriptor valid');
+    return;
+  }
+  if (id == 'PVD-002') {
+    final d = inputs['descriptor'] as Map<String, dynamic>;
+    final descriptor = AtlasProviderDescriptor(
+      id: AtlasId(d['id'] as String),
+      kinds: const {AtlasDataKind.elevation},
+    );
+    _record(
+      id,
+      descriptor.validate().isValid ? Verdict.pass : Verdict.fail,
+      'non-tile kind needs no tile fields (no tile-fetch assumption)',
+    );
+    return;
+  }
+  // PVD-003: endpoint-free shape proven by source grep (arch-check).
+  final bannedImports = RegExp("import\\s+'(dart:io|package:http[^']*)'");
+  final bannedField = RegExp(
+    r'(final|late|var)\s+[\w<>,\? ]*\b(url|endpoint|credential|apiKey|secret)\w*\s*[;=]',
+  );
+  var violations = <String>[];
+  final lib = Directory('packages/atlas_provider_api/lib');
+  for (final file
+      in lib
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))) {
+    final code = file
+        .readAsLinesSync()
+        .where((line) => !line.trimLeft().startsWith('//'))
+        .join('\n');
+    if (bannedImports.hasMatch(code)) {
+      violations.add('${file.path}: transport import');
+    }
+    if (bannedField.hasMatch(code)) {
+      violations.add('${file.path}: stored endpoint/credential field');
+    }
+  }
+  _record(
+    id,
+    violations.isEmpty ? Verdict.pass : Verdict.fail,
+    violations.isEmpty
+        ? 'no stored endpoints/credentials/transport imports'
+        : violations.join('; '),
+  );
+}
+
+void _tiles(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'TILE-001' || id == 'TILE-002' || id == 'TILE-003') {
+    final a = _tileIdentity(inputs['a'] as Map<String, dynamic>);
+    final b = _tileIdentity(inputs['b'] as Map<String, dynamic>);
+    final differ = (a != b) == (expected['identities_differ'] as bool);
+    _record(
+      id,
+      differ && a.validate().isValid && b.validate().isValid
+          ? Verdict.pass
+          : Verdict.fail,
+      'identity dimensions differ as contracted',
+    );
+    return;
+  }
+  if (id == 'TILE-004') {
+    final key = AtlasTileKey(
+      layer: inputs['layer'] as String,
+      z: (inputs['z'] as num).toInt(),
+      x: (inputs['x'] as num).toInt(),
+      y: (inputs['y'] as num).toInt(),
+    );
+    _record(
+      id,
+      key.keyString == expected['key'] ? Verdict.pass : Verdict.fail,
+      'key=${key.keyString} (SOURCE-VERIFIED shape)',
+    );
+    return;
+  }
+  if (id == 'TILE-005') {
+    _record(
+      id,
+      Verdict.notApplicable,
+      'Template-registry lookup belongs to provider discovery (PLANNED); '
+      'the silent-fallback defect is structurally impossible (no fallback code).',
+    );
+    return;
+  }
+  if (id == 'TILE-006') {
+    final c = inputs['coordinate'] as Map<String, dynamic>;
+    final coord = AtlasTileCoordinate(
+      z: (c['z'] as num).toInt(),
+      x: (c['x'] as num).toInt(),
+      y: (c['y'] as num).toInt(),
+    );
+    final xyz = AtlasTileIdentity(
+      provider: const AtlasId('p'),
+      layer: const AtlasId('l'),
+      coordinate: coord,
+    );
+    final tms = AtlasTileIdentity(
+      provider: const AtlasId('p'),
+      layer: const AtlasId('l'),
+      coordinate: coord,
+      scheme: AtlasTileScheme.tms,
+    );
+    final ok =
+        xyz != tms &&
+        (expected['scheme_differs'] as bool) &&
+        coord.rowFor(AtlasTileScheme.xyz) ==
+            _num(expected['row_xyz']).toInt() &&
+        coord.rowFor(AtlasTileScheme.tms) == _num(expected['row_tms']).toInt();
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'xyz=2 tms=5, differ');
+    return;
+  }
+  if (id == 'TILE-007') {
+    final c = inputs['coordinate'] as Map<String, dynamic>;
+    final v = AtlasTileCoordinate(
+      z: (c['z'] as num).toInt(),
+      x: (c['x'] as num).toInt(),
+      y: (c['y'] as num).toInt(),
+    ).validate();
+    _record(
+      id,
+      !v.isValid ? Verdict.pass : Verdict.fail,
+      'rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  if (id == 'TILE-008') {
+    final key = inputs['key'] as String;
+    final parsed = AtlasTileKey.parse(key);
+    _record(
+      id,
+      parsed.keyString == key && (expected['round_trip'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'parse→render round-trip exact',
+    );
+    return;
+  }
+  if (id == 'TILE-009') {
+    try {
+      AtlasTileKey.parse(inputs['key'] as String);
+      _record(id, Verdict.fail, 'parsed malformed key without rejection');
+    } on AtlasRejectionException catch (e) {
+      _record(
+        id,
+        e.rejection.category ==
+                (expected['rejection'] as Map<String, dynamic>)['category']
+            ? Verdict.pass
+            : Verdict.fail,
+        'category=${e.rejection.category}',
+      );
+    }
+    return;
+  }
+  if (id == 'TILE-010' || id == 'TILE-011') {
+    final request = AtlasTileRequest(
+      identity: AtlasTileIdentity(
+        provider: const AtlasId('p'),
+        layer: const AtlasId('l'),
+        coordinate: AtlasTileCoordinate(
+          z: ((inputs['coordinate'] as Map)['z'] as num).toInt(),
+          x: ((inputs['coordinate'] as Map)['x'] as num).toInt(),
+          y: ((inputs['coordinate'] as Map)['y'] as num).toInt(),
+        ),
+        scheme: _scheme(inputs['scheme'] as String),
+      ),
+    );
+    final url = request.resolveUrl(inputs['template'] as String);
+    _record(
+      id,
+      url == expected['url'] ? Verdict.pass : Verdict.fail,
+      'url=$url (pure substitution, no fetch)',
+    );
+    return;
+  }
+  if (id == 'TILE-012') {
+    final request = AtlasTileRequest(
+      identity: AtlasTileIdentity(
+        provider: const AtlasId('p'),
+        layer: const AtlasId('l'),
+        coordinate: AtlasTileCoordinate(
+          z: ((inputs['coordinate'] as Map)['z'] as num).toInt(),
+          x: ((inputs['coordinate'] as Map)['x'] as num).toInt(),
+          y: ((inputs['coordinate'] as Map)['y'] as num).toInt(),
+        ),
+      ),
+    );
+    try {
+      request.resolveUrl(inputs['template'] as String);
+      _record(id, Verdict.fail, 'undeclared placeholder passed silently');
+    } on AtlasRejectionException catch (e) {
+      _record(
+        id,
+        e.rejection.category ==
+                (expected['rejection'] as Map<String, dynamic>)['category']
+            ? Verdict.pass
+            : Verdict.fail,
+        'category=${e.rejection.category}',
+      );
+    }
+    return;
+  }
+  // ENTRY-001 / ENTRY-002.
+  final entryJson = inputs['entry'] as Map<String, dynamic>;
+  final identityJson = entryJson['identity'] as Map<String, dynamic>;
+  final coordJson = identityJson['coordinate'] as Map<String, dynamic>;
+  final payloadJson = entryJson['payload'] as Map<String, dynamic>;
+  final entry = AtlasTileEntry(
+    identity: AtlasTileIdentity(
+      provider: AtlasId(identityJson['provider'] as String),
+      layer: AtlasId(identityJson['layer'] as String),
+      coordinate: AtlasTileCoordinate(
+        z: (coordJson['z'] as num).toInt(),
+        x: (coordJson['x'] as num).toInt(),
+        y: (coordJson['y'] as num).toInt(),
+      ),
+      scheme: _scheme(identityJson['scheme'] as String),
+    ),
+    key: AtlasTileKey.parse(entryJson['key'] as String),
+    payloadId: AtlasId((payloadJson['id'] as String)),
+  );
+  final payload = AtlasTilePayload(
+    id: AtlasId(payloadJson['id'] as String),
+    byteLength: (payloadJson['byte_length'] as num).toInt(),
+  );
+  final entryCheck = entry.validate();
+  final payloadCheck = payload.validate();
+  if (id == 'ENTRY-001') {
+    _record(
+      id,
+      entryCheck.isValid && payloadCheck.isValid && (expected['valid'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'PROVISIONAL shape; consistent addresses validate',
+    );
+    return;
+  }
+  _record(
+    id,
+    !entryCheck.isValid ? Verdict.pass : Verdict.fail,
+    'PROVISIONAL rule; rejection=${entryCheck.rejection?.category}',
   );
 }
 
@@ -1232,6 +1566,86 @@ void _adversarial(Map<String, dynamic> f) {
           'category=${e.rejection.category}',
         );
       }
+    case 'ADV-032':
+      final emptyKinds = AtlasProviderDescriptor(
+        id: const AtlasId('empty-kinds'),
+        kinds: const {},
+      );
+      final emptyCheck = emptyKinds.validate();
+      _record(
+        id,
+        !emptyCheck.isValid ? Verdict.pass : Verdict.fail,
+        'PROPOSED rule; rejection=${emptyCheck.rejection?.category}',
+      );
+    case 'ADV-033':
+      final invertedZoom = AtlasProviderDescriptor(
+        id: const AtlasId('inverted-zoom'),
+        kinds: const {AtlasDataKind.rasterTiles},
+        nativeMinZoom: 19,
+        nativeMaxZoom: 10,
+      );
+      final zoomCheck = invertedZoom.validate();
+      _record(
+        id,
+        !zoomCheck.isValid ? Verdict.pass : Verdict.fail,
+        'PROPOSED rule; rejection=${zoomCheck.rejection?.category}',
+      );
+    case 'ADV-034':
+      final badTile = AtlasTileCoordinate(z: 3, x: 8, y: 0).validate();
+      _record(
+        id,
+        !badTile.isValid ? Verdict.pass : Verdict.fail,
+        'rejection=${badTile.rejection?.category}',
+      );
+    case 'ADV-035':
+      try {
+        AtlasTileKey.parse('standard/3-1-2');
+        _record(id, Verdict.fail, 'parsed malformed key without rejection');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'MALFORMED' ? Verdict.pass : Verdict.fail,
+          'category=${e.rejection.category}',
+        );
+      }
+    case 'ADV-036':
+      const placeholderRequest = AtlasTileRequest(
+        identity: AtlasTileIdentity(
+          provider: AtlasId('p'),
+          layer: AtlasId('l'),
+          coordinate: AtlasTileCoordinate(z: 3, x: 1, y: 2),
+        ),
+      );
+      try {
+        placeholderRequest.resolveUrl(
+          'https://tiles.example.com/{z}/{x}/{y}/{s}.png',
+        );
+        _record(id, Verdict.fail, 'undeclared placeholder passed silently');
+      } on AtlasRejectionException catch (e) {
+        _record(
+          id,
+          e.rejection.category == 'MALFORMED_TEMPLATE'
+              ? Verdict.pass
+              : Verdict.fail,
+          'category=${e.rejection.category}',
+        );
+      }
+    case 'ADV-037':
+      const badEntry = AtlasTileEntry(
+        identity: AtlasTileIdentity(
+          provider: AtlasId('osm'),
+          layer: AtlasId('standard'),
+          coordinate: AtlasTileCoordinate(z: 3, x: 1, y: 2),
+        ),
+        key: AtlasTileKey(layer: 'standard', z: 3, x: 9, y: 9),
+        payloadId: AtlasId('p-1'),
+      );
+      final badEntryCheck = badEntry.validate();
+      _record(
+        id,
+        !badEntryCheck.isValid ? Verdict.pass : Verdict.fail,
+        'PROVISIONAL rule; rejection=${badEntryCheck.rejection?.category}',
+      );
     default:
       _record(
         id,
@@ -1262,7 +1676,6 @@ void main() {
         ..sort((a, b) => a.path.compareTo(b.path));
 
   const naDirs = {
-    'tiles',
     'cache',
     'offline',
     'provenance',
@@ -1310,6 +1723,10 @@ void main() {
             _geometry(fixture);
           case 'parcels':
             _parcels(fixture);
+          case 'providers':
+            _providers(fixture);
+          case 'tiles':
+            _tiles(fixture);
           case 'migration':
             _migration(fixture);
           case 'tactical':

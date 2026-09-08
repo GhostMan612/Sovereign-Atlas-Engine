@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-ID-001","expected":{"rejection":{"category":"MALFORMED","mandatory":true}},"fixture_version":1,"id":"ADV-035","inputs":{"key":"standard/3-1-2"},"notes":"Twin of TILE-009 at adversarial level.","status":"ATLAS-NORMATIVE","tolerance":null,"trace":"ATLAS-TILE-ID-001; AtlasTileKey.parse"}
