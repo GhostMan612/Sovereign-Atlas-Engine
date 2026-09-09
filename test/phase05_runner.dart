@@ -2382,6 +2382,280 @@ void _resources(Map<String, dynamic> f) {
   }
 }
 
+//---------------------------------------------------------------------------
+// PIPELINE (Phase 1.9: orchestration decisions, never execution)
+// ---------------------------------------------------------------------------
+
+AtlasResolutionResult _pipeResolution(Map<String, dynamic> m) {
+  final q = m['request'] as Map<String, dynamic>;
+  final tileJson = m['tile'] as Map<String, dynamic>?;
+  return AtlasResolutionResult(
+    request: AtlasResolutionRequest(
+      kind: _resolutionKind(q['kind'] as String),
+      latitude: (q['latitude'] as num).toDouble(),
+      longitude: (q['longitude'] as num).toDouble(),
+      zoom: (q['zoom'] as num).toDouble(),
+      scheme: AtlasTileScheme.values.firstWhere(
+        (v) => v.name == ((q['scheme'] as String?) ?? 'xyz'),
+      ),
+    ),
+    status: AtlasResolutionStatus.values.firstWhere(
+      (v) => v.name == m['status'],
+    ),
+    eligible: ((m['eligible'] as List?) ?? const [])
+        .map((e) => AtlasId(e as String))
+        .toList(),
+    provider: m['provider'] == null ? null : AtlasId(m['provider'] as String),
+    tile: tileJson == null
+        ? null
+        : AtlasTileCoordinate(
+            z: (tileJson['z'] as num).toInt(),
+            x: (tileJson['x'] as num).toInt(),
+            y: (tileJson['y'] as num).toInt(),
+          ),
+    reason: (m['reason'] as String?) ?? '',
+  );
+}
+
+/// Mirrors the pipeline's descriptor-free binding so materialization inputs
+/// can be built for the same resource the pipeline will bind.
+AtlasResolvedResource _pipeBoundResource(Map<String, dynamic> m) {
+  final resolution = _pipeResolution(m);
+  final tile = resolution.tile;
+  final provider = resolution.provider!;
+  return AtlasResolvedResource(
+    identity: AtlasResourceIdentity(
+      provider: provider,
+      kind: resolution.request.kind,
+      address: tile == null
+          ? ''
+          : AtlasResolvedResource.tileAddressFor(
+              tile,
+              resolution.request.scheme,
+            ),
+    ),
+    provider: provider,
+    kind: resolution.request.kind,
+    tile: tile,
+    scheme: tile == null ? null : resolution.request.scheme,
+  );
+}
+
+AtlasAcquisitionResult _pipeAcquisition(Map<String, dynamic> m) {
+  final req = _acqRequest(m['request'] as Map<String, dynamic>);
+  final state = AtlasAcquisitionState.values.firstWhere(
+    (v) => v.name == m['state'],
+  );
+  final started = (m['started_at'] as num).toInt();
+  final updated = (m['updated_at'] as num).toInt();
+  final failureName = m['failure'] as String?;
+  final failure = failureName == null
+      ? null
+      : AtlasAcquisitionFailure.values.firstWhere((v) => v.name == failureName);
+  switch (state) {
+    case AtlasAcquisitionState.succeeded:
+      final payloadName = m['payload_id'] as String?;
+      if (payloadName == null) {
+        return AtlasAcquisitionResult(request: req, state: state);
+      }
+      return AtlasAcquisition.start(
+        req,
+        started,
+      ).complete(AtlasId(payloadName), updated).toResult();
+    case AtlasAcquisitionState.failed:
+      return AtlasAcquisition.start(
+        req,
+        started,
+      ).fail(failure!, updated).toResult();
+    case AtlasAcquisitionState.cancelled:
+      return AtlasAcquisition.start(req, started).cancel(updated).toResult();
+    case AtlasAcquisitionState.timedOut:
+      return AtlasAcquisition.start(
+        req,
+        started,
+      ).checkTimeout(updated).toResult();
+    case AtlasAcquisitionState.inProgress:
+      return AtlasAcquisition.start(req, started).toResult();
+    case AtlasAcquisitionState.notStarted:
+      return AtlasAcquisition(request: req).toResult();
+  }
+}
+
+AtlasMaterialization? _pipeMaterialization(
+  dynamic raw,
+  AtlasResolvedResource bound,
+) {
+  if (raw == null) return null;
+  final m = raw as Map<String, dynamic>;
+  final override = m['resource_override'] as Map<String, dynamic>?;
+  final identity = override == null ? null : _acqResource(override);
+  return AtlasMaterialization(
+    resource: identity == null
+        ? bound
+        : AtlasResolvedResource(
+            identity: identity,
+            provider: identity.provider,
+            kind: identity.kind,
+          ),
+    status: AtlasMaterializationStatus.values.firstWhere(
+      (v) => v.name == m['status'],
+    ),
+    representation: m['representation'] as String?,
+    reason: (m['reason'] as String?) ?? '',
+  );
+}
+
+AtlasPipelinePolicy _pipePolicy(Map<String, dynamic> m) => AtlasPipelinePolicy(
+  acquireOnStale: (m['acquire_on_stale'] as bool?) ?? false,
+  acquireOnExpired: (m['acquire_on_expired'] as bool?) ?? false,
+  acquireOnInvalid: (m['acquire_on_invalid'] as bool?) ?? false,
+  fallbackToStaleOnFailure:
+      (m['fallback_to_stale_on_failure'] as bool?) ?? false,
+);
+
+void _pipeline(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final resolutionJson = inputs['resolution'] as Map<String, dynamic>;
+  final aqJson = inputs['acquisition'] as Map<String, dynamic>?;
+  final matJson = inputs['materialization'];
+  // Binding mirrors the pipeline (resolved results only); resolution
+  // terminals return before any materialization is consulted.
+  final resolved = (resolutionJson['status'] as String) == 'resolved';
+  final outcome = AtlasPipeline.decide(
+    resolution: _pipeResolution(resolutionJson),
+    cacheEntry: _cacheEntry(inputs['cache_entry']),
+    acquisition: aqJson == null ? null : _pipeAcquisition(aqJson),
+    materialization: matJson == null || !resolved
+        ? null
+        : _pipeMaterialization(matJson, _pipeBoundResource(resolutionJson)),
+    nowSeconds: (inputs['now'] as num).toInt(),
+    policy: _pipePolicy(inputs['policy'] as Map<String, dynamic>),
+    acquisitionPolicy: inputs.containsKey('acquisition_policy')
+        ? _acqPolicy(inputs['acquisition_policy'] as Map<String, dynamic>)
+        : const AtlasAcquisitionPolicy(),
+  );
+  var ok = outcome.status.name == expected['status'];
+  if (expected.containsKey('source')) {
+    ok = ok && outcome.source.name == expected['source'];
+  }
+  if (expected.containsKey('cache_outcome')) {
+    ok = ok && outcome.cacheOutcome?.name == expected['cache_outcome'];
+  }
+  if (expected.containsKey('failure')) {
+    ok = ok && outcome.failure?.name == expected['failure'];
+  }
+  if (expected.containsKey('materialization_status')) {
+    ok =
+        ok &&
+        outcome.materialization?.status.name ==
+            expected['materialization_status'];
+  }
+  if (expected.containsKey('request_address')) {
+    ok =
+        ok &&
+        outcome.acquisitionRequest?.resource.address ==
+            expected['request_address'];
+  }
+  if (expected.containsKey('request_kind')) {
+    ok =
+        ok &&
+        outcome.acquisitionRequest?.resource.kind.name ==
+            expected['request_kind'];
+  }
+  if (expected.containsKey('request_provider')) {
+    ok =
+        ok &&
+        outcome.acquisitionRequest?.resource.provider.value ==
+            expected['request_provider'];
+  }
+  if (expected.containsKey('request_provider_derived')) {
+    ok =
+        ok &&
+        (outcome.acquisitionRequest?.provider == null) ==
+            (expected['request_provider_derived'] as bool);
+  }
+  if (expected.containsKey('handoff_payload')) {
+    ok =
+        ok &&
+        outcome.cacheHandoff?.payloadId?.value == expected['handoff_payload'];
+  }
+  if (expected.containsKey('handoff_key')) {
+    ok = ok && outcome.cacheHandoff?.key.value == expected['handoff_key'];
+  }
+  if (expected.containsKey('handoff_namespace')) {
+    ok =
+        ok &&
+        outcome.cacheHandoff?.key.namespace.name ==
+            expected['handoff_namespace'];
+  }
+  if (expected.containsKey('handoff_stored_at')) {
+    ok = ok && outcome.cacheHandoff?.storedAt == expected['handoff_stored_at'];
+  }
+  if (expected.containsKey('handoff_max_age_null')) {
+    ok =
+        ok &&
+        (outcome.cacheHandoff?.maxAgeSeconds == null) ==
+            (expected['handoff_max_age_null'] as bool);
+  }
+  if (expected.containsKey('never')) {
+    ok = ok && outcome.status.name != expected['never'];
+  }
+  if (expected.containsKey('entry_still_valid')) {
+    ok =
+        ok &&
+        outcome.entry?.validate().isValid ==
+            (expected['entry_still_valid'] as bool);
+  }
+  if (expected.containsKey('acquire_request_keys')) {
+    final want = (expected['acquire_request_keys'] as List).cast<String>();
+    ok =
+        ok &&
+        outcome.acquisitionRequest != null &&
+        want.toSet().containsAll({'resource', 'provider', 'policy'});
+  }
+  if (expected.containsKey('directive_carries')) {
+    ok =
+        ok &&
+        outcome.acquisition != null &&
+        outcome.cacheHandoff != null &&
+        outcome.cacheHandoff?.payloadId != null;
+  }
+  if (expected.containsKey('generic_keys_only')) {
+    final req = outcome.acquisitionRequest;
+    ok =
+        ok &&
+        req != null &&
+        req.provider == null &&
+        req.resource.provider.value == 'opentopo' &&
+        req.resource.kind == AtlasDataKind.elevation;
+  }
+  if (expected.containsKey('deterministic')) {
+    final again = AtlasPipeline.decide(
+      resolution: _pipeResolution(resolutionJson),
+      cacheEntry: _cacheEntry(inputs['cache_entry']),
+      acquisition: aqJson == null ? null : _pipeAcquisition(aqJson),
+      materialization: matJson == null || !resolved
+          ? null
+          : _pipeMaterialization(matJson, _pipeBoundResource(resolutionJson)),
+      nowSeconds: (inputs['now'] as num).toInt(),
+      policy: _pipePolicy(inputs['policy'] as Map<String, dynamic>),
+    );
+    ok =
+        ok &&
+        (expected['deterministic'] as bool) &&
+        again.cacheHandoff?.key.value == outcome.cacheHandoff?.key.value &&
+        again == outcome;
+  }
+  _record(
+    id,
+    ok ? Verdict.pass : Verdict.fail,
+    'status=${outcome.status.name} via ${outcome.source.name} '
+    'cache=${outcome.cacheOutcome?.name} reason=${outcome.reason}',
+  );
+}
+
 void _adversarial(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
@@ -2556,6 +2830,94 @@ void _adversarial(Map<String, dynamic> f) {
           ? Verdict.pass
           : Verdict.fail,
       'no attempt identity anywhere in the model',
+    );
+    return;
+  }
+  if (id == 'ADV-063' ||
+      id == 'ADV-064' ||
+      id == 'ADV-065' ||
+      id == 'ADV-067' ||
+      id == 'ADV-070' ||
+      id == 'ADV-071' ||
+      id == 'ADV-074' ||
+      id == 'ADV-075') {
+    _pipeline(f);
+    return;
+  }
+  if (id == 'ADV-066' ||
+      id == 'ADV-068' ||
+      id == 'ADV-069' ||
+      id == 'ADV-072') {
+    // Source-collapse scans: forbidden tokens must not appear in pipeline
+    // code lines (full-line comments excluded, same as the SELF check).
+    final tokens =
+        ((expected['forbidden_tokens'] as List?) ??
+                (expected['forbidden_imports'] as List))
+            .cast<String>();
+    final hits = <String>[];
+    final dir = Directory(inputs['scan'] as String);
+    for (final file
+        in dir
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))) {
+      final code = file
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+      for (final token in tokens) {
+        if (code.contains(token)) {
+          hits.add('${file.path.split(Platform.pathSeparator).last}: $token');
+        }
+      }
+    }
+    _record(
+      id,
+      hits.isEmpty && (expected['status'] as String) == 'clean'
+          ? Verdict.pass
+          : Verdict.fail,
+      hits.isEmpty ? 'no collapse tokens in pipeline sources' : hits.join('; '),
+    );
+    return;
+  }
+  if (id == 'ADV-073') {
+    // Explicit-time meta-scan: every pipeline fixture carries now, and no
+    // clock token exists in pipeline sources.
+    final missing = <String>[];
+    final dir = Directory('test/golden/pipeline');
+    for (final file in dir.listSync().whereType<File>().where(
+      (f) => f.path.endsWith('.json'),
+    )) {
+      if (!file.readAsStringSync().contains('"now"')) {
+        missing.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    final clockHits = <String>[];
+    final src = Directory(inputs['scan'] as String);
+    for (final file
+        in src
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))) {
+      final code = file
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+      if (code.contains('DateTime.now')) {
+        clockHits.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    _record(
+      id,
+      missing.isEmpty &&
+              clockHits.isEmpty &&
+              (expected['explicit_now_present'] as bool) &&
+              (expected['no_clock_in_sources'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      missing.isEmpty && clockHits.isEmpty
+          ? 'every pipeline fixture carries explicit now; no clock in sources'
+          : 'missing now: $missing; clock: $clockHits',
     );
     return;
   }
@@ -2945,6 +3307,8 @@ void main() {
             _providers(fixture);
           case 'acquisition':
             _acquisition(fixture);
+          case 'pipeline':
+            _pipeline(fixture);
           case 'resolution':
             _resolution(fixture);
           case 'resources':
