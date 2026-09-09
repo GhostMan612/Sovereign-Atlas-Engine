@@ -968,6 +968,148 @@ void _tiles(Map<String, dynamic> f) {
 }
 
 // ---------------------------------------------------------------------------
+// RESOLUTION (Phase 1.5: meaning + deterministic decisions, never acquisition)
+// ---------------------------------------------------------------------------
+
+AtlasDataKind _resolutionKind(String name) =>
+    AtlasDataKind.values.firstWhere((v) => v.name == name);
+
+double _resNum(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value == 'NaN') return double.nan;
+  if (value == 'Infinity') return double.infinity;
+  if (value == '-Infinity') return double.negativeInfinity;
+  throw StateError('non-numeric test scalar: $value');
+}
+
+AtlasProviderDescriptor _resProvider(Map<String, dynamic> m) {
+  return AtlasProviderDescriptor(
+    id: AtlasId(m['id'] as String),
+    kinds: {
+      for (final k in (m['kinds'] as List).cast<String>()) _resolutionKind(k),
+    },
+    capabilities: {
+      for (final c in ((m['capabilities'] as List?) ?? const []).cast<String>())
+        AtlasProviderCapability.values.firstWhere((v) => v.name == c),
+    },
+    nativeMinZoom: m.containsKey('native_min_zoom')
+        ? (m['native_min_zoom'] as num).toInt()
+        : null,
+    nativeMaxZoom: m.containsKey('native_max_zoom')
+        ? (m['native_max_zoom'] as num).toInt()
+        : null,
+  );
+}
+
+AtlasResolutionRequest _resRequest(Map<String, dynamic> m) =>
+    AtlasResolutionRequest(
+      kind: _resolutionKind(m['kind'] as String),
+      latitude: _resNum(m['latitude']),
+      longitude: _resNum(m['longitude']),
+      zoom: _resNum(m['zoom']),
+      scheme: m.containsKey('scheme')
+          ? _scheme(m['scheme'] as String)
+          : AtlasTileScheme.xyz,
+      preferredProviders: [
+        for (final p in ((m['preferred'] as List?) ?? const []).cast<String>())
+          AtlasId(p),
+      ],
+    );
+
+void _resolution(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final catalog = [
+    for (final p in (inputs['catalog'] as List).cast<Map<String, dynamic>>())
+      _resProvider(p),
+  ];
+  final result = AtlasResolver.resolve(
+    _resRequest(inputs['request'] as Map<String, dynamic>),
+    catalog,
+  );
+  var ok = result.status.name == expected['status'];
+  if (expected.containsKey('provider')) {
+    final want = expected['provider'] as String?;
+    ok =
+        ok &&
+        (want == null
+            ? result.provider == null
+            : result.provider?.value == want);
+  }
+  if (expected.containsKey('tile')) {
+    final want = expected['tile'] as Map<String, dynamic>?;
+    if (want == null) {
+      ok = ok && result.tile == null;
+    } else if (result.tile == null) {
+      ok = false;
+    } else {
+      ok =
+          ok &&
+          result.tile!.z == (want['z'] as num).toInt() &&
+          result.tile!.x == (want['x'] as num).toInt() &&
+          result.tile!.y == (want['y'] as num).toInt();
+    }
+  }
+  if (expected.containsKey('eligible')) {
+    final want = (expected['eligible'] as List).cast<String>();
+    final got = result.eligible.map((e) => e.value).toList();
+    ok = ok && got.join(',') == want.join(',');
+  }
+  if (expected.containsKey('rejection')) {
+    ok = ok && result.reason == expected['rejection'];
+  }
+  _record(
+    id,
+    ok ? Verdict.pass : Verdict.fail,
+    'status=${result.status.name} provider=${result.provider?.value} '
+    'tile=${result.tile} eligible=${result.eligible.map((e) => e.value).toList()} '
+    'reason=${result.reason}',
+  );
+}
+
+/// 1.5-M arch-leakage self-check: resolution sources must contain no
+/// transport/renderer/storage/network-activity markers (code only; the
+/// contracted vocabulary itself is never the violation).
+bool _resolutionLeakCheck(List<String> violations) {
+  const banned = [
+    'dart:io',
+    'package:http',
+    'HttpClient',
+    'Socket',
+    'socket',
+    'MapLibre',
+    'flutter',
+    'Widget',
+    'File(',
+    'Directory(',
+    'Credential',
+    'credential',
+    'apiKey',
+    'https://',
+    'http://',
+    'resolveUrl',
+  ];
+  final dir = Directory('packages/atlas_provider_api/lib/src/resolution');
+  for (final file in dir.listSync().whereType<File>().where(
+    (f) => f.path.endsWith('.dart'),
+  )) {
+    final code = file
+        .readAsLinesSync()
+        .where((line) => !line.trimLeft().startsWith('//'))
+        .join('\n');
+    for (final token in banned) {
+      if (code.contains(token)) {
+        violations.add(
+          '${file.path.split(Platform.pathSeparator).last}: $token',
+        );
+      }
+    }
+  }
+  return violations.isEmpty;
+}
+
+// ---------------------------------------------------------------------------
 // GEOMETRY kernel (rings validity, segments, screening)
 // ---------------------------------------------------------------------------
 
@@ -1352,6 +1494,13 @@ bool _noDynamicConstructors() {
 void _adversarial(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
+  if (id == 'ADV-038' ||
+      id == 'ADV-039' ||
+      id == 'ADV-040' ||
+      id == 'ADV-041') {
+    _resolution(f);
+    return;
+  }
   switch (id) {
     case 'ADV-001':
     case 'ADV-002':
@@ -1725,6 +1874,8 @@ void main() {
             _parcels(fixture);
           case 'providers':
             _providers(fixture);
+          case 'resolution':
+            _resolution(fixture);
           case 'tiles':
             _tiles(fixture);
           case 'migration':
@@ -1755,6 +1906,14 @@ void main() {
     'SELF-determinism',
     d1 == d2 ? Verdict.pass : Verdict.fail,
     'repeat=$d1',
+  );
+
+  // 1.5-M arch-leakage self-check (resolution sources only).
+  final leaks = <String>[];
+  _record(
+    'SELF-arch-leakage',
+    _resolutionLeakCheck(leaks) ? Verdict.pass : Verdict.fail,
+    leaks.isEmpty ? 'no transport/renderer/storage markers' : leaks.join('; '),
   );
 
   final pass = _outcomes.where((o) => o.verdict == Verdict.pass).length;
