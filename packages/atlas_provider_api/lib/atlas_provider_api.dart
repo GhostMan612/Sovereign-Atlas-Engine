@@ -11,4 +11,8 @@ export 'src/requests/tile_coordinate.dart';
 export 'src/requests/tile_identity.dart';
 export 'src/requests/tile_key.dart';
 export 'src/requests/tile_request.dart';
+export 'src/resolution/resolution_request.dart';
+export 'src/resolution/resolution_result.dart';
+export 'src/resolution/resolver.dart';
+export 'src/resolution/tile_addressing.dart';
 export 'src/responses/tile_payload.dart';
