@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["dart:io", "File(", "Directory(", "FileSystem", "db.open", "sqlite", "SQLite", "hive", "Hive", ".db'"], "status": "clean"}, "id": "ADV-069", "inputs": {"scan": "packages/atlas_tiles/lib/src/pipeline/"}}

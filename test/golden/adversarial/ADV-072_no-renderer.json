@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["Widget", "BuildContext", "MapLibre", "flutter_map", "RenderObject", "pixel", "Pixel", "canvas", "Canvas"], "status": "clean"}, "id": "ADV-072", "inputs": {"scan": "packages/atlas_tiles/lib/src/pipeline/"}}

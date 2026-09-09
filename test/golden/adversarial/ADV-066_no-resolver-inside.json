@@ -1,0 +1,1 @@
+{"expected": {"forbidden_imports": ["resolver.dart", "tile_addressing.dart", "provider_descriptor.dart", "catalog"], "status": "clean"}, "id": "ADV-066", "inputs": {"scan": "packages/atlas_tiles/lib/src/pipeline/"}}

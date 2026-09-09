@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["http", "Http", "HTTP", "socket", "Socket", "download", "Response", "statusCode"], "status": "clean"}, "id": "ADV-068", "inputs": {"scan": "packages/atlas_tiles/lib/src/pipeline/"}}
