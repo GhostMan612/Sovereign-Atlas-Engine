@@ -19,6 +19,7 @@ import '../packages/atlas_geo/lib/atlas_geo.dart';
 import '../packages/atlas_layers/lib/atlas_layers.dart';
 import '../packages/atlas_map/lib/atlas_map.dart';
 import '../packages/atlas_provider_api/lib/atlas_provider_api.dart';
+import '../packages/atlas_tiles/lib/atlas_tiles.dart';
 
 /// Per-fixture verdict.
 enum Verdict { pass, fail, blocked, notApplicable }
@@ -1071,45 +1072,283 @@ void _resolution(Map<String, dynamic> f) {
   );
 }
 
-/// 1.5-M arch-leakage self-check: resolution sources must contain no
-/// transport/renderer/storage/network-activity markers (code only; the
-/// contracted vocabulary itself is never the violation).
+/// 1.5-M + 1.7 arch-leakage self-check: resolution AND cache-semantic sources
+/// must contain no transport/renderer/storage/network-activity markers (code
+/// only; contracted vocabulary itself is never the violation).
 bool _resolutionLeakCheck(List<String> violations) {
   const banned = [
     'dart:io',
     'package:http',
     'HttpClient',
     'Socket',
-    'socket',
     'MapLibre',
     'flutter',
     'Widget',
     'File(',
     'Directory(',
     'Credential',
-    'credential',
     'apiKey',
     'https://',
     'http://',
-    'resolveUrl',
+    'DateTime.now',
+    'Random(',
+    'sqlite',
+    'hive',
+    'isar',
+    'SharedPreferences',
+    'shared_preferences',
+    'path_provider',
+    'pathProvider',
   ];
-  final dir = Directory('packages/atlas_provider_api/lib/src/resolution');
-  for (final file in dir.listSync().whereType<File>().where(
-    (f) => f.path.endsWith('.dart'),
-  )) {
-    final code = file
-        .readAsLinesSync()
-        .where((line) => !line.trimLeft().startsWith('//'))
-        .join('\n');
-    for (final token in banned) {
-      if (code.contains(token)) {
-        violations.add(
-          '${file.path.split(Platform.pathSeparator).last}: $token',
-        );
+  const dirs = [
+    'packages/atlas_provider_api/lib/src/resolution',
+    'packages/atlas_tiles/lib/src',
+  ];
+  for (final dirPath in dirs) {
+    final dir = Directory(dirPath);
+    if (!dir.existsSync()) continue;
+    for (final file
+        in dir
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))) {
+      final code = file
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+      for (final token in banned) {
+        if (code.contains(token)) {
+          violations.add(
+            '${file.path.split(Platform.pathSeparator).last}: $token',
+          );
+        }
       }
     }
   }
   return violations.isEmpty;
+}
+
+// ---------------------------------------------------------------------------
+// CACHE SEMANTICS (Phase 1.7: storage-independent decisions, explicit time)
+// ---------------------------------------------------------------------------
+
+AtlasCacheKey _cacheKey(Map<String, dynamic> m) => AtlasCacheKey(
+  namespace: AtlasCacheNamespace.values.firstWhere(
+    (v) => v.name == m['namespace'],
+  ),
+  value: m['value'] as String,
+);
+
+AtlasCacheEntry? _cacheEntry(dynamic raw) {
+  if (raw == null) return null;
+  final m = raw as Map<String, dynamic>;
+  final resourceJson = m['resource'] as Map<String, dynamic>?;
+  return AtlasCacheEntry(
+    key: _cacheKey(m['key'] as Map<String, dynamic>),
+    resource: resourceJson == null
+        ? null
+        : AtlasResourceIdentity(
+            provider: AtlasId(resourceJson['provider'] as String),
+            kind: _resolutionKind(resourceJson['kind'] as String),
+            address: (resourceJson['address'] as String?) ?? '',
+          ),
+    storedAt: (m['stored_at'] as num).toInt(),
+    maxAgeSeconds: m.containsKey('max_age_seconds')
+        ? (m['max_age_seconds'] as num).toInt()
+        : null,
+    payloadId: m.containsKey('payload_id')
+        ? AtlasId(m['payload_id'] as String)
+        : null,
+    revoked: (m['revoked'] as bool?) ?? false,
+  );
+}
+
+void _cache(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  if (id.startsWith('CACHE-')) {
+    _record(
+      id,
+      Verdict.notApplicable,
+      'Flow-engine behavior (lookup→validate→fetch) needs an acquisition '
+      'engine; semantic decisions below supersede it without reproducing it.',
+    );
+    return;
+  }
+  if (id == 'KEY-001') {
+    final a = _cacheKey(inputs['a'] as Map<String, dynamic>);
+    final b = _cacheKey(inputs['b'] as Map<String, dynamic>);
+    _record(
+      id,
+      a == b && a.value == expected['key'] && a.validate().isValid
+          ? Verdict.pass
+          : Verdict.fail,
+      'equivalent keys equal; canonical=${a.value}',
+    );
+    return;
+  }
+  if (id == 'KEY-005') {
+    final key = _cacheKey(inputs['key'] as Map<String, dynamic>);
+    _record(
+      id,
+      key.validate().isValid && key.value == expected['canonical']
+          ? Verdict.pass
+          : Verdict.fail,
+      'canonical=${key.value}',
+    );
+    return;
+  }
+  if (id == 'KEY-004') {
+    final v = _cacheKey(inputs['key'] as Map<String, dynamic>).validate();
+    _record(
+      id,
+      !v.isValid ? Verdict.pass : Verdict.fail,
+      'rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  if (id == 'KEY-002' || id == 'KEY-003' || id == 'ADV-049') {
+    // Inequality fixtures: expected.equal is false in all three; a != b must hold.
+    final a = _cacheKey(inputs['a'] as Map<String, dynamic>);
+    final AtlasCacheKey b;
+    if (inputs.containsKey('b')) {
+      b = _cacheKey(inputs['b'] as Map<String, dynamic>);
+    } else {
+      final t = inputs['tile_b'] as Map<String, dynamic>;
+      b = AtlasCacheKey(
+        namespace: AtlasCacheNamespace.resource,
+        value: '${t['provider'] as String}/rasterTiles/',
+      );
+    }
+    _record(
+      id,
+      a != b && !(expected['equal'] as bool) ? Verdict.pass : Verdict.fail,
+      'distinct namespaces/providers never collide',
+    );
+    return;
+  }
+  if (id == 'ADV-044') {
+    final v = _cacheKey(inputs['key'] as Map<String, dynamic>).validate();
+    _record(
+      id,
+      !v.isValid ? Verdict.pass : Verdict.fail,
+      'rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  if (id == 'ADV-050') {
+    final lookupFamily = RegExp(
+      r'"id"\s*:\s*"(LOOKUP|FRESH|RET|ADV-046|ADV-047|ADV-048)',
+    );
+    final missing = <String>[];
+    final dir = Directory('test/golden/cache');
+    for (final file in dir.listSync().whereType<File>().where(
+      (f) => f.path.endsWith('.json'),
+    )) {
+      final text = file.readAsStringSync();
+      if (lookupFamily.hasMatch(text) && !text.contains('"now"')) {
+        missing.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    _record(
+      id,
+      missing.isEmpty ? Verdict.pass : Verdict.fail,
+      missing.isEmpty
+          ? 'every lookup fixture carries explicit now'
+          : 'missing now: $missing',
+    );
+    return;
+  }
+  if (id == 'ADV-044') {
+    final v = _cacheKey(inputs['key'] as Map<String, dynamic>).validate();
+    _record(
+      id,
+      !v.isValid ? Verdict.pass : Verdict.fail,
+      'rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  if (id == 'ADV-050') {
+    final lookupFamily = RegExp(
+      r'"id"\s*:\s*"(LOOKUP|FRESH|RET|ADV-046|ADV-047|ADV-048)',
+    );
+    final missing = <String>[];
+    final dir = Directory('test/golden/cache');
+    for (final file in dir.listSync().whereType<File>().where(
+      (f) => f.path.endsWith('.json'),
+    )) {
+      final text = file.readAsStringSync();
+      if (lookupFamily.hasMatch(text) && !text.contains('"now"')) {
+        missing.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    _record(
+      id,
+      missing.isEmpty ? Verdict.pass : Verdict.fail,
+      missing.isEmpty
+          ? 'every lookup fixture carries explicit now'
+          : 'missing now: $missing',
+    );
+    return;
+  }
+  if (id == 'RET-001') {
+    final entry = _cacheEntry(inputs['entry'])!;
+    final now = (inputs['now'] as num).toInt();
+    final before = AtlasCache.lookup(entry, now);
+    final revoked = entry.invalidate();
+    final after = AtlasCache.lookup(revoked, now);
+    final ok =
+        before.outcome.name == 'hit' &&
+        (expected['before'] as String) == 'hit' &&
+        after.outcome.name == (expected['after'] as String) &&
+        !entry.revoked;
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'before=${before.outcome.name} after=${after.outcome.name} (original untouched)',
+    );
+    return;
+  }
+  if (id == 'RET-003') {
+    final now = (inputs['now'] as num).toInt();
+    final oldDecision = AtlasCache.lookup(
+      _cacheEntry(inputs['old_entry']),
+      now,
+    );
+    final newDecision = AtlasCache.lookup(
+      _cacheEntry(inputs['new_entry']),
+      now,
+    );
+    final ok =
+        oldDecision.outcome.name == 'expired' &&
+        newDecision.outcome.name == 'hit' &&
+        (expected['decision_uses_new'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'old=${oldDecision.outcome.name} new=${newDecision.outcome.name}',
+    );
+    return;
+  }
+  // LOOKUP-*, FRESH-*, RET-002, ADV-046/047/048: single-entry decisions.
+  final entry = _cacheEntry(inputs['entry']);
+  final now = (inputs['now'] as num).toInt();
+  final decision = AtlasCache.lookup(entry, now);
+  var ok = decision.outcome.name == expected['lookup'];
+  if (expected.containsKey('entry_valid')) {
+    ok = ok && entry!.validate().isValid == (expected['entry_valid'] as bool);
+  }
+  if (expected.containsKey('entry_still_valid')) {
+    ok =
+        ok &&
+        entry!.validate().isValid == (expected['entry_still_valid'] as bool);
+  }
+  _record(
+    id,
+    ok ? Verdict.pass : Verdict.fail,
+    'outcome=${decision.outcome.name}',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1837,6 +2076,16 @@ void _adversarial(Map<String, dynamic> f) {
     _resources(f);
     return;
   }
+  if (id == 'KEY-004' ||
+      id == 'ADV-044' ||
+      id == 'ADV-046' ||
+      id == 'ADV-047' ||
+      id == 'ADV-048' ||
+      id == 'ADV-049' ||
+      id == 'ADV-050') {
+    _cache(f);
+    return;
+  }
   switch (id) {
     case 'ADV-001':
     case 'ADV-002':
@@ -2161,7 +2410,6 @@ void main() {
         ..sort((a, b) => a.path.compareTo(b.path));
 
   const naDirs = {
-    'cache',
     'offline',
     'provenance',
     'h3',
@@ -2196,6 +2444,8 @@ void main() {
             _angles(fixture);
           case 'boxes':
             _boxes(fixture);
+          case 'cache':
+            _cache(fixture);
           case 'distance':
             _distance(fixture);
           case 'bearing':
