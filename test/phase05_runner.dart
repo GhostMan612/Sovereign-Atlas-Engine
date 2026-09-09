@@ -998,6 +998,9 @@ AtlasProviderDescriptor _resProvider(Map<String, dynamic> m) {
     nativeMaxZoom: m.containsKey('native_max_zoom')
         ? (m['native_max_zoom'] as num).toInt()
         : null,
+    attribution: m['attribution'] as String?,
+    license: m['license'] as String?,
+    sensitivity: m['sensitivity'] as String?,
   );
 }
 
@@ -1491,6 +1494,335 @@ bool _noDynamicConstructors() {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// RESOURCES (Phase 1.6: resolved-resource + materialization boundary)
+// ---------------------------------------------------------------------------
+
+AtlasProviderDescriptor? _findDescriptor(
+  List<AtlasProviderDescriptor> catalog,
+  AtlasId id,
+) {
+  for (final p in catalog) {
+    if (p.id == id) return p;
+  }
+  return null;
+}
+
+AtlasResolvedResource _bindForTest(
+  AtlasResolutionRequest request,
+  List<AtlasProviderDescriptor> catalog,
+) {
+  final result = AtlasResolver.resolve(request, catalog);
+  if (result.status != AtlasResolutionStatus.resolved ||
+      result.provider == null) {
+    throw StateError(
+      'fixture requires a resolved result, got ${result.status}',
+    );
+  }
+  return AtlasResolvedResource.fromResolution(
+    result: result,
+    provider: _findDescriptor(catalog, result.provider!)!,
+  );
+}
+
+void _resources(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  List<AtlasProviderDescriptor> catalogOf(dynamic raw) => [
+    for (final p in (raw as List).cast<Map<String, dynamic>>()) _resProvider(p),
+  ];
+  if (id == 'RESRC-001') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final tile = expected['tile'] as Map<String, dynamic>;
+    final ok =
+        resource.provider.value == expected['provider'] &&
+        resource.kind.name == expected['kind'] &&
+        resource.tile != null &&
+        resource.tile!.z == (tile['z'] as num).toInt() &&
+        resource.tile!.x == (tile['x'] as num).toInt() &&
+        resource.tile!.y == (tile['y'] as num).toInt() &&
+        resource.identity.address == expected['address'] &&
+        resource.attribution == expected['attribution'] &&
+        resource.validate().isValid;
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'identity=$resource');
+    return;
+  }
+  if (id == 'RESRC-002') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final ok =
+        resource.provider.value == expected['provider'] &&
+        resource.kind.name == expected['kind'] &&
+        resource.tile == null &&
+        resource.identity.address == expected['address'] &&
+        resource.validate().isValid;
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'non-tiled, no tile ref');
+    return;
+  }
+  if (id == 'RESRC-003') {
+    final location = inputs['location'] as Map<String, dynamic>;
+    final zoom = _resNum(inputs['zoom']);
+    var ok = true;
+    for (final c in (inputs['cases'] as List).cast<Map<String, dynamic>>()) {
+      final kind = _resolutionKind(c['kind'] as String);
+      final tiled =
+          kind == AtlasDataKind.rasterTiles ||
+          kind == AtlasDataKind.vectorTiles;
+      final catalog = [
+        AtlasProviderDescriptor(
+          id: AtlasId('p-${kind.name}'),
+          kinds: {kind},
+          capabilities: tiled
+              ? const {AtlasProviderCapability.tileServing}
+              : const {},
+        ),
+      ];
+      final resource = _bindForTest(
+        AtlasResolutionRequest(
+          kind: kind,
+          latitude: _resNum(location['latitude']),
+          longitude: _resNum(location['longitude']),
+          zoom: zoom,
+        ),
+        catalog,
+      );
+      if ((resource.tile != null) != tiled || !resource.validate().isValid) {
+        ok = false;
+      }
+    }
+    _record(
+      id,
+      ok && (expected['all_resolve'] as bool) ? Verdict.pass : Verdict.fail,
+      'all nine kinds resolve; tiles only for tile kinds',
+    );
+    return;
+  }
+  if (id == 'RESRC-004') {
+    final catalog = catalogOf(inputs['catalog']);
+    final request = _resRequest(inputs['request'] as Map<String, dynamic>);
+    final first = _bindForTest(request, catalog);
+    final second = _bindForTest(request, catalog);
+    _record(
+      id,
+      (first == second) == (expected['equal'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'deterministic identity equality',
+    );
+    return;
+  }
+  if (id == 'MAT-001' || id == 'MAT-002' || id == 'AVAIL-001') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final inputsMap = inputs;
+    final materialized = AtlasMaterializer.materialize(
+      resource,
+      urlTemplate: inputsMap.containsKey('template')
+          ? inputsMap['template'] as String
+          : null,
+    );
+    var ok = materialized.status.name == expected['status'];
+    if (expected.containsKey('representation')) {
+      final want = expected['representation'] as String?;
+      ok = ok && materialized.representation == want;
+    }
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'status=${materialized.status.name} reason=${materialized.reason}',
+    );
+    return;
+  }
+  if (id == 'MAT-003') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final materialized = AtlasMaterializer.materialize(
+      resource,
+      urlTemplate: inputs['template'] as String,
+    );
+    _record(
+      id,
+      materialized.status.name == expected['status'] &&
+              materialized.representation == null
+          ? Verdict.pass
+          : Verdict.fail,
+      'template ignored for non-tiles (never forced)',
+    );
+    return;
+  }
+  if (id == 'MAT-004') {
+    final r = inputs['resource'] as Map<String, dynamic>;
+    final resource = AtlasResolvedResource(
+      identity: AtlasResourceIdentity(
+        provider: AtlasId(r['provider'] as String),
+        kind: _resolutionKind(r['kind'] as String),
+      ),
+      provider: AtlasId(r['provider'] as String),
+      kind: _resolutionKind(r['kind'] as String),
+    );
+    final materialized = AtlasMaterializer.materialize(resource);
+    _record(
+      id,
+      materialized.status.name == expected['status'] &&
+              materialized.reason ==
+                  (expected['rejection'] as Map<String, dynamic>)['category']
+          ? Verdict.pass
+          : Verdict.fail,
+      'invalid resource, reason=${materialized.reason}',
+    );
+    return;
+  }
+  if (id == 'RID-001') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final key = AtlasTileKey(
+      layer: 'standard',
+      z: resource.tile!.z,
+      x: resource.tile!.x,
+      y: resource.tile!.y,
+    );
+    final a = resource.provider.value;
+    final b = resource.identity.toString();
+    final c = key.keyString;
+    final ok = a != b && a != c && b != c && (expected['all_distinct'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'provider/identity/key differ',
+    );
+    return;
+  }
+  if (id == 'REP-001') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final materialized = AtlasMaterializer.materialize(
+      resource,
+      urlTemplate: inputs['template'] as String,
+    );
+    final representation = materialized.representation ?? '';
+    final identityString = resource.identity.toString();
+    final ok =
+        representation.contains('://') &&
+        representation != identityString &&
+        !identityString.contains('://') &&
+        (expected['representation_differs_from_identity'] as bool) &&
+        (expected['identity_has_no_scheme_separator'] as bool);
+    _record(id, ok ? Verdict.pass : Verdict.fail, 'url=$representation');
+    return;
+  }
+  // BOUND-001 only: unguarded fallthrough here previously swallowed
+  // ADV-042/043 (fixed: explicit guard + unknown-id safety net).
+  if (id == 'BOUND-001') {
+    final catalog = catalogOf(inputs['catalog']);
+    final resource = _bindForTest(
+      _resRequest(inputs['request'] as Map<String, dynamic>),
+      catalog,
+    );
+    final keyJson = inputs['key'] as Map<String, dynamic>;
+    final key = AtlasTileKey(
+      layer: keyJson['layer'] as String,
+      z: (keyJson['z'] as num).toInt(),
+      x: (keyJson['x'] as num).toInt(),
+      y: (keyJson['y'] as num).toInt(),
+    );
+    final payloadJson = inputs['payload'] as Map<String, dynamic>;
+    final entry = AtlasTileEntry(
+      identity: AtlasTileIdentity(
+        provider: resource.provider,
+        layer: const AtlasId('standard'),
+        coordinate: AtlasTileCoordinate(z: key.z, x: key.x, y: key.y),
+      ),
+      key: key,
+      payloadId: AtlasId(payloadJson['id'] as String),
+    );
+    final materialized = AtlasMaterializer.materialize(
+      resource,
+      urlTemplate: inputs['template'] as String,
+    );
+    final ok =
+        entry.validate().isValid == (expected['entry_valid'] as bool) &&
+        key.keyString ==
+            'standard/${resource.tile!.z}_${resource.tile!.x}_${resource.tile!.y}' &&
+        (expected['key_renders_address'] as bool) &&
+        materialized.status == AtlasMaterializationStatus.ready &&
+        (expected['materialization_clean'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'key/entry coexist with materialization uncollapsed',
+    );
+    return;
+  }
+
+  if (id == 'ADV-042') {
+    final identityJson = inputs['identity'] as Map<String, dynamic>;
+    final identity = AtlasResourceIdentity(
+      provider: AtlasId(identityJson['provider'] as String),
+      kind: _resolutionKind(identityJson['kind'] as String),
+      address: identityJson['address'] as String,
+    );
+    final v = identity.validate();
+    _record(
+      id,
+      !v.isValid ? Verdict.pass : Verdict.fail,
+      'PROPOSED rule; rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  // ADV-043: binding a non-resolved result must throw INVALID_STATE.
+  final ambiguousCatalog = catalogOf(inputs['catalog']);
+  final ambiguousResult = AtlasResolver.resolve(
+    _resRequest(inputs['request'] as Map<String, dynamic>),
+    ambiguousCatalog,
+  );
+  if (ambiguousResult.status != AtlasResolutionStatus.ambiguous) {
+    _record(
+      id,
+      Verdict.fail,
+      'fixture requires ambiguity, got ${ambiguousResult.status}',
+    );
+    return;
+  }
+  try {
+    AtlasResolvedResource.fromResolution(
+      result: ambiguousResult,
+      provider: ambiguousCatalog.first,
+    );
+    _record(id, Verdict.fail, 'bound an ambiguous result without rejection');
+    return;
+  } on AtlasRejectionException catch (e) {
+    _record(
+      id,
+      e.rejection.category ==
+              (expected['rejection'] as Map<String, dynamic>)['category']
+          ? Verdict.pass
+          : Verdict.fail,
+      'category=${e.rejection.category}',
+    );
+    return;
+  }
+}
+
 void _adversarial(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
@@ -1499,6 +1831,10 @@ void _adversarial(Map<String, dynamic> f) {
       id == 'ADV-040' ||
       id == 'ADV-041') {
     _resolution(f);
+    return;
+  }
+  if (id == 'ADV-042' || id == 'ADV-043') {
+    _resources(f);
     return;
   }
   switch (id) {
@@ -1876,6 +2212,8 @@ void main() {
             _providers(fixture);
           case 'resolution':
             _resolution(fixture);
+          case 'resources':
+            _resources(fixture);
           case 'tiles':
             _tiles(fixture);
           case 'migration':
