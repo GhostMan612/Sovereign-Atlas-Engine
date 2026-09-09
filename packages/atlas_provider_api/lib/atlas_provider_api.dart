@@ -5,6 +5,10 @@
 // initialization these become `package:atlas_provider_api/...` imports.
 
 export 'src/capabilities/provider_capability.dart';
+export 'src/acquisition/acquisition.dart';
+export 'src/acquisition/acquisition_policy.dart';
+export 'src/acquisition/acquisition_request.dart';
+export 'src/acquisition/acquisition_result.dart';
 export 'src/provider/data_kind.dart';
 export 'src/provider/provider_descriptor.dart';
 export 'src/requests/tile_coordinate.dart';
