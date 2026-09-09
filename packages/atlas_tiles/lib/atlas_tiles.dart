@@ -8,3 +8,6 @@
 export 'src/entries/cache_entry.dart';
 export 'src/keys/cache_key.dart';
 export 'src/lookup/cache_lookup.dart';
+export 'src/pipeline/pipeline.dart';
+export 'src/pipeline/pipeline_outcome.dart';
+export 'src/pipeline/pipeline_policy.dart';
