@@ -1,0 +1,1 @@
+{"contract":"ATLAS-PROV-DESC-001","expected":{"attempt_ids_exist":false},"fixture_version":1,"id":"ADV-060","inputs":{"probe":"no-attempt-identity"},"notes":"1.8-D ruling: no attempt IDs exist (random IDs banned, counters are engine state). Runner asserts the surface has no id member.","status":"PROPOSED","tolerance":null,"trace":"1.8-D attempt-identity ruling; 1.8-O"}

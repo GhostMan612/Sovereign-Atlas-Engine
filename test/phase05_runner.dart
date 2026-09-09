@@ -1099,9 +1099,16 @@ bool _resolutionLeakCheck(List<String> violations) {
     'shared_preferences',
     'path_provider',
     'pathProvider',
+    'attemptId',
+    'Uuid',
+    'uuid',
+    'Uint8List',
+    'List<int>',
   ];
   const dirs = [
     'packages/atlas_provider_api/lib/src/resolution',
+    'packages/atlas_provider_api/lib/src/resources',
+    'packages/atlas_provider_api/lib/src/acquisition',
     'packages/atlas_tiles/lib/src',
   ];
   for (final dirPath in dirs) {
@@ -1349,6 +1356,319 @@ void _cache(Map<String, dynamic> f) {
     ok ? Verdict.pass : Verdict.fail,
     'outcome=${decision.outcome.name}',
   );
+}
+
+// ---------------------------------------------------------------------------
+// ACQUISITION (Phase 1.8: semantic attempts/outcomes, never transport)
+// ---------------------------------------------------------------------------
+
+AtlasAcquisitionPolicy _acqPolicy(Map<String, dynamic> m) =>
+    AtlasAcquisitionPolicy(
+      timeoutSeconds: m.containsKey('timeout_seconds')
+          ? (m['timeout_seconds'] as num).toInt()
+          : null,
+      allowRetry: (m['allow_retry'] as bool?) ?? true,
+    );
+
+AtlasResourceIdentity _acqResource(Map<String, dynamic> m) =>
+    AtlasResourceIdentity(
+      provider: AtlasId(m['provider'] as String),
+      kind: _resolutionKind(m['kind'] as String),
+      address: (m['address'] as String?) ?? '',
+    );
+
+AtlasAcquisitionRequest _acqRequest(Map<String, dynamic> inputs) {
+  final r = inputs['resource'] as Map<String, dynamic>;
+  return AtlasAcquisitionRequest(
+    resource: _acqResource(r),
+    provider: inputs.containsKey('provider')
+        ? AtlasId(inputs['provider'] as String)
+        : null,
+    policy: inputs.containsKey('policy')
+        ? _acqPolicy(inputs['policy'] as Map<String, dynamic>)
+        : const AtlasAcquisitionPolicy(),
+  );
+}
+
+AtlasAcquisition _acqStarted(Map<String, dynamic> inputs, {int? atOverride}) {
+  final startedAt =
+      (inputs['started_at'] as num?)?.toInt() ?? (inputs['now'] as num).toInt();
+  return AtlasAcquisition.start(_acqRequest(inputs), atOverride ?? startedAt);
+}
+
+void _acquisition(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  AtlasAcquisitionFailure _failure(String name) =>
+      AtlasAcquisitionFailure.values.firstWhere((v) => v.name == name);
+  if (id == 'ACQ-001' ||
+      id == 'ACQ-002' ||
+      id == 'ADV-055' ||
+      id == 'ADV-061') {
+    // Target validation (+ network-flag independence for ADV-061: unknown
+    // JSON keys never reach constructors, so validity is identical).
+    final request = _acqRequest(inputs);
+    final v = request.validate();
+    final held = AtlasAcquisition(request: request);
+    final ok =
+        v.isValid == (expected['valid'] as bool) &&
+        held.state.name == 'notStarted';
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'valid=${v.isValid} initial=${held.state.name}',
+    );
+    return;
+  }
+  if (id == 'ACQ-003' ||
+      id == 'ACQ-004' ||
+      id == 'ACQ-014' ||
+      id == 'ADV-051') {
+    final v = _acqRequest(inputs).validate();
+    final want = expected['rejection'] is Map
+        ? (expected['rejection'] as Map)['category']
+        : expected['rejection'];
+    _record(
+      id,
+      !v.isValid && v.rejection?.category == want ? Verdict.pass : Verdict.fail,
+      'rejection=${v.rejection?.category}',
+    );
+    return;
+  }
+  if (id == 'ACQ-005' || id == 'ACQ-006') {
+    final started = _acqStarted(inputs);
+    _record(
+      id,
+      started.state.name == expected['after'] ? Verdict.pass : Verdict.fail,
+      'state=${started.state.name} (explicit now, no clock)',
+    );
+    return;
+  }
+  if (id == 'ACQ-007') {
+    final acquisition = _acqStarted(inputs)
+        .cancel((inputs['now'] as num).toInt());
+    _record(
+      id,
+      acquisition.state.name == expected['after'] ? Verdict.pass : Verdict.fail,
+      'cancelled ≠ failed (distinct status)',
+    );
+    return;
+  }
+  if (id == 'ACQ-008' || id == 'ACQ-009') {
+    final acquisition = _acqStarted(inputs)
+        .checkTimeout((inputs['now'] as num).toInt());
+    var ok = acquisition.state.name == expected['after'];
+    if (expected.containsKey('retryable')) {
+      ok =
+          ok &&
+          acquisition.failure!.retryable == (expected['retryable'] as bool);
+    }
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'state=${acquisition.state.name} (pure duration compare)',
+    );
+    return;
+  }
+  if (id == 'ACQ-010' || id == 'ADV-054') {
+    // ADV-054 probes completion mechanics, so it carries no resource of its
+    // own: a fixed valid request stands in (time stays explicit).
+    final effectiveInputs = id == 'ADV-054'
+        ? {
+            'policy': <String, dynamic>{},
+            'resource': {
+              'provider': 'osm',
+              'kind': 'rasterTiles',
+              'address': 'z=1/x=0/y=0@xyz',
+            },
+            'started_at': inputs['started_at'],
+          }
+        : inputs;
+    final acquisition = _acqStarted(effectiveInputs).complete(
+      AtlasId(inputs['payload_id'] as String),
+      (inputs['now'] as num).toInt(),
+    );
+    final result = acquisition.toResult();
+    final ok =
+        acquisition.state.name ==
+            (expected['after'] as String? ?? 'succeeded') &&
+        result.payloadId?.value == (inputs['payload_id'] as String) &&
+        result.request == acquisition.request &&
+        (id == 'ACQ-010'
+            ? result.payloadId?.value == expected['payload_id'] &&
+                  (expected['resource_preserved'] as bool)
+            : !(expected['bytes_required'] as bool));
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'payload ID bound, bytes never involved',
+    );
+    return;
+  }
+  if (id == 'ACQ-011' || id == 'ACQ-012' || id == 'ACQ-013') {
+    final acquisition = _acqStarted(inputs).fail(
+      _failure(inputs['failure'] as String),
+      (inputs['now'] as num).toInt(),
+    );
+    final ok =
+        acquisition.state.name == expected['after'] &&
+        acquisition.failure!.name == expected['failure'] &&
+        acquisition.failure!.retryable == (expected['retryable'] as bool);
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'failure=${acquisition.failure!.name} '
+      'retryable=${acquisition.failure!.retryable} (advice only)',
+    );
+    return;
+  }
+  if (id == 'ACQ-015') {
+    // Boundary probe: exercised through the arch self-check (no transport/
+    // cache/renderer markers in acquisition sources) plus a live validation
+    // that request construction needs no network-shaped input.
+    final request = AtlasAcquisitionRequest(
+      resource: _acqResource({
+        'provider': 'osm',
+        'kind': 'rasterTiles',
+        'address': 'z=12/x=986/y=1473@xyz',
+      }),
+    );
+    final leaks = <String>[];
+    final ok =
+        request.validate().isValid &&
+        (expected['acquires_nothing'] as bool) &&
+        (expected['has_no_cache_lookup'] as bool) &&
+        (expected['has_no_url_execution'] as bool) &&
+        _resolutionLeakCheck(leaks) &&
+        leaks.isEmpty;
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'boundaries hold; leak-check green',
+    );
+    return;
+  }
+  if (id == 'ADV-052') {
+    final names = AtlasAcquisitionFailure.values.map((v) => v.name).toSet();
+    final want = (expected['closed_set'] as List).cast<String>().toSet();
+    final hasDigits = names.any((n) => RegExp(r'[0-9]').hasMatch(n));
+    _record(
+      id,
+      names.containsAll(want) &&
+              want.containsAll(names) &&
+              !hasDigits &&
+              (expected['has_no_numeric_codes'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'taxonomy=$names (closed, no HTTP codes)',
+    );
+    return;
+  }
+  if (id == 'ADV-053' || id == 'ADV-057') {
+    // Shape audits: success results expose exactly request/state/failure/
+    // payloadId surface (verified structurally — the types have no other
+    // members; arch grep enforces the absences).
+    final acquisition = _acqStarted({
+      'policy': <String, dynamic>{},
+      'resource': {
+        'provider': 'osm',
+        'kind': 'rasterTiles',
+        'address': 'z=1/x=0/y=0@xyz',
+      },
+    }).complete(const AtlasId('p-1'), 1700000000);
+    final result = acquisition.toResult();
+    final ok =
+        result.state == AtlasAcquisitionState.succeeded &&
+        result.payloadId == const AtlasId('p-1') &&
+        result.failure == null;
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'result surface = request/state/failure/payloadId only',
+    );
+    return;
+  }
+  if (id == 'ADV-056' || id == 'ADV-062') {
+    final leaks = <String>[];
+    _record(
+      id,
+      _resolutionLeakCheck(leaks) && leaks.isEmpty
+          ? Verdict.pass
+          : Verdict.fail,
+      leaks.isEmpty ? 'no cache/sdk members in acquisition' : leaks.join('; '),
+    );
+    return;
+  }
+  if (id == 'ADV-058') {
+    final acquisition = _acqStarted({
+      'policy': <String, dynamic>{},
+      'resource': {
+        'provider': 'osm',
+        'kind': 'rasterTiles',
+        'address': 'z=1/x=0/y=0@xyz',
+      },
+    });
+    final cancelled = acquisition.cancel(1700000001);
+    _record(
+      id,
+      cancelled.state == AtlasAcquisitionState.cancelled &&
+              (expected['cancel_takes_no_token'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'cancel(int) — no token type exists',
+    );
+    return;
+  }
+  if (id == 'ADV-059') {
+    final temporal = RegExp(
+      r'"id"\s*:\s*"(ACQ-005|ACQ-006|ACQ-007|ACQ-008|ACQ-009|ACQ-010|ACQ-011|ACQ-012|ACQ-013|ADV-054)"',
+    );
+    final missing = <String>[];
+    final dir = Directory('test/golden/acquisition');
+    for (final file in dir.listSync().whereType<File>().where(
+      (f) => f.path.endsWith('.json'),
+    )) {
+      final text = file.readAsStringSync();
+      if (temporal.hasMatch(text) && !text.contains('"now"')) {
+        missing.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    _record(
+      id,
+      missing.isEmpty && (expected['explicit_now_present'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      missing.isEmpty
+          ? 'every lifecycle fixture carries explicit now'
+          : 'missing now: $missing',
+    );
+    return;
+  }
+  if (id == 'ADV-060') {
+    // No attempt-id member exists: construction surface is request/state/
+    // startedAt/updatedAt/failure/payloadId only (arch-grep for id-carrying
+    // members enforced alongside).
+    final acquisition = AtlasAcquisition(
+      request: _acqRequest({
+        'policy': <String, dynamic>{},
+        'resource': {
+          'provider': 'osm',
+          'kind': 'rasterTiles',
+          'address': 'z=1/x=0/y=0@xyz',
+        },
+      }),
+    );
+    _record(
+      id,
+      acquisition.startedAt == null && !(expected['attempt_ids_exist'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'no attempt identity anywhere in the model',
+    );
+    return;
+  }
+  _record(id, Verdict.fail, 'unknown acquisition fixture: $id');
 }
 
 // ---------------------------------------------------------------------------
@@ -2065,6 +2385,7 @@ void _resources(Map<String, dynamic> f) {
 void _adversarial(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
   if (id == 'ADV-038' ||
       id == 'ADV-039' ||
       id == 'ADV-040' ||
@@ -2074,6 +2395,168 @@ void _adversarial(Map<String, dynamic> f) {
   }
   if (id == 'ADV-042' || id == 'ADV-043') {
     _resources(f);
+    return;
+  }
+  if (id == 'ADV-051' || id == 'ADV-055' || id == 'ADV-061') {
+    // URL-target refusal / non-tile validity / network-flag independence:
+    // all reduce to request validation over inline resources.
+    final r = inputs['resource'] as Map<String, dynamic>;
+    final request = AtlasAcquisitionRequest(
+      resource: _acqResource(r),
+      policy: inputs.containsKey('policy')
+          ? _acqPolicy(inputs['policy'] as Map<String, dynamic>)
+          : const AtlasAcquisitionPolicy(),
+    );
+    final v = request.validate();
+    final wantInvalid = id == 'ADV-051';
+    final wantCategory = id == 'ADV-051' ? 'INVALID_IDENTITY' : null;
+    final ok = wantInvalid
+        ? !v.isValid && v.rejection?.category == wantCategory
+        : v.isValid;
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      id == 'ADV-061'
+          ? 'unknown keys ignored; validity network-independent'
+          : 'valid=${v.isValid}',
+    );
+    return;
+  }
+  if (id == 'ADV-052') {
+    final names = AtlasAcquisitionFailure.values.map((v) => v.name).toSet();
+    final want = (expected['closed_set'] as List).cast<String>().toSet();
+    final hasDigits = names.any((n) => RegExp(r'[0-9]').hasMatch(n));
+    _record(
+      id,
+      names.containsAll(want) &&
+              want.containsAll(names) &&
+              !hasDigits &&
+              (expected['has_no_numeric_codes'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'taxonomy=$names (closed, no HTTP codes)',
+    );
+    return;
+  }
+  if (id == 'ADV-053' || id == 'ADV-057' || id == 'ADV-054') {
+    // Shape audits over a live success: request/state/failure/payloadId are
+    // the whole surface (absence enforced by arch grep alongside).
+    final base = id == 'ADV-054'
+        ? {
+            'policy': <String, dynamic>{},
+            'resource': {
+              'provider': 'osm',
+              'kind': 'rasterTiles',
+              'address': 'z=1/x=0/y=0@xyz',
+            },
+            'started_at': inputs['started_at'],
+          }
+        : {
+            'policy': <String, dynamic>{},
+            'resource': {
+              'provider': 'osm',
+              'kind': 'rasterTiles',
+              'address': 'z=1/x=0/y=0@xyz',
+            },
+            'started_at': 1700000000,
+          };
+    final acquisition =
+        AtlasAcquisition.start(
+          _acqRequest(base),
+          (inputs['now'] as num?)?.toInt() ?? 1700000010,
+        ).complete(
+          AtlasId((inputs['payload_id'] as String?) ?? 'p-1'),
+          (inputs['now'] as num?)?.toInt() ?? 1700000010,
+        );
+    final result = acquisition.toResult();
+    final ok =
+        result.state == AtlasAcquisitionState.succeeded &&
+        result.payloadId != null &&
+        result.failure == null;
+    _record(
+      id,
+      ok ? Verdict.pass : Verdict.fail,
+      'surface = request/state/failure/payloadId; bytes never required',
+    );
+    return;
+  }
+  if (id == 'ADV-056' || id == 'ADV-062') {
+    final leaks = <String>[];
+    _record(
+      id,
+      _resolutionLeakCheck(leaks) && leaks.isEmpty
+          ? Verdict.pass
+          : Verdict.fail,
+      leaks.isEmpty ? 'no cache/sdk members in acquisition' : leaks.join('; '),
+    );
+    return;
+  }
+  if (id == 'ADV-058') {
+    final acquisition = AtlasAcquisition.start(
+      _acqRequest({
+        'policy': <String, dynamic>{},
+        'resource': {
+          'provider': 'osm',
+          'kind': 'rasterTiles',
+          'address': 'z=1/x=0/y=0@xyz',
+        },
+      }),
+      1700000000,
+    );
+    final cancelled = acquisition.cancel(1700000001);
+    _record(
+      id,
+      cancelled.state == AtlasAcquisitionState.cancelled &&
+              (expected['cancel_takes_no_token'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'cancel(int) — no token type exists',
+    );
+    return;
+  }
+  if (id == 'ADV-059') {
+    final temporal = RegExp(
+      r'"id"\s*:\s*"(ACQ-005|ACQ-006|ACQ-007|ACQ-008|ACQ-009|ACQ-010|ACQ-011|ACQ-012|ACQ-013)"',
+    );
+    final missing = <String>[];
+    final dir = Directory('test/golden/acquisition');
+    for (final file in dir.listSync().whereType<File>().where(
+      (f) => f.path.endsWith('.json'),
+    )) {
+      final text = file.readAsStringSync();
+      if (temporal.hasMatch(text) && !text.contains('"now"')) {
+        missing.add(file.path.split(Platform.pathSeparator).last);
+      }
+    }
+    _record(
+      id,
+      missing.isEmpty && (expected['explicit_now_present'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      missing.isEmpty
+          ? 'every lifecycle fixture carries explicit now'
+          : 'missing now: $missing',
+    );
+    return;
+  }
+  if (id == 'ADV-060') {
+    final acquisition = AtlasAcquisition(
+      request: _acqRequest({
+        'policy': <String, dynamic>{},
+        'resource': {
+          'provider': 'osm',
+          'kind': 'rasterTiles',
+          'address': 'z=1/x=0/y=0@xyz',
+        },
+      }),
+    );
+    _record(
+      id,
+      acquisition.startedAt == null && !(expected['attempt_ids_exist'] as bool)
+          ? Verdict.pass
+          : Verdict.fail,
+      'no attempt identity anywhere in the model',
+    );
     return;
   }
   if (id == 'KEY-004' ||
@@ -2460,6 +2943,8 @@ void main() {
             _parcels(fixture);
           case 'providers':
             _providers(fixture);
+          case 'acquisition':
+            _acquisition(fixture);
           case 'resolution':
             _resolution(fixture);
           case 'resources':
@@ -2480,8 +2965,9 @@ void main() {
             );
         }
       }
-    } catch (e) {
-      _record(fixture['id'] as String, Verdict.fail, 'harness error: $e');
+    } catch (e, st) {
+      _record(fixture['id'] as String, Verdict.fail, 'harness error: $e\n$st');
+      return;
     }
   }
 

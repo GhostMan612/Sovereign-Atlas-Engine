@@ -1,0 +1,1 @@
+{"contract":"ATLAS-TILE-CACHE-001","expected":{"cache_lookup_embedded":false},"fixture_version":1,"id":"ADV-056","inputs":{"probe":"no-cache-inside-acquisition"},"notes":"Acquisition types reference no cache key/entry/lookup (arch-grep enforced; runner asserts type-surface has no cache members).","status":"PROPOSED","tolerance":null,"trace":"1.8-K cache boundary; 1.8-O"}

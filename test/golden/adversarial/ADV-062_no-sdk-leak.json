@@ -1,0 +1,1 @@
+{"contract":"ATLAS-PROV-DESC-001","expected":{"sdk_types_present":false},"fixture_version":1,"id":"ADV-062","inputs":{"probe":"no-provider-sdk-in-acquisition"},"notes":"No provider SDK/client/credential types in acquisition sources (arch-grep enforced over acquisition dir).","status":"PROPOSED","tolerance":null,"trace":"1.8-O provider-implementation boundary"}
