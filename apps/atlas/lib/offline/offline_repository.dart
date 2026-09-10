@@ -22,6 +22,7 @@
 // resident (live gate in resolveTileBytes) — unindexed bytes are pending
 // deletion, never "available offline".
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -51,6 +52,14 @@ const int kMaxSessionTiles = 4096;
 /// Diagnostics event log bound (oldest drops first).
 const int kEventLogBound = 200;
 
+/// Default per-tile acquisition bound (DEC-020 app policy, documented,
+/// adjustable). Rationale: tile fetches normally settle in seconds; 30 s
+/// tolerates slow mobile links while bounding the worst case. The bound
+/// guarantees every downloader await settles, so `finally` cleanup always
+/// runs (closes the stale-`_downloads` restart wedge by construction).
+/// Constructor-injectable for tests (milliseconds there).
+const Duration kDefaultPerTileTimeout = Duration(seconds: 30);
+
 /// Disk journal layout under the app documents directory:
 /// `offline_packs/<packId>/<z>_<x>_<y>.tile` + `offline_packs/index.json`.
 const String kPackJournalDir = 'offline_packs';
@@ -74,6 +83,15 @@ AtlasChunkSource defaultChunkSource(AtlasProviderEndpoint endpoint) {
   };
 }
 
+/// Bounds one chunk fetch with [bound] (DEC-020 detection point: the chunk
+/// source is the only layer that observes a stall). Expiry throws
+/// [TimeoutException], which the downloader's existing catch records as
+/// `failed` with the identity preserved in `failureDetail` — no new
+/// terminal, no taxonomy change.
+AtlasChunkSource withPerTileTimeout(AtlasChunkSource inner, Duration bound) {
+  return (tile) => inner(tile).timeout(bound);
+}
+
 /// App orchestrator for the Offline Areas track. Testable: [clock],
 /// [chunkSourceFactory], and [directoryProvider] inject fakes
 /// (widget/integration builds use the production defaults).
@@ -94,6 +112,7 @@ final class OfflineRepository extends ChangeNotifier {
     int Function()? clock,
     this._sharedLimiter,
     Future<Directory> Function()? directoryProvider,
+    this.perTileTimeout = kDefaultPerTileTimeout,
   })  : _store = store ?? AtlasMemoryStore(capacity: kPackStoreCapacity),
         _chunkSourceFactory = chunkSourceFactory ?? defaultChunkSource,
         _directoryProvider = directoryProvider ?? getApplicationDocumentsDirectory,
@@ -106,6 +125,10 @@ final class OfflineRepository extends ChangeNotifier {
   final AtlasRateLimiter? _sharedLimiter;
   final Future<Directory> Function() _directoryProvider;
   final int Function() _clock;
+
+  /// Per-tile acquisition bound (DEC-020). Wraps the chunk source so every
+  /// downloader await settles — stalled tiles become `failed`, never hangs.
+  final Duration perTileTimeout;
 
   final Map<String, OfflinePackRecord> _packs = {};
   final Map<String, Map<String, List<int>>> _receivedBytes = {};
@@ -297,7 +320,10 @@ final class OfflineRepository extends ChangeNotifier {
     _cancellations[packId] = cancellation;
     final downloader = AtlasPackDownloader(
       tiles: record.plan!.tiles,
-      source: _chunkSourceFactory(endpoint),
+      source: withPerTileTimeout(
+        _chunkSourceFactory(endpoint),
+        perTileTimeout,
+      ),
       limiter: _sharedLimiter,
       cancellation: cancellation,
       received: _receivedBytes.putIfAbsent(packId, () => {}),
@@ -323,9 +349,24 @@ final class OfflineRepository extends ChangeNotifier {
         case AtlasDownloadState.complete:
           await _completePack(record, endpoint);
         case AtlasDownloadState.failed:
-          record.lifecycle = OfflinePackLifecycle.failed;
-          record.failureDetail = downloader.failureDetail;
-          _log('download $packId FAILED: ${downloader.failureDetail}');
+          // Cancellation retains priority over timeout (DEC-020): the
+          // engine cannot observe cancel mid-await, so a timeout firing
+          // while cancel was requested is recorded as cancelled. Only the
+          // synthetic timeout event is reinterpreted — genuine transport
+          // errors keep their `failed` meaning even with cancel pending.
+          // The downloader collapses everything to a detail string, so the
+          // `TimeoutException` runtime-type prefix is the available seam
+          // (asserted in tests; see withPerTileTimeout).
+          if (_cancellations[packId]?.isCancelled == true &&
+              downloader.failureDetail.startsWith('TimeoutException')) {
+            record.lifecycle = OfflinePackLifecycle.cancelled;
+            _log('download $packId cancelled (cancel won over timeout at '
+                '${record.receivedTiles}/${record.tileCount})');
+          } else {
+            record.lifecycle = OfflinePackLifecycle.failed;
+            record.failureDetail = downloader.failureDetail;
+            _log('download $packId FAILED: ${downloader.failureDetail}');
+          }
         case AtlasDownloadState.cancelled:
           record.lifecycle = OfflinePackLifecycle.cancelled;
           _log('download $packId cancelled at '

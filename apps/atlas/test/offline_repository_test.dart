@@ -25,6 +25,7 @@ OfflineRepository testRepo({
   int Function()? clock,
   Directory? dir,
   AtlasRateLimiter? sharedLimiter,
+  Duration? perTileTimeout,
 }) {
   return OfflineRepository(
     registry: AtlasBuiltinProviders.registry(),
@@ -35,8 +36,14 @@ OfflineRepository testRepo({
     directoryProvider: () async =>
         dir ?? Directory.systemTemp.createTempSync('atlas_repo_'),
     sharedLimiter: sharedLimiter,
+    perTileTimeout: perTileTimeout ?? kDefaultPerTileTimeout,
   );
 }
+
+/// A transport that accepts and never answers (deterministic stall — the
+/// shape of the observed Esri incident, without any network).
+AtlasChunkSource get stalledSource =>
+    (_) => Completer<List<int>>().future;
 
 OfflinePackRecord planOne(
   OfflineRepository repo, {
@@ -378,6 +385,104 @@ void main() {
       await repo.startDownload(second.packId);
       expect(second.lifecycle, OfflinePackLifecycle.complete);
       expect(second.receivedTiles, 2);
+    });
+
+    test('stalled tile reaches failed with TimeoutException identity',
+        () async {
+      final repo = testRepo(
+        source: stalledSource,
+        perTileTimeout: const Duration(milliseconds: 50),
+      );
+      final record = planOne(repo);
+      await repo.startDownload(record.packId);
+      // DEC-020 mapping: existing failed terminal, timeout identity kept
+      // in the detail (no new state, no taxonomy change).
+      expect(record.lifecycle, OfflinePackLifecycle.failed);
+      expect(record.failureDetail, contains('TimeoutException'));
+      // No false completion, no false indexing, nothing served.
+      expect(repo.store.stats.entryCount, 0);
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
+      expect(record.seal, isNull);
+    });
+
+    test('timeout preserves received tiles; resume completes', () async {
+      var stallSecond = true;
+      final repo = testRepo(
+        source: (tile) async {
+          if (tile.x == 1 && stallSecond) {
+            await Completer<void>().future;
+          }
+          return [tile.z];
+        },
+        perTileTimeout: const Duration(milliseconds: 50),
+      );
+      final record = repo.planPack(
+        providerId: 'esri-imagery',
+        zMin: 0,
+        zMax: 0,
+        xMin: 0,
+        xMax: 1,
+        yMin: 0,
+        yMax: 0,
+        bytesPerTile: 100,
+      );
+      await repo.startDownload(record.packId);
+      expect(record.lifecycle, OfflinePackLifecycle.failed);
+      expect(record.failureDetail, contains('TimeoutException'));
+      // The completed tile survives; only the stalled in-flight one is lost.
+      expect(record.receivedTiles, 1);
+      stallSecond = false;
+      await repo.startDownload(record.packId);
+      expect(record.lifecycle, OfflinePackLifecycle.complete);
+      expect(record.receivedTiles, 2);
+      expect(record.seal, isNotNull);
+    });
+
+    test('cancel wins over a pending timeout', () async {
+      final repo = testRepo(
+        source: stalledSource,
+        perTileTimeout: const Duration(milliseconds: 80),
+      );
+      final record = planOne(repo);
+      final future = repo.startDownload(record.packId);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Cancel lands mid-await: the engine cannot observe it there, so the
+      // timeout fires — but the app records the user's act, not the clock.
+      repo.cancelDownload(record.packId);
+      await future;
+      expect(record.lifecycle, OfflinePackLifecycle.cancelled);
+      expect(record.failureDetail, isEmpty);
+    });
+
+    test('delete during stall settles promptly (wedge closed)', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final repo = testRepo(
+        dir: dir,
+        source: stalledSource,
+        perTileTimeout: const Duration(milliseconds: 50),
+      );
+      final record = planOne(repo);
+      final watch = Stopwatch()..start();
+      final future = repo.startDownload(record.packId);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await repo.deletePack(record.packId);
+      // Without the bound this await would hang forever (the observed
+      // wedge: finally never runs, restart silently ignored).
+      await future;
+      watch.stop();
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(repo.lookup(record.packId), isNull);
+      expect(repo.packs, isEmpty);
+      expect(repo.store.stats.entryCount, 0);
+      // And the restart path is alive afterwards (no stale running entry:
+      // a fresh download runs to its own terminal instead of being
+      // silently ignored). The source still stalls, so that terminal is
+      // failed — the point is that it TERMINATES.
+      expect(repo.isDownloading, isFalse);
+      final again = planOne(repo);
+      await repo.startDownload(again.packId);
+      expect(again.lifecycle, OfflinePackLifecycle.failed);
+      expect(again.failureDetail, contains('TimeoutException'));
     });
 
     test('delete during download is authoritative (no resurrection)',

@@ -45,6 +45,20 @@
 - **Scope preserved:** transport-blocked, not radio-off (same boundary
   as the render proof above).
 
+## On-device timeout mapping (DEC-020 proof, PASS)
+
+- **Method:** `integration_test/offline_timeout_test.dart` — injected
+  never-answering source + 2 s bound through the REAL app flow
+  (navigate → plan → download). Deterministic trigger, not a natural
+  stall: real socket timing is nondeterministic and unclaimed.
+- **Result:** `OFFLINE_TIMEOUT_RESULT: failed` (00:22, green).
+  `TimeoutException` identity visible on the card, Saved Areas empty,
+  `Pack index: 0/64`, app fully usable afterwards.
+- **What this closes:** the mapping half of the timeout decision on
+  hardware. The mechanism half (deadline fires, received preserved,
+  resume, cancel-wins, wedge closure) is host-proven; the device proves
+  the real app reaches the real terminal through the real UI.
+
 ## Scope honesty
 
 - The block is TRANSPORT-level, not radio-off: for the map renderer the

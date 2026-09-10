@@ -152,16 +152,37 @@ bypass:
     Diagnostics reports `unfinished` + `downloading` instead of a
     misleading `active`.
 
+## Chunk-source timeout (DEC-020, app policy, no engine changes)
+
+12. **Detection at the only observing layer.** The repository wraps its
+    chunk source per tile (`withPerTileTimeout`, default 30 s app policy,
+    constructor-injectable): stalls become `TimeoutException`, which the
+    downloader's existing catch records as `failed` — no new terminal,
+    Resume path intact, received tiles preserved, nothing indexed until
+    completion. The bound guarantees every `download()` settles, closing
+    the stale-`_downloads` restart wedge by construction.
+13. **Cancellation wins over timeout.** The engine cannot observe cancel
+    mid-await, so a timeout firing with cancel pending is recorded as
+    `cancelled` (extends the loop's existing cancellation-first order;
+    genuine transport errors keep `failed` even with cancel pending).
+14. **Identity preserved in diagnostics.** `failureDetail` carries the
+    `TimeoutException` runtime-type prefix by tested convention
+    (taxonomy stays `failed`; no `timedOut` wiring, no provider fields).
+15. **Proven:** 4 deterministic host tests (stall→failed, partial+resume,
+    cancel-wins, delete-during-stall with stopwatch boundedness) + forced
+    short-deadline injection on device (`OFFLINE_TIMEOUT_RESULT:
+    failed`). Real socket-timing remains inherently nondeterministic and
+    unclaimed; the acquisition `timedOut` stays unwired by explicit
+    decision.
+
 ## Verification totals (see DEVICE-005/006 for device rows)
 
-- `flutter analyze --no-pub`: clean. `flutter test test/`: 48/48 green
-  (41 baseline + 7 hardening: delete-during-download,
-  delete-during-persist, LRU eviction, persist-failure+recovery, mixed
-  journal, dead-directory restore, id-collision loop).
-- `flutter test integration_test`: 5/5 green on device (picker + offline
-  acquisition + render A/B + blocked-transport failure proof
-  [`OFFLINE_FAILURE_RESULT: failed` — SocketException detail surfaced,
-  nothing indexed, app usable]).
+- `flutter analyze --no-pub`: clean. `flutter test test/`: 52/52 green
+  (48 baseline + 4 timeout: stall identity, partial+resume, cancel-wins,
+  delete-during-stall boundedness).
+- `flutter test integration_test`: 6/6 green on device (picker + offline
+  acquisition + render A/B + blocked-transport failure +
+  forced-timeout mapping [`OFFLINE_TIMEOUT_RESULT: failed`]).
 - Engine regression `dart tools/atlas_tool.dart all`: 453/413/0/8/32
   (untouched — no engine file modified in this pass).
 - Deps: direct + dev-direct all up-to-date (incl. new path_provider
