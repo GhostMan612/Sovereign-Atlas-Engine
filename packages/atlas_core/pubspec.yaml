@@ -1,0 +1,7 @@
+name: atlas_core
+description: Sovereign Atlas Engine domain primitives (renderer/provider-free).
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+# No dependencies (ADR-002). Relative imports kept until the package:
+# migration step. Depends on nothing in the engine.

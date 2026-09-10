@@ -1,0 +1,17 @@
+# Sovereign Atlas Engine — shared analysis options (ADR-002).
+# Inline rules only: no package:lints include (offline-safe).
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    unused_import: warning
+linter:
+  rules:
+    - unused_import
+    - unnecessary_null_comparison
+    - prefer_final_fields
+    - prefer_final_locals
+    - avoid_print
+    - prefer_single_quotes
+    - require_trailing_commas

@@ -1,0 +1,7 @@
+name: atlas_providers
+description: Sovereign Atlas Engine concrete provider implementations (ADR-003).
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+# No hosted dependencies (ADR-003): transport is dart:io behind an injected
+# function type. Engine edges: core, provider_api, tiles.

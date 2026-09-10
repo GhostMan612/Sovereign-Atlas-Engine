@@ -1,0 +1,7 @@
+name: atlas_map
+description: Sovereign Atlas Engine map orchestration and renderer abstraction.
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+# No dependencies (ADR-002). Engine edges: core, geo, layers, provider_api,
+# tiles, offline, data, location.

@@ -1,0 +1,6 @@
+name: atlas_offline
+description: Sovereign Atlas Engine offline packs and durability contracts.
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+# No dependencies (ADR-002). Engine edges: core, tiles, provider_api, data.

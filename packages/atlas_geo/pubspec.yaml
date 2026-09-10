@@ -1,0 +1,6 @@
+name: atlas_geo
+description: Sovereign Atlas Engine geometry and spatial math (pure).
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+# No dependencies (ADR-002). Engine edges: core.
