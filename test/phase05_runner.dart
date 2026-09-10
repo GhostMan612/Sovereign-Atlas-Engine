@@ -2656,7 +2656,7 @@ void _pipeline(Map<String, dynamic> f) {
   );
 }
 
-void _adversarial(Map<String, dynamic> f) {
+Future<void> _adversarial(Map<String, dynamic> f) async {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
   final inputs = f['inputs'] as Map<String, dynamic>;
@@ -2844,10 +2844,21 @@ void _adversarial(Map<String, dynamic> f) {
     _pipeline(f);
     return;
   }
+  if (id == 'ADV-079' || id == 'ADV-080' || id == 'ADV-081') {
+    await _execution(f);
+    return;
+  }
   if (id == 'ADV-066' ||
       id == 'ADV-068' ||
       id == 'ADV-069' ||
-      id == 'ADV-072') {
+      id == 'ADV-072' ||
+      id == 'ADV-076' ||
+      id == 'ADV-077' ||
+      id == 'ADV-078' ||
+      id == 'ADV-082' ||
+      id == 'ADV-083' ||
+      id == 'ADV-084' ||
+      id == 'ADV-085') {
     // Source-collapse scans: forbidden tokens must not appear in pipeline
     // code lines (full-line comments excluded, same as the SELF check).
     final tokens =
@@ -3235,10 +3246,308 @@ void _adversarial(Map<String, dynamic> f) {
 }
 
 // ---------------------------------------------------------------------------
+// EXECUTION (Phase 2.0: substrate serving, scripted doubles live HERE only)
+// ---------------------------------------------------------------------------
+
+/// Scripted test operation (2.0-M §2): pre-declared outcomes + contact log.
+/// Production code must never contain this class (arch-scan enforced).
+final class _ScriptedOperation implements AtlasExecutionOperation {
+  _ScriptedOperation(
+    this.script,
+    this.cancellation,
+    this.cancelDuring,
+    this.log,
+  );
+
+  final Map<String, dynamic> script;
+  final ExecutionCancellation cancellation;
+  final bool cancelDuring;
+  final List<String> log;
+
+  /// Cooperation point: logs contact, optionally simulates an arriving
+  /// cancel, then cooperates (signal) or proceeds per script.
+  Future<T> _at<T>(String method, Future<T> Function() act) {
+    log.add(method);
+    if (cancelDuring) {
+      cancellation.requestCancel();
+      if ((script['cooperate'] as bool?) ?? true) {
+        throw const ExecutionCancelled();
+      }
+    }
+    return act();
+  }
+
+  Never _throwScripted(Map<String, dynamic> s) {
+    final type = s['type'] as String?;
+    final message = (s['message'] as String?) ?? 'scripted throw';
+    if (type == 'StateError') throw StateError(message);
+    throw Exception('$type: $message');
+  }
+
+  @override
+  Future<AtlasCacheEntry> serveEntry(
+    AtlasCacheEntry entry,
+    ExecutionContext context,
+  ) => _at('serve', () async {
+    final s = script['serve'] as Map<String, dynamic>;
+    switch (s['do']) {
+      case 'echo':
+        return entry;
+      case 'invalid_entry':
+        return AtlasCacheEntry(
+          key: const AtlasCacheKey(
+            namespace: AtlasCacheNamespace.resource,
+            value: '',
+          ),
+          storedAt: 0,
+        );
+      case 'throw':
+        _throwScripted(s);
+      default:
+        throw StateError('unknown serve script: ${s['do']}');
+    }
+  });
+
+  @override
+  Future<AtlasAcquisitionResult> runAcquisition(
+    AtlasAcquisitionRequest request,
+    ExecutionContext context,
+  ) => _at('acquire', () async {
+    final s = script['acquire'] as Map<String, dynamic>;
+    final now = context.nowSeconds;
+    switch (s['do']) {
+      case 'succeed':
+        return AtlasAcquisition.start(
+          request,
+          now - 100,
+        ).complete(AtlasId(s['payload_id'] as String), now).toResult();
+      case 'fail':
+        return AtlasAcquisition.start(request, now - 100)
+            .fail(
+              AtlasAcquisitionFailure.values.firstWhere(
+                (v) => v.name == s['failure'],
+              ),
+              now,
+            )
+            .toResult();
+      case 'cancelled_result':
+        return AtlasAcquisition.start(
+          request,
+          now - 100,
+        ).cancel(now).toResult();
+      case 'timeout_result':
+        final timed = AtlasAcquisitionRequest(
+          resource: request.resource,
+          policy: AtlasAcquisitionPolicy(
+            timeoutSeconds: (s['timeout_seconds'] as num).toInt(),
+          ),
+        );
+        return AtlasAcquisition.start(
+          timed,
+          now - 100,
+        ).checkTimeout(now).toResult();
+      case 'pending':
+        return AtlasAcquisition.start(request, now - 100).toResult();
+      case 'throw':
+        _throwScripted(s);
+      default:
+        throw StateError('unknown acquire script: ${s['do']}');
+    }
+  });
+
+  @override
+  Future<AtlasCacheEntry> storeHandoff(
+    AtlasCacheEntry handoff,
+    ExecutionContext context,
+  ) => _at('store', () async {
+    final s = script['store'] as Map<String, dynamic>;
+    switch (s['do']) {
+      case 'echo':
+        return handoff;
+      case 'invalid_entry':
+        return AtlasCacheEntry(
+          key: const AtlasCacheKey(
+            namespace: AtlasCacheNamespace.resource,
+            value: '',
+          ),
+          storedAt: 0,
+        );
+      case 'throw':
+        _throwScripted(s);
+      default:
+        throw StateError('unknown store script: ${s['do']}');
+    }
+  });
+}
+
+Future<ExecutionResultBase> _serveExecution(
+  String kind,
+  Map<String, dynamic> commandJson,
+  ExecutionContext context,
+) {
+  switch (kind) {
+    case 'serve':
+      return AtlasExecutor.serveEntry(
+        command: ServeEntryCommand(
+          entry: _cacheEntry(commandJson['entry'])!,
+          fallback: (commandJson['fallback'] as bool?) ?? false,
+        ),
+        context: context,
+      );
+    case 'acquire':
+      return AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: _acqRequest(commandJson['request'] as Map<String, dynamic>),
+        ),
+        context: context,
+      );
+    case 'store':
+      return AtlasExecutor.storeHandoff(
+        command: StoreHandoffCommand(
+          handoff: _cacheEntry(commandJson['entry'])!,
+        ),
+        context: context,
+      );
+    default:
+      throw StateError('unknown command kind: $kind');
+  }
+}
+
+Future<void> _execution(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final commandJson = inputs['command'] as Map<String, dynamic>;
+  final kind = commandJson['kind'] as String;
+  final contextJson = inputs['context'] as Map<String, dynamic>;
+
+  final serveKey = kind == 'acquire'
+      ? 'acquire'
+      : kind == 'serve'
+      ? 'serve'
+      : 'store';
+  final opSpecs = (inputs['operations'] as List)
+      .cast<Map>()
+      .map((op) => op.cast<String, dynamic>())
+      .toList();
+  for (final spec in opSpecs) {
+    final script = (spec['script'] as Map).cast<String, dynamic>();
+    if (!script.containsKey(serveKey)) {
+      throw StateError('fixture $id: script missing $serveKey behavior');
+    }
+  }
+
+  ExecutionContext buildContext(List<String> log) {
+    final cancellation = ExecutionCancellation();
+    final binding = <AtlasResourceIdentity, AtlasExecutionOperation>{};
+    for (final spec in opSpecs) {
+      binding[_acqResource(
+        (spec['identity'] as Map).cast<String, dynamic>(),
+      )] = _ScriptedOperation(
+        (spec['script'] as Map).cast<String, dynamic>(),
+        cancellation,
+        (contextJson['cancel_during'] as bool?) ?? false,
+        log,
+      );
+    }
+    return ExecutionContext(
+      nowSeconds: (contextJson['now'] as num).toInt(),
+      cancellation: cancellation,
+      binding: AtlasOperationBinding(binding),
+    );
+  }
+
+  final log = <String>[];
+  var context = buildContext(log);
+  if ((contextJson['cancel_before'] as bool?) ?? false) {
+    context.cancellation.requestCancel();
+  }
+  final result = await _serveExecution(kind, commandJson, context);
+
+  var ok = result.state.name == expected['state'];
+  if (result is RunAcquisitionResult) {
+    if (expected.containsKey('acquisition_state')) {
+      ok =
+          ok && result.acquisition?.state.name == expected['acquisition_state'];
+    }
+    if (expected.containsKey('acquisition_failure')) {
+      final want = expected['acquisition_failure'] as String?;
+      ok = ok && result.acquisition?.failure?.name == want;
+    }
+    if (expected.containsKey('echo_payload')) {
+      ok =
+          ok &&
+          result.acquisition?.payloadId?.value == expected['echo_payload'];
+    }
+    if (expected.containsKey('carries_identity_not_bytes')) {
+      ok =
+          ok &&
+          (expected['carries_identity_not_bytes'] as bool) &&
+          result.acquisition != null &&
+          result.acquisition?.payloadId != null;
+    }
+  }
+  if (result is ServeEntryResult) {
+    if (expected.containsKey('fallback')) {
+      ok = ok && result.command.fallback == expected['fallback'];
+    }
+    if (expected.containsKey('echo_entry')) {
+      ok =
+          ok &&
+          (expected['echo_entry'] as bool) &&
+          result.servedEntry ==
+              _cacheEntry(
+                (commandJson['entry'] as Map).cast<String, dynamic>(),
+              );
+    }
+  }
+  if (result is StoreHandoffResult && expected.containsKey('echo_entry')) {
+    ok =
+        ok &&
+        (expected['echo_entry'] as bool) &&
+        result.storedEntry ==
+            _cacheEntry((commandJson['entry'] as Map).cast<String, dynamic>());
+  }
+  if (expected.containsKey('echo_payload') && result is StoreHandoffResult) {
+    ok = ok && result.storedEntry?.payloadId?.value == expected['echo_payload'];
+  }
+  if (expected.containsKey('malfunction')) {
+    ok = ok && result.malfunction?.name == expected['malfunction'];
+  }
+  if (expected.containsKey('contacted')) {
+    ok = ok && log.isNotEmpty == (expected['contacted'] as bool);
+  }
+  if (expected.containsKey('contact_count')) {
+    ok = ok && log.length == expected['contact_count'];
+  }
+  if (expected.containsKey('reason_contains')) {
+    final wants = expected['reason_contains'] is List
+        ? (expected['reason_contains'] as List).cast<String>()
+        : [expected['reason_contains'] as String];
+    ok = ok && wants.every((w) => result.reason.contains(w));
+  }
+  if (expected.containsKey('equal_rerun')) {
+    final log2 = <String>[];
+    final context2 = buildContext(log2);
+    if ((contextJson['cancel_before'] as bool?) ?? false) {
+      context2.cancellation.requestCancel();
+    }
+    final again = await _serveExecution(kind, commandJson, context2);
+    ok = ok && (expected['equal_rerun'] as bool) && again == result;
+  }
+  _record(
+    id,
+    ok ? Verdict.pass : Verdict.fail,
+    'state=${result.state.name} malfunction=${result.malfunction?.name} '
+    'contacts=$log reason=${result.reason}',
+  );
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
-void main() {
+void main() async {
   final root = Directory('test/golden');
   if (!root.existsSync()) {
     stderr.writeln(
@@ -3309,6 +3618,8 @@ void main() {
             _acquisition(fixture);
           case 'pipeline':
             _pipeline(fixture);
+          case 'execution':
+            await _execution(fixture);
           case 'resolution':
             _resolution(fixture);
           case 'resources':
@@ -3320,7 +3631,7 @@ void main() {
           case 'tactical':
             _tactical(fixture);
           case 'adversarial':
-            _adversarial(fixture);
+            await _adversarial(fixture);
           default:
             _record(
               fixture['id'] as String,
