@@ -34,7 +34,32 @@ downstream track (providers, offline, app) is blocked on this.
   Marked UNEXECUTED-ON-CI in this ADR (cannot run Actions from here; file
   presence claims nothing about green CI).
 
-## 3. Consequences
+## 3. Consequences (as amended)
+
+- Workspace packaging/analysis/tooling are LANDED (see §4 for the
+  package: migration that superseded the relative-import line).
+- `dart pub get --offline` works at root and per package (no hosted deps).
+- DEC-016: Melos adoption + first green CI run stay OPEN; everything else
+  in DEC-016 is resolved (no silent closure).
+
+## 4. Amendment 2026-09-10 (package: migration executed)
+
+Relative cross-package imports proved INCOMPATIBLE with `package_config.json`:
+once `pub get` runs, the analyzer resolves the importing file inside its
+package and relative URIs escaping the package fail (`uri_does_not_exist`,
+found empirically). The "relative imports kept" line above is therefore
+superseded:
+
+- All manifests carry `publish_to: none` + path dependencies for edges
+  actually used (depscan-verified, narrower than the approved map).
+- All cross-package imports migrated to `package:` URIs (57 converted,
+  scripted + analyzer-verified); `test/` + `tools/` resolve via the new root
+  `sovereign_atlas_workspace` package (path deps, offline `pub get`
+  verified). Library `pubspec.lock` files stay uncommitted (gitignored).
+- DEC-016 now: Melos adoption + first green CI run stay OPEN; everything
+  else in DEC-016 is resolved.
+
+- The pre-amendment notes below are superseded where they conflict:
 
 - DEC-016 is PARTIALLY resolved (packaging/analysis/tooling land); the
 `package:`-import migration + Melos/CI-verification stay OPEN as
