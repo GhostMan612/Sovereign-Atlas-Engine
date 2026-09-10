@@ -1,0 +1,1 @@
+{"expected": {"planned": false, "reason": "BULK_GUARD"}, "id": "PAK-005", "inputs": {"approved_bulk": false, "bytes_per_tile": 1000, "endpoint": "osm-standard", "x_max": 1, "x_min": 0, "y_max": 1, "y_min": 0, "z_max": 1, "z_min": 0}}

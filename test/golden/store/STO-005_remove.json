@@ -1,0 +1,1 @@
+{"expected": {"first": true, "op": "remove", "second": false}, "id": "STO-005", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": "k/v/a"}, "stored_at": 1}}}

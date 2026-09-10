@@ -1,0 +1,1 @@
+{"expected": {"count": 1, "echo_payload": "p-2", "evicted": null, "op": "replace"}, "id": "STO-003", "inputs": {"capacity": 1, "first": {"key": {"namespace": "resource", "value": "k/v/a"}, "payload_id": "p-1", "stored_at": 1}, "second": {"key": {"namespace": "resource", "value": "k/v/a"}, "payload_id": "p-2", "stored_at": 2}}}

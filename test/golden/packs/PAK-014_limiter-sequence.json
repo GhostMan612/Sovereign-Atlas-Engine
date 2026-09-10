@@ -1,0 +1,1 @@
+{"expected": {"admitted": [true, true, false, true], "at": [100, 100, 100, 102]}, "id": "PAK-014", "inputs": {"capacity": 2, "refill": 1}}

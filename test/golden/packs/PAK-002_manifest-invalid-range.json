@@ -1,0 +1,1 @@
+{"expected": {"rejection": "INVALID_MANIFEST"}, "id": "PAK-002", "inputs": {"created_at": 1700000000, "entries": [], "pack_id": "pack-1", "provider": "osm-standard", "zoom_max": 1, "zoom_min": 5}}

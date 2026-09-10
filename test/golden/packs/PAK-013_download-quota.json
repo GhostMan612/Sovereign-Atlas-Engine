@@ -1,0 +1,1 @@
+{"expected": {"planned": 3, "received": 2, "state": "quotaPaused"}, "id": "PAK-013", "inputs": {"bytes_map": {"0/0/0": [1], "0/1/0": [2], "1/0/0": [3]}, "limiter": {"capacity": 2, "refill": 0}, "now": 1700000000, "tiles": [{"x": 0, "y": 0, "z": 0}, {"x": 1, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 1}]}}

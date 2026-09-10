@@ -1,0 +1,1 @@
+{"expected": {"op": "invalid_put", "rejection": "INVALID_KEY"}, "id": "STO-004", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": ""}, "stored_at": 1}}}

@@ -1,0 +1,1 @@
+{"expected": {"capacity": 3, "count": 2, "op": "stats"}, "id": "STO-008", "inputs": {"capacity": 3, "entries": [{"key": {"namespace": "resource", "value": "k/v/a"}, "stored_at": 1}, {"key": {"namespace": "resource", "value": "k/v/b"}, "stored_at": 2}]}}

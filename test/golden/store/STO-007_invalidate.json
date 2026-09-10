@@ -1,0 +1,1 @@
+{"expected": {"missing": false, "op": "invalidate", "revoked": true}, "id": "STO-007", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": "k/v/a"}, "stored_at": 1}}}

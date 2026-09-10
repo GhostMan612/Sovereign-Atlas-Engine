@@ -1,0 +1,1 @@
+{"expected": {"op": "op_store", "resident": true, "state": "succeeded"}, "id": "STO-011", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": "osm/rasterTiles/z=1/x=0/y=0@xyz"}, "payload_id": "p-9", "resource": {"address": "z=1/x=0/y=0@xyz", "kind": "rasterTiles", "provider": "osm"}, "stored_at": 1700000000}, "now": 1700000000}}

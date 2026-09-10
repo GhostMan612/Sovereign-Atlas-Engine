@@ -1,0 +1,1 @@
+{"expected": {"planned": false, "reason": "INVALID_RANGE"}, "id": "PAK-008", "inputs": {"approved_bulk": true, "bytes_per_tile": 1000, "endpoint": "esri-imagery", "x_max": 0, "x_min": 5, "y_max": 0, "y_min": 0, "z_max": 1, "z_min": 0}}

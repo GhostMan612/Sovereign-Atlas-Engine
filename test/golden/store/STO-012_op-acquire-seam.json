@@ -1,0 +1,1 @@
+{"expected": {"malfunction": "operationThrown", "op": "op_acquire_seam", "reason_contains": ["UnsupportedError", "provider scope"], "state": "failed"}, "id": "STO-012", "inputs": {"address": "z=1/x=0/y=0@xyz", "capacity": 4, "kind": "rasterTiles", "now": 1700000000, "provider": "osm"}}

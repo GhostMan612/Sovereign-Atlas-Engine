@@ -1,0 +1,1 @@
+{"expected": {"count": 1, "echo": true, "op": "put_get"}, "id": "STO-001", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": "osm/rasterTiles/z=1/x=0/y=0@xyz"}, "max_age_seconds": 3600, "payload_id": "p-1", "resource": {"address": "z=1/x=0/y=0@xyz", "kind": "rasterTiles", "provider": "osm"}, "stored_at": 1699999900}}}

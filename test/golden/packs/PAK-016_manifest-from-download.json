@@ -1,0 +1,1 @@
+{"expected": {"entry_count": 2, "manifest_valid": true, "seal_len": 16}, "id": "PAK-016", "inputs": {"attribution": "© OpenStreetMap contributors", "bytes_map": {"1/0/0": [7, 8], "1/0/1": [9]}, "now": 1700000000, "pack_id": "pack-9", "provider": "osm-standard", "tiles": [{"x": 0, "y": 0, "z": 1}, {"x": 0, "y": 1, "z": 1}], "zoom_max": 1, "zoom_min": 1}}

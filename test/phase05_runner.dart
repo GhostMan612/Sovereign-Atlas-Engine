@@ -14,13 +14,14 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../packages/atlas_core/lib/atlas_core.dart';
-import '../packages/atlas_geo/lib/atlas_geo.dart';
-import '../packages/atlas_layers/lib/atlas_layers.dart';
-import '../packages/atlas_map/lib/atlas_map.dart';
-import '../packages/atlas_provider_api/lib/atlas_provider_api.dart';
-import '../packages/atlas_providers/lib/atlas_providers.dart';
-import '../packages/atlas_tiles/lib/atlas_tiles.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_geo/atlas_geo.dart';
+import 'package:atlas_layers/atlas_layers.dart';
+import 'package:atlas_map/atlas_map.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
+import 'package:atlas_providers/atlas_providers.dart';
+import 'package:atlas_offline/atlas_offline.dart';
+import 'package:atlas_tiles/atlas_tiles.dart';
 
 /// Per-fixture verdict.
 enum Verdict { pass, fail, blocked, notApplicable }
@@ -45,9 +46,9 @@ Map<String, dynamic> _load(String path) =>
 double _num(dynamic value) => (value as num).toDouble();
 
 AtlasCoordinate _coord(Map<String, dynamic> m) => AtlasCoordinate(
-  latitude: _num(m['latitude']),
-  longitude: _num(m['longitude']),
-);
+      latitude: _num(m['latitude']),
+      longitude: _num(m['longitude']),
+    );
 
 bool _close(double actual, double expected, double tolerance) =>
     AtlasComparison.withinTolerance(actual, expected, tolerance);
@@ -100,8 +101,8 @@ void _distance(Map<String, dynamic> f) {
   final expected = f['expected'] as Map<String, dynamic>;
   final tolerance =
       ((f['tolerance'] as Map<String, dynamic>?)?['value'] as num?)
-          ?.toDouble() ??
-      0.0;
+              ?.toDouble() ??
+          0.0;
   final dist = AtlasGeoMath.haversineKm(
     _coord(inputs['from'] as Map<String, dynamic>),
     _coord(inputs['to'] as Map<String, dynamic>),
@@ -136,8 +137,7 @@ void _bearing(Map<String, dynamic> f) {
       _num(inputs['distance_km']),
       _num(inputs['bearing_deg']),
     );
-    final ok =
-        _close(got.latitude, _num(expected['latitude']), tolerance) &&
+    final ok = _close(got.latitude, _num(expected['latitude']), tolerance) &&
         _close(got.longitude, _num(expected['longitude']), tolerance);
     _record(
       id,
@@ -193,8 +193,7 @@ void _camera(Map<String, dynamic> f) {
       layers: const AtlasLayerStack([]),
     );
     final moved = base.copyWith(camera: base.camera.copyWith(zoom: 10.0));
-    final ok =
-        moved.camera.zoom == _num(expected['zoom']) &&
+    final ok = moved.camera.zoom == _num(expected['zoom']) &&
         moved.layers == base.layers &&
         moved.validate().isValid == (expected['valid'] as bool);
     _record(
@@ -208,8 +207,7 @@ void _camera(Map<String, dynamic> f) {
   }
   if (id == 'TRANSITION-002') {
     final turned = AtlasCameraState.home().copyWith(bearing: 90.0);
-    final ok =
-        turned.bearing == _num(expected['bearing']) &&
+    final ok = turned.bearing == _num(expected['bearing']) &&
         turned.center == AtlasCameraState.home().center &&
         turned.validate().isValid == (expected['valid'] as bool);
     _record(
@@ -227,8 +225,7 @@ void _camera(Map<String, dynamic> f) {
       layers: const AtlasLayerStack([]),
     );
     final c = a.copyWith(camera: a.camera.copyWith(zoom: 10.0));
-    final ok =
-        (a ==
+    final ok = (a ==
                 AtlasMapState(
                   camera: AtlasCameraState.home(),
                   layers: const AtlasLayerStack([]),
@@ -240,18 +237,18 @@ void _camera(Map<String, dynamic> f) {
   }
   if (id == 'EQUALITY-002') {
     AtlasLayerState titled(String layerId, String title) => AtlasLayerState(
-      definition: AtlasLayerDefinition(
-        id: AtlasId(layerId),
-        kind: AtlasLayerKind.raster,
-        providerId: 'p',
-        title: title,
-      ),
-    );
+          definition: AtlasLayerDefinition(
+            id: AtlasId(layerId),
+            kind: AtlasLayerKind.raster,
+            providerId: 'p',
+            title: title,
+          ),
+        );
     final inputs = f['inputs'] as Map<String, dynamic>;
     AtlasLayerStack stackOf(List<dynamic> layers) => AtlasLayerStack([
-      for (final l in layers.cast<Map<String, dynamic>>())
-        titled(l['id'] as String, l['title'] as String),
-    ]);
+          for (final l in layers.cast<Map<String, dynamic>>())
+            titled(l['id'] as String, l['title'] as String),
+        ]);
     final a = AtlasMapState(
       camera: AtlasCameraState.home(),
       layers: stackOf(inputs['a_layers'] as List),
@@ -271,8 +268,7 @@ void _camera(Map<String, dynamic> f) {
     final inputs = f['inputs'] as Map<String, dynamic>;
     final once = AtlasCameraState.parse(inputs['serialized'] as String);
     final twice = AtlasCameraState.parse(once.serialize());
-    final ok =
-        once.serialize() == expected['canonical'] &&
+    final ok = once.serialize() == expected['canonical'] &&
         twice == once &&
         (expected['round_trip_stable'] as bool);
     _record(
@@ -285,8 +281,7 @@ void _camera(Map<String, dynamic> f) {
   switch (id) {
     case 'CAM-001':
       final home = AtlasCameraState.home();
-      final ok =
-          home.center.latitude == _num(expected['latitude']) &&
+      final ok = home.center.latitude == _num(expected['latitude']) &&
           home.center.longitude == _num(expected['longitude']) &&
           home.zoom == _num(expected['zoom']);
       _record(id, ok ? Verdict.pass : Verdict.fail, home.serialize());
@@ -306,9 +301,8 @@ void _camera(Map<String, dynamic> f) {
         );
         _record(id, Verdict.fail, 'parsed without rejection');
       } on AtlasRejectionException catch (e) {
-        final want =
-            (expected['rejection'] as Map<String, dynamic>)['category']
-                as String;
+        final want = (expected['rejection'] as Map<String, dynamic>)['category']
+            as String;
         _record(
           id,
           e.rejection.category == want ? Verdict.pass : Verdict.fail,
@@ -363,22 +357,23 @@ AtlasLayerDefinition _testDef(
   String id, {
   String attribution = '',
   bool isPrivate = false,
-}) => AtlasLayerDefinition(
-  id: AtlasId(id),
-  kind: AtlasLayerKind.raster,
-  providerId: 'test-provider',
-  attribution: attribution.isEmpty ? null : attribution,
-  isPrivate: isPrivate,
-);
+}) =>
+    AtlasLayerDefinition(
+      id: AtlasId(id),
+      kind: AtlasLayerKind.raster,
+      providerId: 'test-provider',
+      attribution: attribution.isEmpty ? null : attribution,
+      isPrivate: isPrivate,
+    );
 
 AtlasLayerCategory? _category(String? name) => name == null
     ? null
     : AtlasLayerCategory.values.firstWhere((v) => v.name == name);
 
 Set<AtlasLayerCapability> _caps(List<dynamic> names) => {
-  for (final n in names.cast<String>())
-    AtlasLayerCapability.values.firstWhere((v) => v.name == n),
-};
+      for (final n in names.cast<String>())
+        AtlasLayerCapability.values.firstWhere((v) => v.name == n),
+    };
 
 void _layers(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -398,8 +393,7 @@ void _layers(Map<String, dynamic> f) {
     final stack = AtlasLayerStack([
       for (final d in defs) AtlasLayerState(definition: d),
     ]);
-    final ok =
-        defs[0].id != defs[1].id &&
+    final ok = defs[0].id != defs[1].id &&
         defs[0] != defs[1] &&
         stack.validate().isValid == (expected['stack_valid'] as bool);
     _record(
@@ -418,8 +412,7 @@ void _layers(Map<String, dynamic> f) {
       kind: AtlasLayerKind.raster,
       providerId: 'p',
     );
-    final ok =
-        names.containsAll(want) &&
+    final ok = names.containsAll(want) &&
         want.containsAll(names) &&
         roundTrips &&
         unclassified.category == null;
@@ -446,8 +439,7 @@ void _layers(Map<String, dynamic> f) {
       providerId: 'p',
     );
     final want = (expected['advertised'] as List).cast<String>().toSet();
-    final ok =
-        def.capabilities.map((v) => v.name).toSet().containsAll(want) &&
+    final ok = def.capabilities.map((v) => v.name).toSet().containsAll(want) &&
         bare.capabilities.isEmpty == (expected['default_empty'] as bool);
     _record(
       id,
@@ -458,8 +450,7 @@ void _layers(Map<String, dynamic> f) {
   }
   if (id == 'LAYER-004') {
     const stack = AtlasLayerStack([]);
-    final ok =
-        stack.validate().isValid &&
+    final ok = stack.validate().isValid &&
         stack.orderedVisible().isEmpty &&
         stack.conformsToBaseline(AtlasBaselineRanks.rankOf);
     _record(id, ok ? Verdict.pass : Verdict.fail, 'empty stack valid');
@@ -482,8 +473,7 @@ void _layers(Map<String, dynamic> f) {
     } on AtlasRejectionException catch (e) {
       threw = e.rejection.category == 'INVALID_LAYER_STATE';
     }
-    final ok =
-        flipped.visible == false &&
+    final ok = flipped.visible == false &&
         dimmed.opacity == _num(expected['withOpacity_0_5']) &&
         (copied.visible == false) ==
             (expected['copyWith_visible_false'] as bool) &&
@@ -516,8 +506,7 @@ void _layers(Map<String, dynamic> f) {
       (inputs['c'] as Map<String, dynamic>)['id'] as String,
       (inputs['c'] as Map<String, dynamic>)['title'] as String,
     );
-    final ok =
-        (a == b) == (expected['different_title_still_equal'] as bool) &&
+    final ok = (a == b) == (expected['different_title_still_equal'] as bool) &&
         (a != c) == (expected['different_id_not_equal'] as bool);
     _record(
       id,
@@ -532,13 +521,10 @@ void _layers(Map<String, dynamic> f) {
     final stack = AtlasLayerStack([
       for (final layerId in ids) AtlasLayerState(definition: _testDef(layerId)),
     ]);
-    final got = stack
-        .orderedVisible()
-        .map((s) => s.definition.id.value)
-        .toList();
+    final got =
+        stack.orderedVisible().map((s) => s.definition.id.value).toList();
     final want = (expected['order_preserved'] as List).cast<String>();
-    final ok =
-        got.join(',') == want.join(',') &&
+    final ok = got.join(',') == want.join(',') &&
         stack.conformsToBaseline(AtlasBaselineRanks.rankOf) ==
             (expected['conforms'] as bool);
     _record(id, ok ? Verdict.pass : Verdict.fail, 'tie=insertion order');
@@ -549,12 +535,9 @@ void _layers(Map<String, dynamic> f) {
       for (final rank in AtlasBaselineRanks.ranks)
         AtlasLayerState(definition: _testDef(rank)),
     ]);
-    final ordered = stack
-        .orderedVisible()
-        .map((s) => s.definition.id.value)
-        .toList();
-    final want =
-        (expected['order_significant'] as bool) &&
+    final ordered =
+        stack.orderedVisible().map((s) => s.definition.id.value).toList();
+    final want = (expected['order_significant'] as bool) &&
         ordered.join(',') == AtlasBaselineRanks.ranks.join(',');
     _record(
       id,
@@ -576,24 +559,22 @@ void _layers(Map<String, dynamic> f) {
     final toggles =
         ((f['inputs'] as Map<String, dynamic>)['adapter_toggles'] as List)
             .cast<String>();
-    final orderedIds =
-        <String>['offline-graticule', for (final t in toggles) mapping[t]!]
-          ..sort(
-            (a, b) =>
-                AtlasBaselineRanks.rankOf(a)!
-                    .compareTo(AtlasBaselineRanks.rankOf(b)!),
-          );
+    final orderedIds = <String>[
+      'offline-graticule',
+      for (final t in toggles) mapping[t]!
+    ]..sort(
+        (a, b) => AtlasBaselineRanks.rankOf(a)!
+            .compareTo(AtlasBaselineRanks.rankOf(b)!),
+      );
     final stack = AtlasLayerStack([
       for (final layerId in orderedIds)
         AtlasLayerState(definition: _testDef(layerId)),
     ]);
-    final got = stack
-        .orderedVisible()
-        .map((s) => s.definition.id.value)
-        .toList();
+    final got =
+        stack.orderedVisible().map((s) => s.definition.id.value).toList();
     final want = (expected['ordered_core_list'] as List).cast<String>().join(
-      ',',
-    );
+          ',',
+        );
     _record(
       id,
       got.join(',') == want &&
@@ -644,17 +625,17 @@ AtlasTileScheme _scheme(String name) =>
     AtlasTileScheme.values.firstWhere((v) => v.name == name);
 
 AtlasTileIdentity _tileIdentity(Map<String, dynamic> m) => AtlasTileIdentity(
-  provider: AtlasId(m['provider'] as String),
-  layer: AtlasId(m['layer'] as String),
-  coordinate: AtlasTileCoordinate(
-    z: (m['z'] as num).toInt(),
-    x: (m['x'] as num).toInt(),
-    y: (m['y'] as num).toInt(),
-  ),
-  scheme: m.containsKey('scheme')
-      ? _scheme(m['scheme'] as String)
-      : AtlasTileScheme.xyz,
-);
+      provider: AtlasId(m['provider'] as String),
+      layer: AtlasId(m['layer'] as String),
+      coordinate: AtlasTileCoordinate(
+        z: (m['z'] as num).toInt(),
+        x: (m['x'] as num).toInt(),
+        y: (m['y'] as num).toInt(),
+      ),
+      scheme: m.containsKey('scheme')
+          ? _scheme(m['scheme'] as String)
+          : AtlasTileScheme.xyz,
+    );
 
 /// Phase 0.4 DESC-* fixtures (descriptor shape, provider-contract vocabulary).
 void _descriptor(Map<String, dynamic> f) {
@@ -687,8 +668,7 @@ void _descriptor(Map<String, dynamic> f) {
   // provenance model, not to descriptors: recorded here as unmodeled, never
   // defaulted. The descriptor answers identity/taxonomy/range only.
   final v = descriptor.validate();
-  final ok =
-      v.isValid &&
+  final ok = v.isValid &&
       (expected['identity_present'] as bool? ?? true) &&
       (zoom == null || (expected['native_zoom_present'] as bool? ?? true));
   _record(
@@ -717,8 +697,7 @@ void _providers(Map<String, dynamic> f) {
     );
     final v = descriptor.validate();
     final zoomExpected = expected['native_zoom'] as List;
-    final ok =
-        v.isValid &&
+    final ok = v.isValid &&
         descriptor.attribution == expected['attribution'] &&
         descriptor.nativeMinZoom == (zoomExpected[0] as num).toInt() &&
         descriptor.nativeMaxZoom == (zoomExpected[1] as num).toInt();
@@ -745,11 +724,10 @@ void _providers(Map<String, dynamic> f) {
   );
   var violations = <String>[];
   final lib = Directory('packages/atlas_provider_api/lib');
-  for (final file
-      in lib
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.dart'))) {
+  for (final file in lib
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.dart'))) {
     final code = file
         .readAsLinesSync()
         .where((line) => !line.trimLeft().startsWith('//'))
@@ -828,8 +806,7 @@ void _tiles(Map<String, dynamic> f) {
       coordinate: coord,
       scheme: AtlasTileScheme.tms,
     );
-    final ok =
-        xyz != tms &&
+    final ok = xyz != tms &&
         (expected['scheme_differs'] as bool) &&
         coord.rowFor(AtlasTileScheme.xyz) ==
             _num(expected['row_xyz']).toInt() &&
@@ -1036,8 +1013,7 @@ void _resolution(Map<String, dynamic> f) {
   var ok = result.status.name == expected['status'];
   if (expected.containsKey('provider')) {
     final want = expected['provider'] as String?;
-    ok =
-        ok &&
+    ok = ok &&
         (want == null
             ? result.provider == null
             : result.provider?.value == want);
@@ -1049,8 +1025,7 @@ void _resolution(Map<String, dynamic> f) {
     } else if (result.tile == null) {
       ok = false;
     } else {
-      ok =
-          ok &&
+      ok = ok &&
           result.tile!.z == (want['z'] as num).toInt() &&
           result.tile!.x == (want['x'] as num).toInt() &&
           result.tile!.y == (want['y'] as num).toInt();
@@ -1115,11 +1090,10 @@ bool _resolutionLeakCheck(List<String> violations) {
   for (final dirPath in dirs) {
     final dir = Directory(dirPath);
     if (!dir.existsSync()) continue;
-    for (final file
-        in dir
-            .listSync(recursive: true)
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.dart'))) {
+    for (final file in dir
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))) {
       final code = file
           .readAsLinesSync()
           .where((line) => !line.trimLeft().startsWith('//'))
@@ -1141,11 +1115,11 @@ bool _resolutionLeakCheck(List<String> violations) {
 // ---------------------------------------------------------------------------
 
 AtlasCacheKey _cacheKey(Map<String, dynamic> m) => AtlasCacheKey(
-  namespace: AtlasCacheNamespace.values.firstWhere(
-    (v) => v.name == m['namespace'],
-  ),
-  value: m['value'] as String,
-);
+      namespace: AtlasCacheNamespace.values.firstWhere(
+        (v) => v.name == m['namespace'],
+      ),
+      value: m['value'] as String,
+    );
 
 AtlasCacheEntry? _cacheEntry(dynamic raw) {
   if (raw == null) return null;
@@ -1164,9 +1138,8 @@ AtlasCacheEntry? _cacheEntry(dynamic raw) {
     maxAgeSeconds: m.containsKey('max_age_seconds')
         ? (m['max_age_seconds'] as num).toInt()
         : null,
-    payloadId: m.containsKey('payload_id')
-        ? AtlasId(m['payload_id'] as String)
-        : null,
+    payloadId:
+        m.containsKey('payload_id') ? AtlasId(m['payload_id'] as String) : null,
     revoked: (m['revoked'] as bool?) ?? false,
   );
 }
@@ -1252,8 +1225,8 @@ void _cache(Map<String, dynamic> f) {
     final missing = <String>[];
     final dir = Directory('test/golden/cache');
     for (final file in dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.json'),
-    )) {
+          (f) => f.path.endsWith('.json'),
+        )) {
       final text = file.readAsStringSync();
       if (lookupFamily.hasMatch(text) && !text.contains('"now"')) {
         missing.add(file.path.split(Platform.pathSeparator).last);
@@ -1284,8 +1257,8 @@ void _cache(Map<String, dynamic> f) {
     final missing = <String>[];
     final dir = Directory('test/golden/cache');
     for (final file in dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.json'),
-    )) {
+          (f) => f.path.endsWith('.json'),
+        )) {
       final text = file.readAsStringSync();
       if (lookupFamily.hasMatch(text) && !text.contains('"now"')) {
         missing.add(file.path.split(Platform.pathSeparator).last);
@@ -1306,8 +1279,7 @@ void _cache(Map<String, dynamic> f) {
     final before = AtlasCache.lookup(entry, now);
     final revoked = entry.invalidate();
     final after = AtlasCache.lookup(revoked, now);
-    final ok =
-        before.outcome.name == 'hit' &&
+    final ok = before.outcome.name == 'hit' &&
         (expected['before'] as String) == 'hit' &&
         after.outcome.name == (expected['after'] as String) &&
         !entry.revoked;
@@ -1328,8 +1300,7 @@ void _cache(Map<String, dynamic> f) {
       _cacheEntry(inputs['new_entry']),
       now,
     );
-    final ok =
-        oldDecision.outcome.name == 'expired' &&
+    final ok = oldDecision.outcome.name == 'expired' &&
         newDecision.outcome.name == 'hit' &&
         (expected['decision_uses_new'] as bool);
     _record(
@@ -1348,8 +1319,7 @@ void _cache(Map<String, dynamic> f) {
     ok = ok && entry!.validate().isValid == (expected['entry_valid'] as bool);
   }
   if (expected.containsKey('entry_still_valid')) {
-    ok =
-        ok &&
+    ok = ok &&
         entry!.validate().isValid == (expected['entry_still_valid'] as bool);
   }
   _record(
@@ -1412,8 +1382,7 @@ void _acquisition(Map<String, dynamic> f) {
     final request = _acqRequest(inputs);
     final v = request.validate();
     final held = AtlasAcquisition(request: request);
-    final ok =
-        v.isValid == (expected['valid'] as bool) &&
+    final ok = v.isValid == (expected['valid'] as bool) &&
         held.state.name == 'notStarted';
     _record(
       id,
@@ -1447,8 +1416,8 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ACQ-007') {
-    final acquisition = _acqStarted(inputs)
-        .cancel((inputs['now'] as num).toInt());
+    final acquisition =
+        _acqStarted(inputs).cancel((inputs['now'] as num).toInt());
     _record(
       id,
       acquisition.state.name == expected['after'] ? Verdict.pass : Verdict.fail,
@@ -1457,12 +1426,11 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ACQ-008' || id == 'ACQ-009') {
-    final acquisition = _acqStarted(inputs)
-        .checkTimeout((inputs['now'] as num).toInt());
+    final acquisition =
+        _acqStarted(inputs).checkTimeout((inputs['now'] as num).toInt());
     var ok = acquisition.state.name == expected['after'];
     if (expected.containsKey('retryable')) {
-      ok =
-          ok &&
+      ok = ok &&
           acquisition.failure!.retryable == (expected['retryable'] as bool);
     }
     _record(
@@ -1491,14 +1459,13 @@ void _acquisition(Map<String, dynamic> f) {
       (inputs['now'] as num).toInt(),
     );
     final result = acquisition.toResult();
-    final ok =
-        acquisition.state.name ==
+    final ok = acquisition.state.name ==
             (expected['after'] as String? ?? 'succeeded') &&
         result.payloadId?.value == (inputs['payload_id'] as String) &&
         result.request == acquisition.request &&
         (id == 'ACQ-010'
             ? result.payloadId?.value == expected['payload_id'] &&
-                  (expected['resource_preserved'] as bool)
+                (expected['resource_preserved'] as bool)
             : !(expected['bytes_required'] as bool));
     _record(
       id,
@@ -1512,8 +1479,7 @@ void _acquisition(Map<String, dynamic> f) {
       _failure(inputs['failure'] as String),
       (inputs['now'] as num).toInt(),
     );
-    final ok =
-        acquisition.state.name == expected['after'] &&
+    final ok = acquisition.state.name == expected['after'] &&
         acquisition.failure!.name == expected['failure'] &&
         acquisition.failure!.retryable == (expected['retryable'] as bool);
     _record(
@@ -1536,8 +1502,7 @@ void _acquisition(Map<String, dynamic> f) {
       }),
     );
     final leaks = <String>[];
-    final ok =
-        request.validate().isValid &&
+    final ok = request.validate().isValid &&
         (expected['acquires_nothing'] as bool) &&
         (expected['has_no_cache_lookup'] as bool) &&
         (expected['has_no_url_execution'] as bool) &&
@@ -1579,8 +1544,7 @@ void _acquisition(Map<String, dynamic> f) {
       },
     }).complete(const AtlasId('p-1'), 1700000000);
     final result = acquisition.toResult();
-    final ok =
-        result.state == AtlasAcquisitionState.succeeded &&
+    final ok = result.state == AtlasAcquisitionState.succeeded &&
         result.payloadId == const AtlasId('p-1') &&
         result.failure == null;
     _record(
@@ -1628,8 +1592,8 @@ void _acquisition(Map<String, dynamic> f) {
     final missing = <String>[];
     final dir = Directory('test/golden/acquisition');
     for (final file in dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.json'),
-    )) {
+          (f) => f.path.endsWith('.json'),
+        )) {
       final text = file.readAsStringSync();
       if (temporal.hasMatch(text) && !text.contains('"now"')) {
         missing.add(file.path.split(Platform.pathSeparator).last);
@@ -1677,9 +1641,9 @@ void _acquisition(Map<String, dynamic> f) {
 // ---------------------------------------------------------------------------
 
 List<AtlasCoordinate> _ring(List<dynamic> pts) => [
-  for (final p in pts.cast<List<dynamic>>())
-    AtlasCoordinate(latitude: _num(p[1]), longitude: _num(p[0])),
-];
+      for (final p in pts.cast<List<dynamic>>())
+        AtlasCoordinate(latitude: _num(p[1]), longitude: _num(p[0])),
+    ];
 
 void _geometry(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -1692,8 +1656,7 @@ void _geometry(Map<String, dynamic> f) {
     ];
     final line = AtlasPolyline(points);
     final v = line.validateStructure();
-    final ok =
-        v.isValid &&
+    final ok = v.isValid &&
         line.isLengthMeaningful == (expected['meaningful'] as bool) &&
         line.lengthKm() == _num(expected['length_km']);
     _record(
@@ -1713,8 +1676,7 @@ void _geometry(Map<String, dynamic> f) {
     final tolerance = _num(
       ((f['tolerance'] as Map<String, dynamic>)['value'] as num),
     );
-    final ok =
-        line.validateStructure().isValid &&
+    final ok = line.validateStructure().isValid &&
         _close(line.lengthKm(), _num(expected['length_km']), tolerance);
     _record(
       id,
@@ -1737,8 +1699,7 @@ void _geometry(Map<String, dynamic> f) {
     }
     final boundsExpected = expected['bounds'] as Map<String, dynamic>;
     final bounds = polygon.bounds;
-    final ok =
-        v.isValid &&
+    final ok = v.isValid &&
         bounds.south == _num(boundsExpected['south']) &&
         bounds.west == _num(boundsExpected['west']) &&
         bounds.north == _num(boundsExpected['north']) &&
@@ -1866,8 +1827,7 @@ void _tactical(Map<String, dynamic> f) {
   final id = f['id'] as String;
   if (id == 'RING-001') {
     final expected = f['expected'] as Map<String, dynamic>;
-    final tableOk =
-        AtlasRangeRings.steps.join(',') ==
+    final tableOk = AtlasRangeRings.steps.join(',') ==
         ((expected['steps'] as List).map((v) => _num(v))).join(',');
     var ok = tableOk && AtlasRangeRings.ringsPerStep == 4;
     for (var i = 0; i < AtlasRangeRings.steps.length && ok; i++) {
@@ -1948,8 +1908,8 @@ void _angles(Map<String, dynamic> f) {
     final value = id == 'NORM-001'
         ? AtlasAngles.normalizeBearingDeg(input)
         : id == 'NORM-002'
-        ? AtlasAngles.normalizeSignedDeg(input)
-        : AtlasAngles.normalizeLongitudeDeg(input);
+            ? AtlasAngles.normalizeSignedDeg(input)
+            : AtlasAngles.normalizeLongitudeDeg(input);
     got.add('$input->$value');
     if (value != _num(c['out'])) ok = false;
   }
@@ -1961,11 +1921,11 @@ void _angles(Map<String, dynamic> f) {
 }
 
 AtlasBoundingBox _box(Map<String, dynamic> m) => AtlasBoundingBox(
-  south: _num(m['south']),
-  west: _num(m['west']),
-  north: _num(m['north']),
-  east: _num(m['east']),
-);
+      south: _num(m['south']),
+      west: _num(m['west']),
+      north: _num(m['north']),
+      east: _num(m['east']),
+    );
 
 void _boxes(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -1975,8 +1935,7 @@ void _boxes(Map<String, dynamic> f) {
     final box = _box(inputs);
     final inside = _coord({'latitude': 44.95, 'longitude': -93.25});
     final outside = _coord({'latitude': 46.0, 'longitude': -93.25});
-    final ok =
-        box.validate().isValid &&
+    final ok = box.validate().isValid &&
         !box.crossesAntimeridian &&
         box.contains(inside) &&
         !box.contains(outside);
@@ -1986,8 +1945,7 @@ void _boxes(Map<String, dynamic> f) {
   if (id == 'BOX-002') {
     final inputs = f['inputs'] as Map<String, dynamic>;
     final box = _box(inputs);
-    final ok =
-        box.validate().isValid &&
+    final ok = box.validate().isValid &&
         box.crossesAntimeridian == (expected['crosses_antimeridian'] as bool);
     _record(
       id,
@@ -2023,8 +1981,7 @@ void _boxes(Map<String, dynamic> f) {
   }
   final boundsExpected = expected['bounds'] as Map<String, dynamic>;
   final bounds = polygon.bounds;
-  final ok =
-      bounds.south == _num(boundsExpected['south']) &&
+  final ok = bounds.south == _num(boundsExpected['south']) &&
       bounds.west == _num(boundsExpected['west']) &&
       bounds.north == _num(boundsExpected['north']) &&
       bounds.east == _num(boundsExpected['east']);
@@ -2093,8 +2050,9 @@ void _resources(Map<String, dynamic> f) {
   final inputs = f['inputs'] as Map<String, dynamic>;
   final expected = f['expected'] as Map<String, dynamic>;
   List<AtlasProviderDescriptor> catalogOf(dynamic raw) => [
-    for (final p in (raw as List).cast<Map<String, dynamic>>()) _resProvider(p),
-  ];
+        for (final p in (raw as List).cast<Map<String, dynamic>>())
+          _resProvider(p),
+      ];
   if (id == 'RESRC-001') {
     final catalog = catalogOf(inputs['catalog']);
     final resource = _bindForTest(
@@ -2102,8 +2060,7 @@ void _resources(Map<String, dynamic> f) {
       catalog,
     );
     final tile = expected['tile'] as Map<String, dynamic>;
-    final ok =
-        resource.provider.value == expected['provider'] &&
+    final ok = resource.provider.value == expected['provider'] &&
         resource.kind.name == expected['kind'] &&
         resource.tile != null &&
         resource.tile!.z == (tile['z'] as num).toInt() &&
@@ -2121,8 +2078,7 @@ void _resources(Map<String, dynamic> f) {
       _resRequest(inputs['request'] as Map<String, dynamic>),
       catalog,
     );
-    final ok =
-        resource.provider.value == expected['provider'] &&
+    final ok = resource.provider.value == expected['provider'] &&
         resource.kind.name == expected['kind'] &&
         resource.tile == null &&
         resource.identity.address == expected['address'] &&
@@ -2136,16 +2092,14 @@ void _resources(Map<String, dynamic> f) {
     var ok = true;
     for (final c in (inputs['cases'] as List).cast<Map<String, dynamic>>()) {
       final kind = _resolutionKind(c['kind'] as String);
-      final tiled =
-          kind == AtlasDataKind.rasterTiles ||
+      final tiled = kind == AtlasDataKind.rasterTiles ||
           kind == AtlasDataKind.vectorTiles;
       final catalog = [
         AtlasProviderDescriptor(
           id: AtlasId('p-${kind.name}'),
           kinds: {kind},
-          capabilities: tiled
-              ? const {AtlasProviderCapability.tileServing}
-              : const {},
+          capabilities:
+              tiled ? const {AtlasProviderCapability.tileServing} : const {},
         ),
       ];
       final resource = _bindForTest(
@@ -2284,8 +2238,7 @@ void _resources(Map<String, dynamic> f) {
     );
     final representation = materialized.representation ?? '';
     final identityString = resource.identity.toString();
-    final ok =
-        representation.contains('://') &&
+    final ok = representation.contains('://') &&
         representation != identityString &&
         !identityString.contains('://') &&
         (expected['representation_differs_from_identity'] as bool) &&
@@ -2322,8 +2275,7 @@ void _resources(Map<String, dynamic> f) {
       resource,
       urlTemplate: inputs['template'] as String,
     );
-    final ok =
-        entry.validate().isValid == (expected['entry_valid'] as bool) &&
+    final ok = entry.validate().isValid == (expected['entry_valid'] as bool) &&
         key.keyString ==
             'standard/${resource.tile!.z}_${resource.tile!.x}_${resource.tile!.y}' &&
         (expected['key_renders_address'] as bool) &&
@@ -2510,12 +2462,12 @@ AtlasMaterialization? _pipeMaterialization(
 }
 
 AtlasPipelinePolicy _pipePolicy(Map<String, dynamic> m) => AtlasPipelinePolicy(
-  acquireOnStale: (m['acquire_on_stale'] as bool?) ?? false,
-  acquireOnExpired: (m['acquire_on_expired'] as bool?) ?? false,
-  acquireOnInvalid: (m['acquire_on_invalid'] as bool?) ?? false,
-  fallbackToStaleOnFailure:
-      (m['fallback_to_stale_on_failure'] as bool?) ?? false,
-);
+      acquireOnStale: (m['acquire_on_stale'] as bool?) ?? false,
+      acquireOnExpired: (m['acquire_on_expired'] as bool?) ?? false,
+      acquireOnInvalid: (m['acquire_on_invalid'] as bool?) ?? false,
+      fallbackToStaleOnFailure:
+          (m['fallback_to_stale_on_failure'] as bool?) ?? false,
+    );
 
 void _pipeline(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -2551,46 +2503,39 @@ void _pipeline(Map<String, dynamic> f) {
     ok = ok && outcome.failure?.name == expected['failure'];
   }
   if (expected.containsKey('materialization_status')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.materialization?.status.name ==
             expected['materialization_status'];
   }
   if (expected.containsKey('request_address')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.acquisitionRequest?.resource.address ==
             expected['request_address'];
   }
   if (expected.containsKey('request_kind')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.acquisitionRequest?.resource.kind.name ==
             expected['request_kind'];
   }
   if (expected.containsKey('request_provider')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.acquisitionRequest?.resource.provider.value ==
             expected['request_provider'];
   }
   if (expected.containsKey('request_provider_derived')) {
-    ok =
-        ok &&
+    ok = ok &&
         (outcome.acquisitionRequest?.provider == null) ==
             (expected['request_provider_derived'] as bool);
   }
   if (expected.containsKey('handoff_payload')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.cacheHandoff?.payloadId?.value == expected['handoff_payload'];
   }
   if (expected.containsKey('handoff_key')) {
     ok = ok && outcome.cacheHandoff?.key.value == expected['handoff_key'];
   }
   if (expected.containsKey('handoff_namespace')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.cacheHandoff?.key.namespace.name ==
             expected['handoff_namespace'];
   }
@@ -2598,8 +2543,7 @@ void _pipeline(Map<String, dynamic> f) {
     ok = ok && outcome.cacheHandoff?.storedAt == expected['handoff_stored_at'];
   }
   if (expected.containsKey('handoff_max_age_null')) {
-    ok =
-        ok &&
+    ok = ok &&
         (outcome.cacheHandoff?.maxAgeSeconds == null) ==
             (expected['handoff_max_age_null'] as bool);
   }
@@ -2607,29 +2551,25 @@ void _pipeline(Map<String, dynamic> f) {
     ok = ok && outcome.status.name != expected['never'];
   }
   if (expected.containsKey('entry_still_valid')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.entry?.validate().isValid ==
             (expected['entry_still_valid'] as bool);
   }
   if (expected.containsKey('acquire_request_keys')) {
     final want = (expected['acquire_request_keys'] as List).cast<String>();
-    ok =
-        ok &&
+    ok = ok &&
         outcome.acquisitionRequest != null &&
         want.toSet().containsAll({'resource', 'provider', 'policy'});
   }
   if (expected.containsKey('directive_carries')) {
-    ok =
-        ok &&
+    ok = ok &&
         outcome.acquisition != null &&
         outcome.cacheHandoff != null &&
         outcome.cacheHandoff?.payloadId != null;
   }
   if (expected.containsKey('generic_keys_only')) {
     final req = outcome.acquisitionRequest;
-    ok =
-        ok &&
+    ok = ok &&
         req != null &&
         req.provider == null &&
         req.resource.provider.value == 'opentopo' &&
@@ -2646,8 +2586,7 @@ void _pipeline(Map<String, dynamic> f) {
       nowSeconds: (inputs['now'] as num).toInt(),
       policy: _pipePolicy(inputs['policy'] as Map<String, dynamic>),
     );
-    ok =
-        ok &&
+    ok = ok &&
         (expected['deterministic'] as bool) &&
         again.cacheHandoff?.key.value == outcome.cacheHandoff?.key.value &&
         again == outcome;
@@ -2738,17 +2677,15 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
             },
             'started_at': 1700000000,
           };
-    final acquisition =
-        AtlasAcquisition.start(
-          _acqRequest(base),
-          (inputs['now'] as num?)?.toInt() ?? 1700000010,
-        ).complete(
-          AtlasId((inputs['payload_id'] as String?) ?? 'p-1'),
-          (inputs['now'] as num?)?.toInt() ?? 1700000010,
-        );
+    final acquisition = AtlasAcquisition.start(
+      _acqRequest(base),
+      (inputs['now'] as num?)?.toInt() ?? 1700000010,
+    ).complete(
+      AtlasId((inputs['payload_id'] as String?) ?? 'p-1'),
+      (inputs['now'] as num?)?.toInt() ?? 1700000010,
+    );
     final result = acquisition.toResult();
-    final ok =
-        result.state == AtlasAcquisitionState.succeeded &&
+    final ok = result.state == AtlasAcquisitionState.succeeded &&
         result.payloadId != null &&
         result.failure == null;
     _record(
@@ -2799,8 +2736,8 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     final missing = <String>[];
     final dir = Directory('test/golden/acquisition');
     for (final file in dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.json'),
-    )) {
+          (f) => f.path.endsWith('.json'),
+        )) {
       final text = file.readAsStringSync();
       if (temporal.hasMatch(text) && !text.contains('"now"')) {
         missing.add(file.path.split(Platform.pathSeparator).last);
@@ -2862,6 +2799,17 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     await _basemap(f);
     return;
   }
+  if (id == 'ADV-093' || id == 'ADV-098') {
+    await _store(f);
+    return;
+  }
+  if (id == 'ADV-094' ||
+      id == 'ADV-095' ||
+      id == 'ADV-096' ||
+      id == 'ADV-097') {
+    await _packs(f);
+    return;
+  }
   if (id == 'ADV-066' ||
       id == 'ADV-068' ||
       id == 'ADV-069' ||
@@ -2872,27 +2820,32 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
       id == 'ADV-082' ||
       id == 'ADV-083' ||
       id == 'ADV-084' ||
-      id == 'ADV-085') {
+      id == 'ADV-085' ||
+      id == 'ADV-099' ||
+      id == 'ADV-100') {
     // Source-collapse scans: forbidden tokens must not appear in pipeline
     // code lines (full-line comments excluded, same as the SELF check).
-    final tokens =
-        ((expected['forbidden_tokens'] as List?) ??
-                (expected['forbidden_imports'] as List))
-            .cast<String>();
+    final tokens = ((expected['forbidden_tokens'] as List?) ??
+            (expected['forbidden_imports'] as List))
+        .cast<String>();
     final hits = <String>[];
-    final dir = Directory(inputs['scan'] as String);
-    for (final file
-        in dir
-            .listSync(recursive: true)
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.dart'))) {
-      final code = file
-          .readAsLinesSync()
-          .where((line) => !line.trimLeft().startsWith('//'))
-          .join('\n');
-      for (final token in tokens) {
-        if (code.contains(token)) {
-          hits.add('${file.path.split(Platform.pathSeparator).last}: $token');
+    final dirs = (inputs['scan'] as String).split(',');
+    for (final dirPath in dirs) {
+      final dir = Directory(dirPath);
+      for (final file in dir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))) {
+        final code = file
+            .readAsLinesSync()
+            .where((line) => !line.trimLeft().startsWith('//'))
+            .join('\n');
+        for (final token in tokens) {
+          if (code.contains(token)) {
+            hits.add(
+              '${file.path.split(Platform.pathSeparator).last}: $token',
+            );
+          }
         }
       }
     }
@@ -2911,19 +2864,18 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     final missing = <String>[];
     final dir = Directory('test/golden/pipeline');
     for (final file in dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.json'),
-    )) {
+          (f) => f.path.endsWith('.json'),
+        )) {
       if (!file.readAsStringSync().contains('"now"')) {
         missing.add(file.path.split(Platform.pathSeparator).last);
       }
     }
     final clockHits = <String>[];
     final src = Directory(inputs['scan'] as String);
-    for (final file
-        in src
-            .listSync(recursive: true)
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.dart'))) {
+    for (final file in src
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))) {
       final code = file
           .readAsLinesSync()
           .where((line) => !line.trimLeft().startsWith('//'))
@@ -3302,96 +3254,99 @@ final class _ScriptedOperation implements AtlasExecutionOperation {
   Future<AtlasCacheEntry> serveEntry(
     AtlasCacheEntry entry,
     ExecutionContext context,
-  ) => _at('serve', () async {
-    final s = script['serve'] as Map<String, dynamic>;
-    switch (s['do']) {
-      case 'echo':
-        return entry;
-      case 'invalid_entry':
-        return AtlasCacheEntry(
-          key: const AtlasCacheKey(
-            namespace: AtlasCacheNamespace.resource,
-            value: '',
-          ),
-          storedAt: 0,
-        );
-      case 'throw':
-        _throwScripted(s);
-      default:
-        throw StateError('unknown serve script: ${s['do']}');
-    }
-  });
+  ) =>
+      _at('serve', () async {
+        final s = script['serve'] as Map<String, dynamic>;
+        switch (s['do']) {
+          case 'echo':
+            return entry;
+          case 'invalid_entry':
+            return AtlasCacheEntry(
+              key: const AtlasCacheKey(
+                namespace: AtlasCacheNamespace.resource,
+                value: '',
+              ),
+              storedAt: 0,
+            );
+          case 'throw':
+            _throwScripted(s);
+          default:
+            throw StateError('unknown serve script: ${s['do']}');
+        }
+      });
 
   @override
   Future<AtlasAcquisitionResult> runAcquisition(
     AtlasAcquisitionRequest request,
     ExecutionContext context,
-  ) => _at('acquire', () async {
-    final s = script['acquire'] as Map<String, dynamic>;
-    final now = context.nowSeconds;
-    switch (s['do']) {
-      case 'succeed':
-        return AtlasAcquisition.start(
-          request,
-          now - 100,
-        ).complete(AtlasId(s['payload_id'] as String), now).toResult();
-      case 'fail':
-        return AtlasAcquisition.start(request, now - 100)
-            .fail(
-              AtlasAcquisitionFailure.values.firstWhere(
-                (v) => v.name == s['failure'],
+  ) =>
+      _at('acquire', () async {
+        final s = script['acquire'] as Map<String, dynamic>;
+        final now = context.nowSeconds;
+        switch (s['do']) {
+          case 'succeed':
+            return AtlasAcquisition.start(
+              request,
+              now - 100,
+            ).complete(AtlasId(s['payload_id'] as String), now).toResult();
+          case 'fail':
+            return AtlasAcquisition.start(request, now - 100)
+                .fail(
+                  AtlasAcquisitionFailure.values.firstWhere(
+                    (v) => v.name == s['failure'],
+                  ),
+                  now,
+                )
+                .toResult();
+          case 'cancelled_result':
+            return AtlasAcquisition.start(
+              request,
+              now - 100,
+            ).cancel(now).toResult();
+          case 'timeout_result':
+            final timed = AtlasAcquisitionRequest(
+              resource: request.resource,
+              policy: AtlasAcquisitionPolicy(
+                timeoutSeconds: (s['timeout_seconds'] as num).toInt(),
               ),
-              now,
-            )
-            .toResult();
-      case 'cancelled_result':
-        return AtlasAcquisition.start(
-          request,
-          now - 100,
-        ).cancel(now).toResult();
-      case 'timeout_result':
-        final timed = AtlasAcquisitionRequest(
-          resource: request.resource,
-          policy: AtlasAcquisitionPolicy(
-            timeoutSeconds: (s['timeout_seconds'] as num).toInt(),
-          ),
-        );
-        return AtlasAcquisition.start(
-          timed,
-          now - 100,
-        ).checkTimeout(now).toResult();
-      case 'pending':
-        return AtlasAcquisition.start(request, now - 100).toResult();
-      case 'throw':
-        _throwScripted(s);
-      default:
-        throw StateError('unknown acquire script: ${s['do']}');
-    }
-  });
+            );
+            return AtlasAcquisition.start(
+              timed,
+              now - 100,
+            ).checkTimeout(now).toResult();
+          case 'pending':
+            return AtlasAcquisition.start(request, now - 100).toResult();
+          case 'throw':
+            _throwScripted(s);
+          default:
+            throw StateError('unknown acquire script: ${s['do']}');
+        }
+      });
 
   @override
   Future<AtlasCacheEntry> storeHandoff(
     AtlasCacheEntry handoff,
     ExecutionContext context,
-  ) => _at('store', () async {
-    final s = script['store'] as Map<String, dynamic>;
-    switch (s['do']) {
-      case 'echo':
-        return handoff;
-      case 'invalid_entry':
-        return AtlasCacheEntry(
-          key: const AtlasCacheKey(
-            namespace: AtlasCacheNamespace.resource,
-            value: '',
-          ),
-          storedAt: 0,
-        );
-      case 'throw':
-        _throwScripted(s);
-      default:
-        throw StateError('unknown store script: ${s['do']}');
-    }
-  });
+  ) =>
+      _at('store', () async {
+        final s = script['store'] as Map<String, dynamic>;
+        switch (s['do']) {
+          case 'echo':
+            return handoff;
+          case 'invalid_entry':
+            return AtlasCacheEntry(
+              key: const AtlasCacheKey(
+                namespace: AtlasCacheNamespace.resource,
+                value: '',
+              ),
+              storedAt: 0,
+            );
+          case 'throw':
+            _throwScripted(s);
+          default:
+            throw StateError('unknown store script: ${s['do']}');
+        }
+      });
 }
 
 Future<ExecutionResultBase> _serveExecution(
@@ -3438,15 +3393,15 @@ Future<void> _execution(Map<String, dynamic> f) async {
   final serveKey = kind == 'acquire'
       ? 'acquire'
       : kind == 'serve'
-      ? 'serve'
-      : 'store';
+          ? 'serve'
+          : 'store';
   final opSpecs = (inputs['operations'] as List)
       .cast<Map<dynamic, dynamic>>()
       .map((op) => op.cast<String, dynamic>())
       .toList();
   for (final spec in opSpecs) {
-    final script = (spec['script'] as Map<dynamic, dynamic>)
-        .cast<String, dynamic>();
+    final script =
+        (spec['script'] as Map<dynamic, dynamic>).cast<String, dynamic>();
     if (!script.containsKey(serveKey)) {
       throw StateError('fixture $id: script missing $serveKey behavior');
     }
@@ -3490,13 +3445,11 @@ Future<void> _execution(Map<String, dynamic> f) async {
       ok = ok && result.acquisition?.failure?.name == want;
     }
     if (expected.containsKey('echo_payload')) {
-      ok =
-          ok &&
+      ok = ok &&
           result.acquisition?.payloadId?.value == expected['echo_payload'];
     }
     if (expected.containsKey('carries_identity_not_bytes')) {
-      ok =
-          ok &&
+      ok = ok &&
           (expected['carries_identity_not_bytes'] as bool) &&
           result.acquisition != null &&
           result.acquisition?.payloadId != null;
@@ -3507,8 +3460,7 @@ Future<void> _execution(Map<String, dynamic> f) async {
       ok = ok && result.command.fallback == expected['fallback'];
     }
     if (expected.containsKey('echo_entry')) {
-      ok =
-          ok &&
+      ok = ok &&
           (expected['echo_entry'] as bool) &&
           result.servedEntry ==
               _cacheEntry(
@@ -3517,8 +3469,7 @@ Future<void> _execution(Map<String, dynamic> f) async {
     }
   }
   if (result is StoreHandoffResult && expected.containsKey('echo_entry')) {
-    ok =
-        ok &&
+    ok = ok &&
         (expected['echo_entry'] as bool) &&
         result.storedEntry ==
             _cacheEntry((commandJson['entry'] as Map).cast<String, dynamic>());
@@ -3558,6 +3509,424 @@ Future<void> _execution(Map<String, dynamic> f) async {
   );
 }
 
+// ---------------------------------------------------------------------------
+// RETENTION + PACKS (Blueprint Phase 3 engine side)
+// ---------------------------------------------------------------------------
+
+Future<void> _store(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final op = expected['op'] as String? ??
+      (id == 'ADV-093'
+          ? 'invalidate'
+          : id == 'ADV-098'
+              ? 'op_miss'
+              : 'put_get');
+  final store = AtlasMemoryStore(
+    capacity: (inputs['capacity'] as num).toInt(),
+  );
+  AtlasCacheEntry entry(String field) =>
+      _cacheEntry(inputs[field] as Map<String, dynamic>)!;
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'put_get':
+      final e = entry('entry');
+      store.put(e);
+      ok = store.get(e.key) == e && store.entryCount == expected['count'];
+      detail = 'echo + count';
+    case 'eviction':
+      final items = (inputs['entries'] as List).cast<Map<dynamic, dynamic>>();
+      AtlasCacheEntry? evicted;
+      for (var idx = 0; idx < items.length; idx++) {
+        final e = _cacheEntry(items[idx].cast<String, dynamic>())!;
+        if (idx == items.length - 1) {
+          for (final a in (inputs['access'] as List).cast<String>()) {
+            store.get(
+              AtlasCacheKey(namespace: AtlasCacheNamespace.resource, value: a),
+            );
+          }
+          evicted = store.put(e);
+        } else {
+          store.put(e);
+        }
+      }
+      final bKey = AtlasCacheKey(
+        namespace: AtlasCacheNamespace.resource,
+        value: 'other/rasterTiles/z=9/x=9/y=9@xyz',
+      );
+      ok = evicted?.key.value == expected['evicted'] &&
+          (store.get(bKey) == null) == (expected['b_absent'] as bool);
+      detail = 'evicted=${evicted?.key.value} lru-honored';
+    case 'replace':
+      final first = _cacheEntry(inputs['first'] as Map<String, dynamic>)!;
+      final second = _cacheEntry(inputs['second'] as Map<String, dynamic>)!;
+      store.put(first);
+      final evicted = store.put(second);
+      ok = evicted == null &&
+          store.entryCount == expected['count'] &&
+          store.get(second.key)?.payloadId?.value == expected['echo_payload'];
+      detail = 'replace refreshes, never evicts self';
+    case 'invalid_put':
+      try {
+        store.put(entry('entry'));
+        ok = false;
+      } on AtlasRejectionException catch (e) {
+        ok = e.rejection.category == expected['rejection'];
+        detail = 'category=${e.rejection.category}';
+      }
+    case 'remove':
+      final e = entry('entry');
+      store.put(e);
+      final first = store.remove(e.key);
+      final second = store.remove(e.key);
+      ok = first == (expected['first'] as bool) &&
+          second == (expected['second'] as bool);
+      detail = 'remove=$first then $second';
+    case 'clear':
+      for (final e
+          in (inputs['entries'] as List).cast<Map<dynamic, dynamic>>()) {
+        store.put(_cacheEntry(e.cast<String, dynamic>())!);
+      }
+      store.clear();
+      ok = store.entryCount == expected['after'];
+      detail = 'cleared';
+    case 'invalidate':
+      final e = entry('entry');
+      store.put(e);
+      final done = store.invalidate(e.key);
+      final stored = store.get(e.key);
+      final missing = store.invalidate(
+        const AtlasCacheKey(
+          namespace: AtlasCacheNamespace.resource,
+          value: 'k/v/zzz',
+        ),
+      );
+      ok = done;
+      if (expected.containsKey('revoked')) {
+        ok = ok && (stored?.revoked ?? false) == expected['revoked'];
+      }
+      if (expected.containsKey('missing')) {
+        ok = ok && missing == (expected['missing'] as bool);
+      }
+      if (expected.containsKey('revoked_echo')) {
+        ok = ok && (stored?.revoked ?? false) == expected['revoked_echo'];
+      }
+      detail = 'revoked=${stored?.revoked}';
+    case 'stats':
+      for (final e
+          in (inputs['entries'] as List).cast<Map<dynamic, dynamic>>()) {
+        store.put(_cacheEntry(e.cast<String, dynamic>())!);
+      }
+      ok = store.stats.entryCount == expected['count'] &&
+          store.stats.capacity == expected['capacity'];
+      detail = 'stats=${store.stats.entryCount}/${store.stats.capacity}';
+    case 'op_serve':
+    case 'op_miss':
+      final e = entry('entry');
+      if (op == 'op_serve') store.put(e);
+      final identity = e.resource!;
+      final result = await AtlasExecutor.serveEntry(
+        command: ServeEntryCommand(entry: e),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            identity: AtlasStoreOperation(store: store),
+          }),
+        ),
+      );
+      ok = result.state.name == expected['state'];
+      if (expected.containsKey('echo')) {
+        ok = ok && result.servedEntry == e;
+      }
+      if (expected.containsKey('malfunction')) {
+        ok = ok && result.malfunction?.name == expected['malfunction'];
+      }
+      if (expected.containsKey('reason_contains')) {
+        final wants = (expected['reason_contains'] as List).cast<String>();
+        ok = ok && wants.every((w) => result.reason.contains(w));
+      }
+      detail =
+          'state=${result.state.name} served=${result.servedEntry != null}';
+    case 'op_store':
+      final e = entry('entry');
+      final identity = e.resource!;
+      final result = await AtlasExecutor.storeHandoff(
+        command: StoreHandoffCommand(handoff: e),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            identity: AtlasStoreOperation(store: store),
+          }),
+        ),
+      );
+      ok = result.state.name == expected['state'] && store.get(e.key) != null;
+      detail = 'resident=${store.get(e.key) != null}';
+    case 'op_acquire_seam':
+      final identity = AtlasResourceIdentity(
+        provider: AtlasId(inputs['provider'] as String),
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: AtlasAcquisitionRequest(resource: identity),
+        ),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            identity: AtlasStoreOperation(store: store),
+          }),
+        ),
+      );
+      ok = result.state.name == expected['state'] &&
+          result.malfunction?.name == expected['malfunction'];
+      if (expected.containsKey('reason_contains')) {
+        final wants = (expected['reason_contains'] as List).cast<String>();
+        ok = ok && wants.every((w) => result.reason.contains(w));
+      }
+      detail = 'seam holds: ${result.reason}';
+    default:
+      _record(id, Verdict.fail, 'unknown store op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+AtlasPackManifest _packsManifest(Map<String, dynamic> inputs) =>
+    AtlasPackManifest(
+      packId: AtlasId(inputs['pack_id'] as String),
+      provider: AtlasId(inputs['provider'] as String),
+      zoomMin: (inputs['zoom_min'] as num).toInt(),
+      zoomMax: (inputs['zoom_max'] as num).toInt(),
+      createdAt: (inputs['created_at'] as num).toInt(),
+      sourceVersion: inputs['source_version'] as String?,
+      attribution: inputs['attribution'] as String?,
+      entries: [
+        for (final e
+            in (inputs['entries'] as List).cast<Map<dynamic, dynamic>>())
+          AtlasPackEntry(
+            address: e['address'] as String,
+            checksum: e['checksum'] as String,
+          ),
+      ],
+    );
+
+Future<void> _packs(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  var ok = true;
+  var detail = '';
+  List<AtlasTileCoordinate> tilesOf(dynamic raw) => [
+        for (final t in (raw as List).cast<Map<dynamic, dynamic>>())
+          AtlasTileCoordinate(
+            z: (t['z'] as num).toInt(),
+            x: (t['x'] as num).toInt(),
+            y: (t['y'] as num).toInt(),
+          ),
+      ];
+  if (id == 'PAK-001' || id == 'ADV-094') {
+    final manifest = _packsManifest(inputs);
+    ok = manifest.validate().isValid &&
+        manifest.seal.length == 16 &&
+        AtlasPackManifest.fromJson(
+              manifest.toJson().cast<String, dynamic>(),
+            ) ==
+            manifest;
+    if (id == 'ADV-094') {
+      final tampered = AtlasPackManifest(
+        packId: manifest.packId,
+        provider: manifest.provider,
+        zoomMin: manifest.zoomMin,
+        zoomMax: manifest.zoomMax,
+        createdAt: manifest.createdAt,
+        entries: const [
+          AtlasPackEntry(
+            address: 'z=1/x=0/y=0@xyz',
+            checksum: 'ffffffffffffffff',
+          ),
+        ],
+      );
+      ok = ok && tampered.seal != manifest.seal;
+    }
+    detail = 'seal=${manifest.seal}';
+  } else if (id == 'PAK-002') {
+    final check = _packsManifest(inputs).validate();
+    ok = !check.isValid && check.rejection?.category == expected['rejection'];
+    detail = 'invalid range refused';
+  } else if (id == 'PAK-003') {
+    final bytes =
+        (expected['bytes'] as List).cast<num>().map((n) => n.toInt()).toList();
+    final first = fnv1a64(bytes);
+    ok = first.length == expected['len'] && fnv1a64(bytes) == first;
+    detail = 'fnv=$first';
+  } else if (id == 'PAK-004' ||
+      id == 'PAK-005' ||
+      id == 'PAK-006' ||
+      id == 'PAK-007' ||
+      id == 'PAK-008' ||
+      id == 'PAK-017' ||
+      id == 'ADV-097') {
+    Object plan() => AtlasPackPlanner.plan(
+          endpoint: _bmEndpoint(inputs['endpoint'] as String),
+          zMin: (inputs['z_min'] as num).toInt(),
+          zMax: (inputs['z_max'] as num).toInt(),
+          xMin: (inputs['x_min'] as num).toInt(),
+          xMax: (inputs['x_max'] as num).toInt(),
+          yMin: (inputs['y_min'] as num).toInt(),
+          yMax: (inputs['y_max'] as num).toInt(),
+          bytesPerTileEstimate: (inputs['bytes_per_tile'] as num).toInt(),
+          approvedBulk: (inputs['approved_bulk'] as bool?) ?? false,
+          isPrefetch: (inputs['is_prefetch'] as bool?) ?? false,
+        );
+    if (id == 'ADV-097') {
+      final first = plan() as AtlasPackPlan;
+      final second = plan() as AtlasPackPlan;
+      ok = (expected['identical'] as bool) &&
+          first.estimatedBytes == second.estimatedBytes &&
+          first.tiles.length == second.tiles.length &&
+          Iterable<int>.generate(
+            first.tiles.length,
+          ).every((i) => first.tiles[i] == second.tiles[i]);
+      detail = 'plan deterministic x${first.tiles.length}';
+    } else {
+      final outcome = plan();
+      if (outcome is AtlasPackRefusal) {
+        ok = outcome.reason == expected['reason'];
+        detail = 'refused: ${outcome.reason}';
+      } else {
+        final planOk = outcome as AtlasPackPlan;
+        ok = planOk.entryCount == expected['entry_count'] &&
+            planOk.estimatedBytes == expected['estimated_bytes'];
+        detail = 'planned x${planOk.entryCount}';
+      }
+    }
+  } else if (id == 'PAK-014') {
+    final limiter = AtlasRateLimiter(
+      capacity: (inputs['capacity'] as num).toInt(),
+      refillPerSecond: (inputs['refill'] as num).toInt(),
+    );
+    final at =
+        (expected['at'] as List).cast<num>().map((n) => n.toInt()).toList();
+    final want = (expected['admitted'] as List).cast<bool>();
+    final got = [for (final t in at) limiter.take(t)];
+    ok = got.length == want.length &&
+        Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
+    detail = 'admitted=$got';
+  } else {
+    // Download scenarios (PAK-009..013, PAK-015/016, ADV-095/096).
+    final byteMap = <String, List<int>>{};
+    if (inputs.containsKey('bytes_map')) {
+      for (final kv
+          in ((inputs['bytes_map'] as Map).cast<String, dynamic>()).entries) {
+        byteMap[kv.key] =
+            (kv.value as List).cast<num>().map((n) => n.toInt()).toList();
+      }
+    }
+    final prereceived = <String, List<int>>{};
+    if (inputs.containsKey('prereceived')) {
+      for (final kv
+          in ((inputs['prereceived'] as Map).cast<String, dynamic>()).entries) {
+        prereceived[kv.key] =
+            (kv.value as List).cast<num>().map((n) => n.toInt()).toList();
+      }
+    }
+    final failOn = inputs['fail_on'] as String?;
+    final cancelOn = inputs['cancel_on'] as String?;
+    final cancellation = ExecutionCancellation();
+    AtlasRateLimiter? limiter;
+    if (inputs.containsKey('limiter')) {
+      final lim = inputs['limiter'] as Map<String, dynamic>;
+      limiter = AtlasRateLimiter(
+        capacity: (lim['capacity'] as num).toInt(),
+        refillPerSecond: (lim['refill'] as num).toInt(),
+      );
+    }
+    final tiles = tilesOf(inputs['tiles']);
+    Future<List<int>> source(AtlasTileCoordinate tile) async {
+      final key = '${tile.z}/${tile.x}/${tile.y}';
+      if (key == cancelOn) cancellation.requestCancel();
+      if (key == failOn) throw Exception('chunk boom for $key');
+      final hit = byteMap[key];
+      if (hit == null) throw Exception('no scripted bytes for $key');
+      return hit;
+    }
+
+    Future<AtlasPackDownloader> run() {
+      final downloader = AtlasPackDownloader(
+        tiles: tiles,
+        source: source,
+        limiter: limiter,
+        cancellation: cancellation,
+        received: Map.of(prereceived),
+      );
+      return downloader
+          .download((inputs['now'] as num).toInt())
+          .then((_) => downloader);
+    }
+
+    final downloader = await run();
+    if (id == 'PAK-015') {
+      downloader.discard();
+      ok = downloader.state == AtlasDownloadState.planned &&
+          downloader.progress.received == expected['after'];
+      detail = 'discarded to planned';
+    } else if (id == 'ADV-096') {
+      final again = await downloader.download((inputs['now'] as num).toInt());
+      ok = downloader.state == AtlasDownloadState.failed &&
+          again == AtlasDownloadState.failed;
+      detail = 'failed sticky';
+    } else if (id == 'PAK-016') {
+      final manifest = AtlasPackManifest(
+        packId: AtlasId(inputs['pack_id'] as String),
+        provider: AtlasId(inputs['provider'] as String),
+        zoomMin: (inputs['zoom_min'] as num).toInt(),
+        zoomMax: (inputs['zoom_max'] as num).toInt(),
+        createdAt: (inputs['now'] as num).toInt(),
+        attribution: inputs['attribution'] as String?,
+        entries: [
+          for (final kv in downloader.received.entries)
+            AtlasPackEntry(address: kv.key, checksum: fnv1a64(kv.value)),
+        ],
+      );
+      ok = downloader.state == AtlasDownloadState.complete &&
+          manifest.validate().isValid &&
+          manifest.entryCount == expected['entry_count'] &&
+          manifest.seal.length == expected['seal_len'];
+      detail = 'manifest from download seal=${manifest.seal}';
+    } else {
+      final progress = downloader.progress;
+      ok = downloader.state.name == expected['state'];
+      if (expected.containsKey('received')) {
+        ok = ok && progress.received == expected['received'];
+      }
+      if (expected.containsKey('planned')) {
+        ok = ok && progress.planned == expected['planned'];
+      }
+      if (expected.containsKey('bytes')) {
+        ok = ok && progress.bytes == expected['bytes'];
+      }
+      if (expected.containsKey('retained_partial')) {
+        ok = ok &&
+            (expected['retained_partial'] as bool) &&
+            progress.received > 0 &&
+            progress.received < progress.planned;
+      }
+      if (expected.containsKey('detail_contains')) {
+        final wants = (expected['detail_contains'] as List).cast<String>();
+        ok = ok && wants.every((w) => downloader.failureDetail.contains(w));
+      }
+      detail = 'state=${downloader.state.name} $progress';
+    }
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
 //---------------------------------------------------------------------------
 // BASEMAP MATRIX (Blueprint Phase 2 engine side: registry + implementations)
 // ---------------------------------------------------------------------------
@@ -3566,9 +3935,9 @@ AtlasProviderRegistry _bmRegistry() => AtlasBuiltinProviders.registry();
 
 AtlasProviderEndpoint _bmEndpoint(String id) {
   AtlasProviderDescriptor syn(String sid) => AtlasProviderDescriptor(
-    id: AtlasId(sid),
-    kinds: const {AtlasDataKind.rasterTiles},
-  );
+        id: AtlasId(sid),
+        kinds: const {AtlasDataKind.rasterTiles},
+      );
   const policy = AtlasProviderPolicy(
     onlineAllowed: true,
     cacheAllowed: true,
@@ -3595,6 +3964,17 @@ AtlasProviderEndpoint _bmEndpoint(String id) {
           cacheAllowed: true,
           prefetchAllowed: false,
           requiresKey: true,
+        ),
+        urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png',
+      );
+    case 'synthetic-capped':
+      return AtlasProviderEndpoint(
+        descriptor: syn('syn-capped'),
+        policy: const AtlasProviderPolicy(
+          onlineAllowed: true,
+          cacheAllowed: true,
+          prefetchAllowed: true,
+          maxTiles: 2,
         ),
         urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png',
       );
@@ -3634,13 +4014,11 @@ Future<void> _basemap(Map<String, dynamic> f) async {
     case 'registry_ids':
       final want = (expected['ids'] as List).cast<String>();
       final got = registry.ids;
-      ok =
-          got.length == want.length &&
+      ok = got.length == want.length &&
           Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
       detail = 'ids=$got';
     case 'validate_all':
-      ok =
-          registry.descriptors.every(
+      ok = registry.descriptors.every(
             (d) => AtlasBuiltinProviders.all
                 .firstWhere((e) => e.descriptor == d)
                 .validate()
@@ -3655,8 +4033,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
       ok = got.length == expected['count'];
       detail = 'count=${got.length}';
     case 'lookup':
-      ok =
-          (registry.lookup(expected['id'] as String) != null) ==
+      ok = (registry.lookup(expected['id'] as String) != null) ==
           (expected['found'] as bool);
       detail = 'found=${registry.lookup(expected['id'] as String) != null}';
     case 'register_duplicate':
@@ -3675,8 +4052,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         ok = ok && policy.prefetchAllowed == expected['prefetch_allowed'];
       }
       if (expected.containsKey('bulk_guard_present')) {
-        ok =
-            ok &&
+        ok = ok &&
             (policy.bulkGuard?.isNotEmpty ?? false) ==
                 (expected['bulk_guard_present'] as bool);
       }
@@ -3738,8 +4114,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         detail = 'category=${e.rejection.category}';
       }
     case 'local_template':
-      ok =
-          (AtlasBuiltinProviders.localBundle.urlTemplate == null) ==
+      ok = (AtlasBuiltinProviders.localBundle.urlTemplate == null) ==
           (expected['template_null'] as bool);
       detail = 'local is bundle-backed';
     case 'resolve':
@@ -3766,8 +4141,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
       if (expected.containsKey('eligible')) {
         final want = (expected['eligible'] as List).cast<String>();
         final got = result.eligible.map((e) => e.value).toList();
-        ok =
-            ok &&
+        ok = ok &&
             got.length == want.length &&
             Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
       }
@@ -3784,8 +4158,8 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         rawBytes == 'large'
             ? List<int>.filled(100000, 7)
             : rawBytes == null
-            ? <int>[]
-            : (rawBytes as List).cast<num>().map((n) => n.toInt()).toList(),
+                ? <int>[]
+                : (rawBytes as List).cast<num>().map((n) => n.toInt()).toList(),
         (transportJson['status'] as num?)?.toInt() ?? 0,
       );
       final endpoint = _bmEndpoint(inputs['endpoint'] as String);
@@ -3810,19 +4184,16 @@ Future<void> _basemap(Map<String, dynamic> f) async {
       );
       ok = result.state.name == expected['state'];
       if (expected.containsKey('acquisition_state')) {
-        ok =
-            ok &&
+        ok = ok &&
             result.acquisition?.state.name == expected['acquisition_state'];
       }
       if (expected.containsKey('acquisition_failure')) {
-        ok =
-            ok &&
+        ok = ok &&
             result.acquisition?.failure?.name ==
                 expected['acquisition_failure'];
       }
       if (expected.containsKey('echo_payload')) {
-        ok =
-            ok &&
+        ok = ok &&
             result.acquisition?.payloadId?.value == expected['echo_payload'];
       }
       if (expected.containsKey('url_seen')) {
@@ -3830,8 +4201,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         detail = 'url=${fake.urls.single}';
       }
       if (expected.containsKey('headers_contain')) {
-        ok =
-            ok &&
+        ok = ok &&
             fake.headersSeen.single.containsKey(expected['headers_contain']);
       }
       if (expected.containsKey('header_name')) {
@@ -3840,14 +4210,12 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         detail = 'ua=$value';
       }
       if (expected.containsKey('url_differs_from_identity')) {
-        ok =
-            ok &&
+        ok = ok &&
             (expected['url_differs_from_identity'] as bool) &&
             fake.urls.single.toString() != (inputs['address'] as String);
       }
       if (expected.containsKey('payload_short')) {
-        ok =
-            ok &&
+        ok = ok &&
             (expected['payload_short'] as bool) &&
             (result.acquisition?.payloadId?.value.length ?? 9999) < 100;
       }
@@ -3858,8 +4226,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
         final wants = (expected['reason_contains'] as List).cast<String>();
         ok = ok && wants.every((w) => result.reason.contains(w));
       }
-      detail =
-          '$detail state=${result.state.name} '
+      detail = '$detail state=${result.state.name} '
           'acq=${result.acquisition?.state.name}/${result.acquisition?.failure?.name}';
     case 'fetch_cancel':
       final transportJson = inputs['transport'] as Map<String, dynamic>;
@@ -3893,8 +4260,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
           }),
         ),
       );
-      ok =
-          result.state.name == expected['state'] &&
+      ok = result.state.name == expected['state'] &&
           fake.urls.isEmpty == !(expected['contacted'] as bool? ?? true);
       detail = 'cancelled before contact calls=${fake.urls.length}';
     case 'fetch_registry':
@@ -3925,8 +4291,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
           }),
         ),
       );
-      ok =
-          result.state.name == expected['state'] &&
+      ok = result.state.name == expected['state'] &&
           result.acquisition?.state.name == expected['acquisition_state'] &&
           result.acquisition?.payloadId?.value == expected['echo_payload'];
       detail = 'registry→binding→executor wired';
@@ -3961,14 +4326,12 @@ Future<void> _basemap(Map<String, dynamic> f) async {
       );
       ok = result.state.name == expected['state'];
       if (expected.containsKey('acquisition_failure')) {
-        ok =
-            ok &&
+        ok = ok &&
             result.acquisition?.failure?.name ==
                 expected['acquisition_failure'];
       }
       if (expected.containsKey('echo_payload')) {
-        ok =
-            ok &&
+        ok = ok &&
             result.acquisition?.payloadId?.value == expected['echo_payload'];
       }
       if (expected.containsKey('path_seen')) {
@@ -4003,8 +4366,7 @@ Future<void> _basemap(Map<String, dynamic> f) async {
           }),
         ),
       );
-      ok =
-          result.state.name == expected['state'] &&
+      ok = result.state.name == expected['state'] &&
           result.malfunction?.name == expected['malfunction'];
       if (expected.containsKey('reason_contains')) {
         final wants = (expected['reason_contains'] as List).cast<String>();
@@ -4037,13 +4399,12 @@ void main() async {
     );
     exit(2);
   }
-  final files =
-      root
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.json'))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+  final files = root
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.json'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
 
   const naDirs = {
     'offline',
@@ -4102,6 +4463,10 @@ void main() async {
             _pipeline(fixture);
           case 'basemap':
             await _basemap(fixture);
+          case 'store':
+            await _store(fixture);
+          case 'packs':
+            await _packs(fixture);
           case 'execution':
             await _execution(fixture);
           case 'resolution':
