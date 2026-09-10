@@ -18,6 +18,14 @@ dependencies:
   # SDK-pinned — hard ceiling, see `flutter pub outdated`).
   latlong2: ^0.10.1
   # Engine contracts only (boundary: app depends on engine, never reverse).
+  atlas_core:
+    path: ../../packages/atlas_core
+  atlas_provider_api:
+    path: ../../packages/atlas_provider_api
+  atlas_tiles:
+    path: ../../packages/atlas_tiles
+  atlas_offline:
+    path: ../../packages/atlas_offline
   atlas_providers:
     path: ../../packages/atlas_providers
 

@@ -11,6 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'diagnostics/diagnostics_page.dart';
+import 'offline/offline_page.dart';
+import 'offline/offline_repository.dart';
+
 void main() {
   runApp(const AtlasApp());
 }
@@ -23,21 +27,49 @@ const Map<String, String> _casualBasemaps = {
   'Dark': 'esri-dark-gray',
 };
 
-class AtlasApp extends StatelessWidget {
-  const AtlasApp({super.key});
+/// Host root. Holds the [OfflineRepository] so the map page, the Offline
+/// Areas track, and Diagnostics share one orchestrator (single store, single
+/// record set, single event log). Injectable for tests.
+class AtlasApp extends StatefulWidget {
+  const AtlasApp({super.key, OfflineRepository? repository})
+      : _repositoryOverride = repository;
+
+  final OfflineRepository? _repositoryOverride;
+
+  @override
+  State<AtlasApp> createState() => _AtlasAppState();
+}
+
+class _AtlasAppState extends State<AtlasApp> {
+  late final OfflineRepository _repository;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget._repositoryOverride ??
+        OfflineRepository(registry: AtlasBuiltinProviders.registry());
+  }
+
+  @override
+  void dispose() {
+    if (widget._repositoryOverride == null) _repository.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Sovereign Atlas',
       theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-      home: const AtlasMapPage(),
+      home: AtlasMapPage(repository: _repository),
     );
   }
 }
 
 class AtlasMapPage extends StatefulWidget {
-  const AtlasMapPage({super.key});
+  const AtlasMapPage({super.key, required this.repository});
+
+  final OfflineRepository repository;
 
   @override
   State<AtlasMapPage> createState() => _AtlasMapPageState();
@@ -95,6 +127,24 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
             icon: const Icon(Icons.layers),
             tooltip: 'Basemap',
             onPressed: _openPicker,
+          ),
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'offline-areas',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => OfflinePage(repository: widget.repository),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.assessment),
+            tooltip: 'diagnostics',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => DiagnosticsPage(repository: widget.repository),
+              ),
+            ),
           ),
         ],
       ),
