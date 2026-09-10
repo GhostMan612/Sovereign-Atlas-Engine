@@ -7,6 +7,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:atlas/offline/offline_page.dart';
 import 'package:atlas/offline/offline_pack.dart';
@@ -21,12 +22,18 @@ OfflineRepository testRepo({
   AtlasChunkSource? source,
   int now = 1000,
   int Function()? clock,
+  Directory? dir,
+  AtlasRateLimiter? sharedLimiter,
 }) {
   return OfflineRepository(
     registry: AtlasBuiltinProviders.registry(),
     chunkSourceFactory: (_) =>
         source ?? (tile) async => [tile.z, tile.x, tile.y],
     clock: clock ?? () => now,
+    // Isolated journal per repository (never touches the host docs dir).
+    directoryProvider: () async =>
+        dir ?? Directory.systemTemp.createTempSync('atlas_repo_'),
+    sharedLimiter: sharedLimiter,
   );
 }
 
@@ -339,12 +346,9 @@ void main() {
       // limiter could never resume past its own pause (resume re-walks
       // every tile at one take per iteration against a capped bucket).
       var now = 1000;
-      final repo = OfflineRepository(
-        registry: AtlasBuiltinProviders.registry(),
-        chunkSourceFactory: (_) => (tile) async => [tile.z],
+      final repo = testRepo(
         clock: () => now,
-        sharedLimiter:
-            AtlasRateLimiter(capacity: 2, refillPerSecond: 1),
+        sharedLimiter: AtlasRateLimiter(capacity: 2, refillPerSecond: 1),
       );
       OfflinePackRecord planTwo() => repo.planPack(
             providerId: 'esri-imagery',
@@ -372,35 +376,176 @@ void main() {
       expect(second.receivedTiles, 2);
     });
 
-    test('delete drops record, bytes, and index entry', () async {
-      final repo = testRepo();
+    test('delete drops record, bytes, index entry, and disk journal',
+        () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final repo = testRepo(dir: dir);
       final record = planOne(repo);
       await repo.startDownload(record.packId);
       expect(repo.store.stats.entryCount, 1);
-      repo.deletePack(record.packId);
+      expect(
+        Directory('${dir.path}/offline_packs/${record.packId}').existsSync(),
+        isTrue,
+      );
+      await repo.deletePack(record.packId);
       expect(repo.lookup(record.packId), isNull);
       expect(repo.store.stats.entryCount, 0);
       expect(repo.packs, isEmpty);
+      expect(
+        Directory('${dir.path}/offline_packs/${record.packId}').existsSync(),
+        isFalse,
+      );
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
     });
 
-    test('clearStore keeps records, flags index entries gone', () async {
+    test('clearStore evicts everything, keeps records as history', () async {
       final repo = testRepo();
       final record = planOne(repo);
       await repo.startDownload(record.packId);
-      repo.clearStore();
+      await repo.clearStore();
       expect(repo.store.stats.entryCount, 0);
       expect(repo.lookup(record.packId), isNotNull);
       expect(record.cacheEntryPresent, isFalse);
-      expect(record.seal, isNotNull); // bytes + seal survive; index is gone
+      // Eviction is total: bytes, seal, and manifest go with the index
+      // (half-held state would make "available offline" a lie).
+      expect(record.bytesHeld, isFalse);
+      expect(record.seal, isNull);
+      expect(record.manifestJson, isNull);
+      expect(record.tileKeys, isEmpty);
+      expect(record.receivedTiles, 0);
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
     });
 
     test('event log is bounded and newest-visible', () async {
       final repo = testRepo();
       final record = planOne(repo);
       await repo.startDownload(record.packId);
-      repo.deletePack(record.packId);
+      await repo.deletePack(record.packId);
       expect(repo.events.length, lessThanOrEqualTo(kEventLogBound));
       expect(repo.events.first, contains('deleted'));
+    });
+  });
+
+  group('disk journal + relaunch restore', () {
+    Future<(OfflineRepository, OfflinePackRecord, Directory)> completeIn(
+      Directory dir,
+    ) async {
+      final repo = testRepo(dir: dir);
+      final record = planOne(repo);
+      await repo.startDownload(record.packId);
+      expect(record.lifecycle, OfflinePackLifecycle.complete);
+      return (repo, record, dir);
+    }
+
+    test('completion persists tile files + index', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final (_, record, _) = await completeIn(dir);
+      final packDir =
+          Directory('${dir.path}/offline_packs/${record.packId}');
+      expect(packDir.existsSync(), isTrue);
+      expect(
+        packDir
+            .listSync()
+            .whereType<File>()
+            .map((f) => f.path.split(Platform.pathSeparator).last)
+            .toList(),
+        ['0_0_0.tile'],
+      );
+      expect(
+        File('${dir.path}/offline_packs/$kPackIndexFile').existsSync(),
+        isTrue,
+      );
+    });
+
+    test('fresh repository restores packs from disk (relaunch)', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final (repo, record, _) = await completeIn(dir);
+
+      final relaunched = testRepo(dir: dir);
+      expect(relaunched.packs, isEmpty);
+      await relaunched.restore();
+
+      final restored = relaunched.lookup(record.packId);
+      expect(restored, isNotNull);
+      expect(restored!.lifecycle, OfflinePackLifecycle.complete);
+      expect(restored.seal, record.seal);
+      expect(restored.tileKeys, {'0/0/0'});
+      expect(restored.receivedTiles, 1);
+      expect(relaunched.store.stats.entryCount, 1);
+      // Bytes resolve through the relaunched instance (same code path the
+      // renderer uses after a real process restart).
+      expect(
+        relaunched.resolveTileBytes('esri-imagery', '0/0/0'),
+        [0, 0, 0],
+      );
+      expect(relaunched.offlineTileHits, 1);
+      // Manifest export shape survives the journal round-trip.
+      final manifest = AtlasPackManifest.fromJson(
+        (jsonDecode(restored.manifestJson!) as Map).cast<String, dynamic>(),
+      );
+      expect(manifest.seal, record.seal);
+      expect(repo.offlineTileHits, 0); // untouched original
+    });
+
+    test('restore with no journal is a logged no-op', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final repo = testRepo(dir: dir);
+      await repo.restore();
+      expect(repo.packs, isEmpty);
+      expect(repo.events.first, contains('no journal'));
+    });
+
+    test('restore skips packs with missing tile files', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final (_, record, _) = await completeIn(dir);
+      File('${dir.path}/offline_packs/${record.packId}/0_0_0.tile')
+          .deleteSync();
+      final relaunched = testRepo(dir: dir);
+      await relaunched.restore();
+      expect(relaunched.lookup(record.packId), isNull);
+      expect(relaunched.store.stats.entryCount, 0);
+      expect(relaunched.events.join('\n'), contains('skipped'));
+    });
+
+    test('restore skips packs exceeding the session cap', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final journal = Directory('${dir.path}/offline_packs')..createSync();
+      final keys = [
+        for (var i = 0; i < kMaxSessionTiles + 1; i++) '0/$i/0',
+      ];
+      File('${journal.path}/$kPackIndexFile').writeAsStringSync(
+        jsonEncode([
+          {
+            'pack_id': 'pack-evil',
+            'provider': 'esri-imagery',
+            'zoom_min': 0,
+            'zoom_max': 0,
+            'x_min': 0,
+            'x_max': kMaxSessionTiles,
+            'y_min': 0,
+            'y_max': 0,
+            'bytes_per_tile': 1,
+            'created_at': 1000,
+            'tile_count': keys.length,
+            'keys': keys,
+          },
+        ]),
+      );
+      final repo = testRepo(dir: dir);
+      await repo.restore();
+      expect(repo.lookup('pack-evil'), isNull);
+      expect(repo.events.join('\n'), contains('exceeds session cap'));
+    });
+
+    test('restore skips an unparseable index wholesale', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final journal = Directory('${dir.path}/offline_packs')..createSync();
+      File('${journal.path}/$kPackIndexFile')
+          .writeAsStringSync('this is not json');
+      final repo = testRepo(dir: dir);
+      await repo.restore();
+      expect(repo.packs, isEmpty);
+      expect(repo.events.first, contains('unparseable'));
     });
   });
 }

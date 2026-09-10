@@ -5,6 +5,8 @@
 // and an approved pack downloads end to end through the same buttons the
 // operator presses.
 
+import 'dart:io';
+
 import 'package:atlas/diagnostics/diagnostics_page.dart';
 import 'package:atlas/offline/offline_page.dart';
 import 'package:atlas/offline/offline_repository.dart';
@@ -17,6 +19,9 @@ OfflineRepository uiRepo() {
     registry: AtlasBuiltinProviders.registry(),
     chunkSourceFactory: (_) => (tile) async => [tile.z, tile.x, tile.y],
     clock: () => 1000,
+    // Isolated journal (never touches the host docs dir).
+    directoryProvider: () async =>
+        Directory.systemTemp.createTempSync('atlas_ui_'),
   );
 }
 
@@ -139,6 +144,7 @@ void main() {
     expect(find.textContaining('Providers registered: 7'), findsOneWidget);
     expect(find.textContaining('Endpoints self-valid: 7/7'), findsOneWidget);
     expect(find.textContaining('Pack index: 0/64'), findsOneWidget);
+    expect(find.textContaining('offline serves'), findsOneWidget);
     expect(find.textContaining('No events yet'), findsOneWidget);
   });
 }

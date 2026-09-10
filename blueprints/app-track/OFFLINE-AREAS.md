@@ -5,8 +5,11 @@
 - **Scope:** blueprint 3.5 UX plus the 3.4-UX halves (restrictions/estimates
   surfaced before download) against the existing Phase 3 engine
   (`atlas_providers` planner, `atlas_offline` downloader/manifest/limiter,
-  `atlas_tiles` memory store). File export/import is NOT built (manifest
-  JSON is viewable + round-trip-tested; bytes on disk are future work).
+  `atlas_tiles` memory store), extended to **offline rendering**
+  (resolution → flutter_map seam, device-proven — see §"Offline rendering"
+  below). User-visible file export/import is NOT built (manifest JSON is
+  viewable + round-trip-tested; the disk journal is app-private
+  persistence, not an export surface).
 
 ## Architecture (new app code, `apps/atlas/lib/`)
 
@@ -77,17 +80,68 @@
 4. **One index entry per pack**, not per tile: tile-level entries would
    make a 512-entry store absurd; pack-level keeps Storage math truthful.
 
-## Verification totals (see DEVICE-005 for device rows)
+## Offline rendering (resolution → renderer seam)
 
-- `flutter analyze --no-pub`: clean. `flutter test test/`: 30/30 green
-  (21 repository incl. pause/resume, cancel, quota pause→resume→complete,
-  seal + manifest round-trip, store indexing, delete, clearStore, log
-  bound; 7 page incl. estimate-required, BULK_GUARD verbatim, full fake-
-  source download to Saved Areas + Storage; 2 pre-existing shell/picker).
-- `flutter test integration_test`: 2/2 green on device (picker + offline,
-  `OFFLINE_DEVICE_RESULT: complete` twice).
-- Engine regression `dart tools/atlas_tool.dart all`: 453/413/0/8/32.
-- Deps: direct + dev-direct all up-to-date; webdriver 3.1.0→3.2.0 taken
-  (lock-only, tests re-green); hard ceiling unchanged (SDK-pinned
-  material_color_utilities/test_api); engine workspace has zero hosted
-  dependencies (path-only, nothing to audit).
+"The tile exists in storage" ≠ "the renderer rendered it offline" — the
+second claim is now proven (DEVICE-006). Smallest adapter, no engine
+bypass:
+
+- `offline/offline_tile_provider.dart` — `AtlasOfflineTileProvider extends
+  TileProvider` (the exact flutter_map seam: `getImageWithCancelLoading-
+  Support`). Order per tile: (1) repository bytes → `MemoryImage`;
+  (2) miss → standard `NetworkTileProvider` (URL mechanics unchanged,
+  same as before — the DOWNLOAD path still resolves engine-side);
+  (3) fallback construction/invocation throws → transparent tile
+  (local-only degradation; missing degrades, served renders, nothing
+  faked). Fallback is LAZY (under a blocked transport even client
+  construction throws — must degrade per-tile, never at build) and
+  injectable for tests. Store-first means packed tiles serve local even
+  while online (offline-first, by construction).
+- Knowledge gates bytes: `resolveTileBytes` serves ONLY when the pack's
+  engine index entry is live (`store.get` per resolve — cheap map op;
+  recency refresh on serve is semantically fine). Unindexed bytes are
+  pending deletion, never "available offline" (proven by clearing the
+  store out from under held bytes → miss).
+- Provider isolation: serve map keyed `$providerId/$key`; Esri bytes
+  never serve an OSM layer (proven — including accidentally on device,
+  where the first render attempt correctly served nothing).
+- Disk journal (app-side; engine never touches disk):
+  `offline_packs/<packId>/<z>_<x>_<y>.tile` + `index.json` under the app
+  documents dir (`path_provider ^2.1.6` — sole new dependency, justified
+  in pubspec: dart:io cannot resolve that location). `restore()` rebuilds
+  RAM + engine index in a fresh repository; corrupt entries (missing
+  files, oversized key lists, unparseable index) are SKIPPED with a log
+  line, never half-loaded. `deletePack` removes record + RAM + disk +
+  index entry; `clearStore` evicts everything (index, RAM, journal) and
+  keeps records as byteless history (seal/manifest nulled — half-held
+  state would make "available offline" a lie).
+- Renderer-observable counters on the repository (`offlineTileHits`,
+  `networkTileRequests`; deliberately un-notified per tile, polled by
+  Diagnostics) — these ARE the device proof instruments.
+
+## Findings, continued
+
+5. **Prism enumeration is engine-visible from the app.** The planner
+   enumerates the full inclusive prism with no grid validation (a z0-2 /
+   x0-2 / y0-2 request plans 27 tiles, including grid-invalid ones) — the
+   New-pack form therefore requires all six bounds (caught live when a
+   maxes-only test entry over-planned). No app-side grid validation added
+   (out of scope; one-line observation, no behavior change).
+6. **SDK rename caught by the compiler, not by docs:** `HttpOverrides.
+   createClient` is now `createHttpClient` (verified in the bundled SDK
+   sources). The offline transport block uses the current name.
+
+## Verification totals (see DEVICE-005/006 for device rows)
+
+- `flutter analyze --no-pub`: clean. `flutter test test/`: 41/41 green
+  (21 repository + 6 journal/restore + 5 renderer seam + 7 page + 2
+  pre-existing shell/picker).
+- `flutter test integration_test`: 4/4 green on device (picker + offline
+  acquisition + render A/B; render reproduced byte-identical counters
+  across runs: 4 tiles / 8 serves / 56 network attempts).
+- Engine regression `dart tools/atlas_tool.dart all`: 453/413/0/8/32
+  (untouched).
+- Deps: direct + dev-direct all up-to-date (incl. new path_provider
+  2.1.6); hard ceiling unchanged (SDK-pinned
+  material_color_utilities/test_api); webdriver stays 3.2.0; engine
+  workspace zero hosted dependencies.

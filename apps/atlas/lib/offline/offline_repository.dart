@@ -4,8 +4,10 @@
 // Owns: the engine memory store (pack-slot accounting), pack records,
 // downloader lifecycles, the HTTP chunk source (engine URL resolution +
 // engine transport — the app states WHICH tile, the engine states HOW the
-// URL reads), manifest assembly + seal verification on completion, and a
-// bounded event log feeding the Diagnostics page.
+// URL reads), manifest assembly + seal verification on completion, the disk
+// journal (byte persistence + pack index for relaunch), the RAM serve map
+// feeding the renderer adapter, and a bounded event log feeding
+// Diagnostics.
 //
 // What this file does NOT do (engine-owned, never duplicated):
 // - tile enumeration or refusal decisions (AtlasPackPlanner),
@@ -13,8 +15,15 @@
 // - checksums or seals (fnv1a64 / AtlasPackManifest),
 // - store semantics (AtlasMemoryStore),
 // - URL template mechanics (AtlasTileRequest.resolveUrl).
+//
+// Byte/knowledge split (engine 1.7-H): the engine store holds KNOWLEDGE
+// (index entries); bytes live downstream here (RAM serve map + disk
+// journal). Resolution serves bytes ONLY when the engine index entry is
+// resident (live gate in resolveTileBytes) — unindexed bytes are pending
+// deletion, never "available offline".
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_offline/atlas_offline.dart';
@@ -22,6 +31,7 @@ import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'package:atlas_providers/atlas_providers.dart';
 import 'package:atlas_tiles/atlas_tiles.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'offline_pack.dart';
 
@@ -41,6 +51,11 @@ const int kMaxSessionTiles = 4096;
 /// Diagnostics event log bound (oldest drops first).
 const int kEventLogBound = 200;
 
+/// Disk journal layout under the app documents directory:
+/// `offline_packs/<packId>/<z>_<x>_<y>.tile` + `offline_packs/index.json`.
+const String kPackJournalDir = 'offline_packs';
+const String kPackIndexFile = 'index.json';
+
 /// Default chunk source: engine URL resolution over the endpoint template +
 /// engine production transport. Throws [AtlasTransportException] on HTTP
 /// failure (surfaces as the downloader `failed` terminal with detail).
@@ -59,9 +74,9 @@ AtlasChunkSource defaultChunkSource(AtlasProviderEndpoint endpoint) {
   };
 }
 
-/// App orchestrator for the Offline Areas track. Testable: [clock], and
-/// [chunkSourceFactory] inject fakes (widget/integration builds use the
-/// production default).
+/// App orchestrator for the Offline Areas track. Testable: [clock],
+/// [chunkSourceFactory], and [directoryProvider] inject fakes
+/// (widget/integration builds use the production defaults).
 ///
 /// Rate limiting is CENTRALIZED (blueprint 3.4): one optional [sharedLimiter]
 /// throttles every pack download. This is structural, not cosmetic: the
@@ -78,8 +93,10 @@ final class OfflineRepository extends ChangeNotifier {
     AtlasChunkSource Function(AtlasProviderEndpoint)? chunkSourceFactory,
     int Function()? clock,
     this._sharedLimiter,
+    Future<Directory> Function()? directoryProvider,
   })  : _store = store ?? AtlasMemoryStore(capacity: kPackStoreCapacity),
         _chunkSourceFactory = chunkSourceFactory ?? defaultChunkSource,
+        _directoryProvider = directoryProvider ?? getApplicationDocumentsDirectory,
         _clock = clock ??
             (() => DateTime.now().millisecondsSinceEpoch ~/ 1000);
 
@@ -87,6 +104,7 @@ final class OfflineRepository extends ChangeNotifier {
   final AtlasMemoryStore _store;
   final AtlasChunkSource Function(AtlasProviderEndpoint) _chunkSourceFactory;
   final AtlasRateLimiter? _sharedLimiter;
+  final Future<Directory> Function() _directoryProvider;
   final int Function() _clock;
 
   final Map<String, OfflinePackRecord> _packs = {};
@@ -96,8 +114,22 @@ final class OfflineRepository extends ChangeNotifier {
   final List<String> _events = [];
   int _packSequence = 0;
 
+  /// Renderer-observable counters (polled by Diagnostics; deliberately NOT
+  /// notified per tile — notifyListeners per tile would rebuild the UI at
+  /// tile rate).
+  int _offlineTileHits = 0;
+  int _networkTileRequests = 0;
+
+  int get offlineTileHits => _offlineTileHits;
+  int get networkTileRequests => _networkTileRequests;
+
   AtlasProviderRegistry get registry => _registry;
   AtlasMemoryStore get store => _store;
+
+  /// Serve map: `$providerId/$tileKey` → bytes (RAM). Gated by the engine
+  /// index at resolve time (see [resolveTileBytes]).
+  final Map<String, Uint8List> _serveBytes = {};
+  final Map<String, String> _servePacks = {};
 
   /// Insertion-ordered records (plan order = display order).
   List<OfflinePackRecord> get packs => _packs.values.toList();
@@ -306,7 +338,8 @@ final class OfflineRepository extends ChangeNotifier {
   }
 
   /// Assembles the manifest from received bytes, verifies self-consistency
-  /// (validate + stable seal), and indexes the pack in the engine store.
+  /// (validate + stable seal), indexes the pack in the engine store, and
+  /// persists bytes + index to the disk journal.
   Future<void> _completePack(
     OfflinePackRecord record,
     AtlasProviderEndpoint endpoint,
@@ -339,6 +372,7 @@ final class OfflineRepository extends ChangeNotifier {
     record.seal = manifest.seal;
     record.manifestJson =
         const JsonEncoder.withIndent('  ').convert(manifest.toJson());
+    record.tileKeys = keys.toSet();
     _store.put(
       AtlasCacheEntry(
         key: AtlasCacheKey(
@@ -350,7 +384,10 @@ final class OfflineRepository extends ChangeNotifier {
       ),
     );
     record.cacheEntryPresent = true;
+    record.bytesHeld = true;
     record.lifecycle = OfflinePackLifecycle.complete;
+    _rebuildServe();
+    await _persistPack(record);
     _log('download ${record.packId} COMPLETE: ${record.receivedTiles} tiles, '
         '${record.receivedBytes} B, seal ${manifest.seal}');
   }
@@ -368,8 +405,9 @@ final class OfflineRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clean deletion: drops the store index entry, session bytes, and record.
-  void deletePack(String packId) {
+  /// Clean deletion: drops the store index entry, RAM + disk bytes, the
+  /// journal entry, and the record.
+  Future<void> deletePack(String packId) async {
     final record = _packs.remove(packId);
     _receivedBytes.remove(packId);
     _downloads.remove(packId);
@@ -381,19 +419,259 @@ final class OfflineRepository extends ChangeNotifier {
           value: packId,
         ),
       );
-      _log('pack $packId deleted (index entry + session bytes dropped)');
+      await _deletePackFiles(packId);
+      _rebuildServe();
+      _log('pack $packId deleted (index entry + RAM/disk bytes dropped)');
     }
     notifyListeners();
   }
 
-  /// Manage Storage: clears the engine store. Completed records keep their
-  /// bytes and seal but are flagged (index entry gone — shown honestly).
-  void clearStore() {
+  /// Manage Storage: evicts EVERYTHING (engine index, RAM serve bytes, disk
+  /// journal) while keeping records as history, flagged unindexed +
+  /// bytelss. Eviction is total by design: half-held bytes (indexed but
+  /// deleted, or held but unindexed) would make "available offline" a lie.
+  Future<void> clearStore() async {
     _store.clear();
+    _receivedBytes.clear();
     for (final record in _packs.values) {
       record.cacheEntryPresent = false;
+      record.bytesHeld = false;
+      record.tileKeys = {};
+      record.seal = null;
+      record.manifestJson = null;
+      record.receivedTiles = 0;
+      record.receivedBytes = 0;
     }
-    _log('store cleared by operator (${_packs.length} records kept)');
+    await _clearJournal();
+    _rebuildServe();
+    _log('store cleared by operator (${_packs.length} records kept, '
+        'bytes evicted)');
     notifyListeners();
+  }
+
+  // ------------------------------------------------------------------
+  // Resolution: the renderer seam.
+  // ------------------------------------------------------------------
+
+  /// Serves one tile's bytes for [providerId] + engine-format [tileKey]
+  /// (`z/x/y`). Bytes serve ONLY when the pack's engine index entry is
+  /// resident (live knowledge gate — unindexed bytes are pending deletion,
+  /// never "available offline"). Null = local miss (caller falls back to
+  /// network where policy permits, or degrades when it does not).
+  Uint8List? resolveTileBytes(String providerId, String tileKey) {
+    final serveKey = '$providerId/$tileKey';
+    final bytes = _serveBytes[serveKey];
+    if (bytes == null) return null;
+    final packId = _servePacks[serveKey]!;
+    final entry = _store.get(
+      AtlasCacheKey(namespace: AtlasCacheNamespace.resource, value: packId),
+    );
+    if (entry == null) return null;
+    _offlineTileHits += 1;
+    return bytes;
+  }
+
+  /// Records a renderer miss that fell through to the network path
+  /// (Diagnostics-observable; no per-tile notify — see counter note).
+  void recordNetworkRequest() {
+    _networkTileRequests += 1;
+  }
+
+  void _rebuildServe() {
+    _serveBytes.clear();
+    _servePacks.clear();
+    for (final record in _packs.values) {
+      if (record.lifecycle != OfflinePackLifecycle.complete ||
+          !record.bytesHeld) {
+        continue;
+      }
+      final held = _receivedBytes[record.packId];
+      if (held == null) continue;
+      for (final key in record.tileKeys) {
+        final bytes = held[key];
+        if (bytes == null) continue;
+        final serveKey = '${record.providerId}/$key';
+        // Newest completed record wins (insertion order).
+        _serveBytes[serveKey] = Uint8List.fromList(bytes);
+        _servePacks[serveKey] = record.packId;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Disk journal (app-side persistence; engine never touches disk).
+  // ------------------------------------------------------------------
+
+  static String _fileNameFor(String tileKey) =>
+      '${tileKey.replaceAll('/', '_')}.tile';
+
+  Future<Directory> _journalDir() async {
+    final docs = await _directoryProvider();
+    final dir = Directory('${docs.path}/$kPackJournalDir');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  Map<String, dynamic> _indexEntry(OfflinePackRecord record) => {
+        'pack_id': record.packId,
+        'provider': record.providerId,
+        'provider_title': record.providerTitle,
+        'zoom_min': record.zMin,
+        'zoom_max': record.zMax,
+        'x_min': record.xMin,
+        'x_max': record.xMax,
+        'y_min': record.yMin,
+        'y_max': record.yMax,
+        'bytes_per_tile': record.bytesPerTile,
+        'approved_bulk': record.approvedBulk,
+        'is_prefetch': record.isPrefetch,
+        'created_at': record.createdAtEpoch,
+        'seal': record.seal,
+        'manifest': record.manifestJson,
+        'tile_count': record.tileCount,
+        'estimated_bytes': record.estimatedBytes,
+        'received_bytes': record.receivedBytes,
+        'keys': record.tileKeys.toList()..sort(),
+      };
+
+  Future<void> _persistPack(OfflinePackRecord record) async {
+    final journal = await _journalDir();
+    final packDir = Directory('${journal.path}/${record.packId}');
+    if (!await packDir.exists()) await packDir.create(recursive: true);
+    final held = _receivedBytes[record.packId] ?? const {};
+    for (final key in record.tileKeys) {
+      final bytes = held[key];
+      if (bytes == null) continue;
+      await File('${packDir.path}/${_fileNameFor(key)}')
+          .writeAsBytes(bytes, flush: true);
+    }
+    await _writeIndex(journal);
+  }
+
+  Future<void> _writeIndex(Directory journal) async {
+    final entries = [
+      for (final record in _packs.values)
+        if (record.lifecycle == OfflinePackLifecycle.complete &&
+            record.bytesHeld)
+          _indexEntry(record),
+    ];
+    await File('${journal.path}/$kPackIndexFile')
+        .writeAsString(jsonEncode(entries), flush: true);
+  }
+
+  Future<void> _deletePackFiles(String packId) async {
+    final journal = await _journalDir();
+    final packDir = Directory('${journal.path}/$packId');
+    if (await packDir.exists()) await packDir.delete(recursive: true);
+    await _writeIndex(journal);
+  }
+
+  Future<void> _clearJournal() async {
+    final journal = await _journalDir();
+    if (await journal.exists()) await journal.delete(recursive: true);
+  }
+
+  /// Restores disk-persisted packs into a FRESH repository (relaunch path:
+  /// engine store is empty, RAM is empty — the journal rebuilds both).
+  /// Corrupt entries (missing files, oversized key lists, unparseable JSON)
+  /// are SKIPPED with a log line, never half-loaded (integrity honesty).
+  Future<void> restore() async {
+    final journal = await _journalDir();
+    final indexFile = File('${journal.path}/$kPackIndexFile');
+    if (!await indexFile.exists()) {
+      _log('restore: no journal present');
+      notifyListeners();
+      return;
+    }
+    late final List<dynamic> entries;
+    try {
+      entries = jsonDecode(await indexFile.readAsString()) as List<dynamic>;
+    } catch (error) {
+      _log('restore: index unparseable, skipped whole journal ($error)');
+      notifyListeners();
+      return;
+    }
+    var restored = 0;
+    for (final raw in entries) {
+      final restoredRecord = await _restoreOne(
+        journal,
+        (raw as Map).cast<String, dynamic>(),
+      );
+      if (restoredRecord != null) restored += 1;
+    }
+    _rebuildServe();
+    _log('restore: $restored/${entries.length} packs re-indexed');
+    notifyListeners();
+  }
+
+  Future<OfflinePackRecord?> _restoreOne(
+    Directory journal,
+    Map<String, dynamic> json,
+  ) async {
+    try {
+      final packId = json['pack_id'] as String;
+      final keys = (json['keys'] as List).cast<String>();
+      if (keys.length > kMaxSessionTiles) {
+        _log('restore: $packId skipped (key list exceeds session cap)');
+        return null;
+      }
+      final packDir = Directory('${journal.path}/$packId');
+      final held = <String, List<int>>{};
+      var bytes = 0;
+      for (final key in keys) {
+        final file = File('${packDir.path}/${_fileNameFor(key)}');
+        if (!await file.exists()) {
+          _log('restore: $packId skipped (missing tile file for $key)');
+          return null;
+        }
+        final content = await file.readAsBytes();
+        held[key] = content;
+        bytes += content.length;
+      }
+      final record = OfflinePackRecord(
+        packId: packId,
+        providerId: json['provider'] as String,
+        providerTitle:
+            (json['provider_title'] as String?) ?? json['provider'] as String,
+        zMin: (json['zoom_min'] as num).toInt(),
+        zMax: (json['zoom_max'] as num).toInt(),
+        xMin: (json['x_min'] as num).toInt(),
+        xMax: (json['x_max'] as num).toInt(),
+        yMin: (json['y_min'] as num).toInt(),
+        yMax: (json['y_max'] as num).toInt(),
+        bytesPerTile: (json['bytes_per_tile'] as num).toInt(),
+        approvedBulk: (json['approved_bulk'] as bool?) ?? false,
+        isPrefetch: (json['is_prefetch'] as bool?) ?? false,
+        createdAtEpoch: (json['created_at'] as num).toInt(),
+      )
+        ..lifecycle = OfflinePackLifecycle.complete
+        ..tileKeys = keys.toSet()
+        ..persistedTileCount = (json['tile_count'] as num).toInt()
+        ..persistedEstimatedBytes =
+            (json['estimated_bytes'] as num?)?.toInt() ?? 0
+        ..seal = json['seal'] as String?
+        ..manifestJson = json['manifest'] as String?
+        ..receivedTiles = keys.length
+        ..receivedBytes = bytes
+        ..cacheEntryPresent = true
+        ..bytesHeld = true;
+      _packs[packId] = record;
+      _receivedBytes[packId] = held;
+      _store.put(
+        AtlasCacheEntry(
+          key: AtlasCacheKey(
+            namespace: AtlasCacheNamespace.resource,
+            value: packId,
+          ),
+          storedAt: _clock(),
+          payloadId:
+              record.seal == null ? null : AtlasId(record.seal!),
+        ),
+      );
+      return record;
+    } catch (error) {
+      _log('restore: entry skipped (malformed: $error)');
+      return null;
+    }
   }
 }

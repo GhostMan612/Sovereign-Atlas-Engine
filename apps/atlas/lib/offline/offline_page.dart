@@ -310,8 +310,9 @@ class _StorageTab extends StatelessWidget {
         const SizedBox(height: 8.0),
         const Text(
           'One index entry per pack (pack-level accounting, not per tile). '
-          'Clearing drops index entries; pack records and bytes stay until '
-          'deleted, flagged as unindexed.',
+          'Clearing evicts everything — index entries, RAM bytes, and disk '
+          'journal — while records stay as history flagged unindexed and '
+          'byteless.',
         ),
         const SizedBox(height: 16.0),
         ElevatedButton(

@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import 'diagnostics/diagnostics_page.dart';
 import 'offline/offline_page.dart';
 import 'offline/offline_repository.dart';
+import 'offline/offline_tile_provider.dart';
 
 void main() {
   runApp(const AtlasApp());
@@ -48,6 +49,11 @@ class _AtlasAppState extends State<AtlasApp> {
     super.initState();
     _repository = widget._repositoryOverride ??
         OfflineRepository(registry: AtlasBuiltinProviders.registry());
+    // Relaunch path: re-index disk-persisted packs (async; tiles served
+    // from network until restore lands — startup race, documented).
+    if (widget._repositoryOverride == null) {
+      _repository.restore();
+    }
   }
 
   @override
@@ -168,6 +174,12 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                   key: ValueKey<String>(_providerId),
                   urlTemplate: _template,
                   userAgentPackageName: 'com.sovereignatlas.atlas',
+                  // Store-first resolution (offline packs serve here);
+                  // network fallback is standard flutter_map behavior.
+                  tileProvider: AtlasOfflineTileProvider(
+                    repository: widget.repository,
+                    providerId: _providerId,
+                  ),
                 ),
                 MarkerLayer(
                   markers: [

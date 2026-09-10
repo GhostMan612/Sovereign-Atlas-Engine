@@ -69,6 +69,10 @@ class DiagnosticsPage extends StatelessWidget {
             'Pack index: ${stats.entryCount}/${stats.capacity} · '
             'records: ${repository.packs.length} · active: $active',
           ),
+          Text(
+            'Renderer: ${repository.offlineTileHits} offline serves · '
+            '${repository.networkTileRequests} network requests',
+          ),
           const SizedBox(height: 12.0),
           const Text(
             'Event log (newest first)',

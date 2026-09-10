@@ -18,6 +18,12 @@ dependencies:
   # SDK-pinned — hard ceiling, see `flutter pub outdated`).
   latlong2: ^0.10.1
   # Engine contracts only (boundary: app depends on engine, never reverse).
+  # path_provider JUSTIFICATION (AGENTS.md §4: no deps without why): the
+  # offline disk journal (pack bytes + pack index for relaunch persistence)
+  # must live in the platform app-documents directory. dart:io alone cannot
+  # resolve that location; path_provider is the Flutter-team plugin for it
+  # (2.1.6, pub-cache-verified). No other new capability is drawn from it.
+  path_provider: ^2.1.6
   atlas_core:
     path: ../../packages/atlas_core
   atlas_provider_api:

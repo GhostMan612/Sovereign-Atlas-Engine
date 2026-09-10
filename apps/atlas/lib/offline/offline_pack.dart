@@ -92,8 +92,22 @@ final class OfflinePackRecord {
   /// completed pack (bytes stay session-resident; the index entry is gone).
   bool cacheEntryPresent = false;
 
-  int get tileCount => plan?.entryCount ?? 0;
-  int get estimatedBytes => plan?.estimatedBytes ?? 0;
+  /// False after eviction (Manage-Storage clear): bytes dropped from RAM
+  /// and disk, seal/manifest nulled. The record stays as history.
+  bool bytesHeld = true;
+
+  /// Tile keys (`z/x/y`, engine downloader key format) currently served
+  /// for this pack. Set at completion (received set) or restore (index).
+  Set<String> tileKeys = {};
+
+  /// Counts for disk-restored packs (no engine plan object exists for
+  /// them — the key list in the journal replaces enumeration, which the
+  /// app must never duplicate: enumeration is engine-owned).
+  int persistedTileCount = 0;
+  int persistedEstimatedBytes = 0;
+
+  int get tileCount => plan?.entryCount ?? persistedTileCount;
+  int get estimatedBytes => plan?.estimatedBytes ?? persistedEstimatedBytes;
 
   bool get isTerminal =>
       lifecycle == OfflinePackLifecycle.complete ||
