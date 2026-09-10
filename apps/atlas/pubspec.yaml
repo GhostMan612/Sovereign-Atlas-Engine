@@ -13,7 +13,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   # Renderer adapter (ADR-005: flutter_map, pub-cache-verified 8.3.2).
   flutter_map: ^8.3.2
-  latlong2: ^0.9.1
+  # Ceiling 2026-09-10: latlong2 0.10.1 is the max resolvable with
+  # flutter_map 8.3.2 (material_color_utilities/test_api newer are
+  # SDK-pinned — hard ceiling, see `flutter pub outdated`).
+  latlong2: ^0.10.1
   # Engine contracts only (boundary: app depends on engine, never reverse).
   atlas_providers:
     path: ../../packages/atlas_providers
