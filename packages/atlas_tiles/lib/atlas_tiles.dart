@@ -6,6 +6,13 @@
 // imports. Depends: atlas_core + atlas_provider_api only (no new deps).
 
 export 'src/entries/cache_entry.dart';
+export 'src/execution/cancellation.dart';
+export 'src/execution/execution_command.dart';
+export 'src/execution/execution_context.dart';
+export 'src/execution/execution_lifecycle.dart';
+export 'src/execution/execution_result.dart';
+export 'src/execution/executor.dart';
+export 'src/execution/operation_binding.dart';
 export 'src/keys/cache_key.dart';
 export 'src/lookup/cache_lookup.dart';
 export 'src/pipeline/pipeline.dart';
