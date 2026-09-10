@@ -1,0 +1,31 @@
+name: sovereign_atlas_workspace
+description: Workspace root for tooling and the golden runner (not published).
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  atlas_core:
+    path: packages/atlas_core
+  atlas_data:
+    path: packages/atlas_data
+  atlas_geo:
+    path: packages/atlas_geo
+  atlas_layers:
+    path: packages/atlas_layers
+  atlas_location:
+    path: packages/atlas_location
+  atlas_map:
+    path: packages/atlas_map
+  atlas_offline:
+    path: packages/atlas_offline
+  atlas_provider_api:
+    path: packages/atlas_provider_api
+  atlas_providers:
+    path: packages/atlas_providers
+  atlas_security:
+    path: packages/atlas_security
+  atlas_tactical:
+    path: packages/atlas_tactical
+  atlas_tiles:
+    path: packages/atlas_tiles

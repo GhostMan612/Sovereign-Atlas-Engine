@@ -12,7 +12,7 @@
 //   Operation throws map to operationThrown with type + message only.
 // Phase 2.0 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
 
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'execution_command.dart';
 import 'execution_context.dart';
 import 'execution_lifecycle.dart';
@@ -120,8 +120,7 @@ abstract final class AtlasExecutor {
           return RunAcquisitionResult(
             command: command,
             state: ExecutionState.succeeded,
-            reason:
-                'attempt reported ${reported.state.name}'
+            reason: 'attempt reported ${reported.state.name}'
                 '${reported.failure == null ? '' : ' ${reported.failure!.name}'}',
             acquisition: reported,
           );

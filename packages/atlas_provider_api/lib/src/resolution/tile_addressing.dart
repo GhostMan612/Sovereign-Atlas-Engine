@@ -21,7 +21,7 @@
 
 import 'dart:math' as math;
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../requests/tile_coordinate.dart';
 
 /// Geographic → tile-grid addressing. No I/O, no providers, no state.
@@ -80,7 +80,7 @@ abstract final class AtlasTileAddressing {
     final latRad = latitude * math.pi / 180.0;
     final fraction =
         (1.0 - math.log(math.tan(latRad) + 1.0 / math.cos(latRad)) / math.pi) /
-        2.0;
+            2.0;
     final clamped = fraction < 0.0 ? 0.0 : (fraction > 1.0 ? 1.0 : fraction);
     final y = (clamped * n).floor();
     return AtlasTileCoordinate(z: z, x: x, y: y);

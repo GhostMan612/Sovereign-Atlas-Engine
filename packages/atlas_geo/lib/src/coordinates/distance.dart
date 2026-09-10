@@ -14,7 +14,7 @@
 
 import 'dart:math' as math;
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../normalization/angles.dart';
 import 'coordinate.dart';
 
@@ -33,8 +33,7 @@ abstract final class AtlasGeoMath {
     final lat2 = _radians(to.latitude);
     final dLat = _radians(to.latitude - from.latitude);
     final dLon = _radians(to.longitude - from.longitude);
-    final h =
-        math.pow(math.sin(dLat / 2), 2) +
+    final h = math.pow(math.sin(dLat / 2), 2) +
         math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLon / 2), 2);
     return 2 * radiusKm * math.asin(math.sqrt(h.toDouble()));
   }
@@ -57,8 +56,7 @@ abstract final class AtlasGeoMath {
     final lat2 = _radians(to.latitude);
     final dLon = _radians(to.longitude - from.longitude);
     final x = math.sin(dLon) * math.cos(lat2);
-    final y =
-        math.cos(lat1) * math.sin(lat2) -
+    final y = math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
     // Bearing-domain normalization (ATLAS-NORMATIVE extraction; identical math
     // to the Phase 0 inline expression over atan2's (-180, 180] range).
@@ -86,8 +84,7 @@ abstract final class AtlasGeoMath {
       math.sin(lat1) * math.cos(angular) +
           math.cos(lat1) * math.sin(angular) * math.cos(bearing),
     );
-    final lon2 =
-        lon1 +
+    final lon2 = lon1 +
         math.atan2(
           math.sin(bearing) * math.sin(angular) * math.cos(lat1),
           math.cos(angular) - math.sin(lat1) * math.sin(lat2),

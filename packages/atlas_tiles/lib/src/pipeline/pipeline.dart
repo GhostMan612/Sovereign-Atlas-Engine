@@ -27,8 +27,8 @@
 //   no randomness, no platform state.
 // Phase 1.9 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
 
-import '../../../../atlas_core/lib/atlas_core.dart';
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../entries/cache_entry.dart';
 import '../keys/cache_key.dart';
 import '../lookup/cache_lookup.dart';
@@ -41,11 +41,12 @@ abstract final class AtlasPipeline {
   /// `provider/kind/address` value (URL-free by identity validation).
   static AtlasCacheKey handoffKeyFor(
     AtlasResourceIdentity identity,
-  ) => AtlasCacheKey(
-    namespace: AtlasCacheNamespace.resource,
-    value:
-        '${identity.provider.value}/${identity.kind.name}/${identity.address}',
-  );
+  ) =>
+      AtlasCacheKey(
+        namespace: AtlasCacheNamespace.resource,
+        value:
+            '${identity.provider.value}/${identity.kind.name}/${identity.address}',
+      );
 
   /// Candidate handoff entry for an acquired payload: pure construction with
   /// explicit [nowSeconds]; maxAge stays undeclared (see header).
@@ -53,12 +54,13 @@ abstract final class AtlasPipeline {
     required AtlasResolvedResource resource,
     required AtlasId payloadId,
     required int nowSeconds,
-  }) => AtlasCacheEntry(
-    key: handoffKeyFor(resource.identity),
-    resource: resource.identity,
-    storedAt: nowSeconds,
-    payloadId: payloadId,
-  );
+  }) =>
+      AtlasCacheEntry(
+        key: handoffKeyFor(resource.identity),
+        resource: resource.identity,
+        storedAt: nowSeconds,
+        payloadId: payloadId,
+      );
 
   /// Routes one pipeline step over supplied stage results (see header order).
   static AtlasPipelineOutcome decide({
@@ -278,9 +280,10 @@ abstract final class AtlasPipeline {
   static AtlasPipelineOutcome _terminal(
     AtlasPipelineStatus status,
     String reason,
-  ) => AtlasPipelineOutcome(
-    status: status,
-    source: AtlasPipelineSource.resolution,
-    reason: reason,
-  );
+  ) =>
+      AtlasPipelineOutcome(
+        status: status,
+        source: AtlasPipelineSource.resolution,
+        reason: reason,
+      );
 }

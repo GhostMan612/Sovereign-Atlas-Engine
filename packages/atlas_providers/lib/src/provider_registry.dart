@@ -7,13 +7,13 @@
 // misuse (loud StateError, never silent replace).
 // Phase 2 slice. Depends on atlas_core + atlas_provider_api only.
 
-import '../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'provider_endpoint.dart';
 
 /// Closed provider catalog value.
 final class AtlasProviderRegistry {
   AtlasProviderRegistry([Iterable<AtlasProviderEndpoint>? endpoints])
-    : _endpoints = {} {
+      : _endpoints = {} {
     for (final endpoint in endpoints ?? const <AtlasProviderEndpoint>[]) {
       register(endpoint);
     }
@@ -34,10 +34,10 @@ final class AtlasProviderRegistry {
   AtlasProviderEndpoint? lookup(String id) => _endpoints[id];
 
   /// Endpoints serving [kind], in registration order.
-  List<AtlasProviderEndpoint> providersFor(AtlasDataKind kind) => _endpoints
-      .values
-      .where((e) => e.descriptor.kinds.contains(kind))
-      .toList();
+  List<AtlasProviderEndpoint> providersFor(AtlasDataKind kind) =>
+      _endpoints.values
+          .where((e) => e.descriptor.kinds.contains(kind))
+          .toList();
 
   /// Registered ids in registration order.
   List<String> get ids => _endpoints.keys.toList();

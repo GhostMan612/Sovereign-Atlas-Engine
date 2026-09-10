@@ -20,7 +20,7 @@
 // no HTTP, no cache entries, no paths, no renderer objects (1.5-F/J/K).
 // Phase 1.5 slice. Depends on atlas_core (+ sibling request/coordinate) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../requests/tile_coordinate.dart';
 import 'resolution_request.dart';
 
@@ -82,11 +82,11 @@ final class AtlasResolutionResult {
 
   @override
   int get hashCode => Object.hash(
-    request,
-    status,
-    provider,
-    tile,
-    reason,
-    Object.hashAll(eligible),
-  );
+        request,
+        status,
+        provider,
+        tile,
+        reason,
+        Object.hashAll(eligible),
+      );
 }

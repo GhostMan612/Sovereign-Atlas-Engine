@@ -10,7 +10,7 @@
 //   outcomes. No generic result envelope exists.
 // Phase 2.0 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
 
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../entries/cache_entry.dart';
 import 'execution_command.dart';
 import 'execution_lifecycle.dart';
@@ -32,12 +32,12 @@ enum ExecutionMalfunction {
 /// Results are constructed by the executor only (terminal states enforced).
 abstract base class ExecutionResultBase {
   const ExecutionResultBase({required this.state, this.reason = ''})
-    : assert(
-        state == ExecutionState.succeeded ||
-            state == ExecutionState.failed ||
-            state == ExecutionState.cancelled,
-        'Execution results are terminal-only (2.0-G).',
-      );
+      : assert(
+          state == ExecutionState.succeeded ||
+              state == ExecutionState.failed ||
+              state == ExecutionState.cancelled,
+          'Execution results are terminal-only (2.0-G).',
+        );
 
   final ExecutionState state;
 

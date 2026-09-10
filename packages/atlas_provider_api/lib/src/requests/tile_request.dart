@@ -14,7 +14,7 @@
 // - No HTTP, no client, no I/O anywhere in this file.
 // Phase 1.4 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import 'tile_identity.dart';
 
 /// A tile request: an identity plus caller-supplied template parameters.
@@ -70,9 +70,9 @@ final class AtlasTileRequest {
 
   @override
   int get hashCode => Object.hash(
-    identity,
-    Object.hashAllUnordered(
-      params.entries.map((e) => Object.hash(e.key, e.value)),
-    ),
-  );
+        identity,
+        Object.hashAllUnordered(
+          params.entries.map((e) => Object.hash(e.key, e.value)),
+        ),
+      );
 }

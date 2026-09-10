@@ -37,7 +37,7 @@
 // Phase 1.2. Depends on atlas_core only (no geo import until geometry is
 // genuinely needed; no unused imports).
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 
 /// Layer data category (PROPOSED taxonomy, blueprint Phase 2 / F-catalog).
 /// Unchanged by Phase 1.2 (inventory verdict: already minimal).
@@ -141,21 +141,22 @@ final class AtlasLayerDefinition {
   static bool _equalCapabilities(
     Set<AtlasLayerCapability> a,
     Set<AtlasLayerCapability> b,
-  ) => a.length == b.length && a.containsAll(b);
+  ) =>
+      a.length == b.length && a.containsAll(b);
 
   @override
   int get hashCode => Object.hash(
-    id,
-    kind,
-    providerId,
-    datasetId,
-    category,
-    Object.hashAllUnordered(capabilities),
-    minZoom,
-    maxZoom,
-    attribution,
-    isPrivate,
-  );
+        id,
+        kind,
+        providerId,
+        datasetId,
+        category,
+        Object.hashAllUnordered(capabilities),
+        minZoom,
+        maxZoom,
+        attribution,
+        isPrivate,
+      );
 }
 
 /// Per-layer runtime state. UI toggles WRITE this state from the adapter side
@@ -176,10 +177,10 @@ final class AtlasLayerState {
 
   /// Visibility flip. Deterministic, validated by construction (bool domain).
   AtlasLayerState toggled() => AtlasLayerState(
-    definition: definition,
-    visible: !visible,
-    opacity: opacity,
-  );
+        definition: definition,
+        visible: !visible,
+        opacity: opacity,
+      );
 
   /// Opacity change. Throws [AtlasRejectionException] (`INVALID_LAYER_STATE`)
   /// outside [0, 1] instead of clamping (no silent coercion).

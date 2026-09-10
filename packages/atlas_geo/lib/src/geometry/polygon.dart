@@ -17,7 +17,7 @@
 // (FLOW-003/ADV-022 execute against this provisional.)
 // Phase 0.5 slice. Depends on atlas_core + coordinate.dart only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../coordinates/coordinate.dart';
 
 /// Validity checks for position sequences.

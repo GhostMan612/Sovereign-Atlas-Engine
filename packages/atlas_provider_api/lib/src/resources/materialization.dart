@@ -18,7 +18,7 @@
 // 1.4 request mechanics: unknown placeholders throw MALFORMED_TEMPLATE.
 // Phase 1.6 slice. Depends on atlas_core (+ siblings) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../requests/tile_identity.dart';
 import '../requests/tile_request.dart';
 import 'resolved_resource.dart';

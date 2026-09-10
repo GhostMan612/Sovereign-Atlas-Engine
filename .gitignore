@@ -1,6 +1,7 @@
 .dart_tool/
 .packages
 .pub-cache/
+pubspec.lock
 build/
 coverage/
 .idea/

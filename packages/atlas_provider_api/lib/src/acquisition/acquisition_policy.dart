@@ -9,7 +9,7 @@
 //   no retries, backoff, counters, timers, or queues (1.8-H refusal).
 // Phase 1.8 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 
 /// Declared acquisition bounds. Data, not machinery.
 final class AtlasAcquisitionPolicy {

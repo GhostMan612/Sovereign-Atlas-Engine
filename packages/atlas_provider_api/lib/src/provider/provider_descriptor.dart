@@ -11,7 +11,7 @@
 // zoom range suffices for Phase 1.4 — inventory ruling).
 // Phase 1.4 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import 'data_kind.dart';
 import '../capabilities/provider_capability.dart';
 
@@ -119,13 +119,13 @@ final class AtlasProviderDescriptor {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    Object.hashAllUnordered(kinds),
-    Object.hashAllUnordered(capabilities),
-    nativeMinZoom,
-    nativeMaxZoom,
-    attribution,
-    license,
-    sensitivity,
-  );
+        id,
+        Object.hashAllUnordered(kinds),
+        Object.hashAllUnordered(capabilities),
+        nativeMinZoom,
+        nativeMaxZoom,
+        attribution,
+        license,
+        sensitivity,
+      );
 }

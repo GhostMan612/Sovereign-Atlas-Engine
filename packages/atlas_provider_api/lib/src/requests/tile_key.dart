@@ -9,7 +9,7 @@
 // No namespace extension is added (extension DEFERRED per 1.4-A inventory).
 // Phase 1.4 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 
 /// Layer-scoped tile key with exact string round-trip.
 final class AtlasTileKey {

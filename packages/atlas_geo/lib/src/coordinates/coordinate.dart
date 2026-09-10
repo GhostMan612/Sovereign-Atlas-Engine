@@ -10,7 +10,7 @@
 // - Altitude/elevation: DEC-003 OPEN — this type is 2D only.
 // Phase 0.5 slice. Depends only on atlas_core. No I/O, no platform APIs.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 
 /// Earth-referenced angular position in decimal degrees.
 ///

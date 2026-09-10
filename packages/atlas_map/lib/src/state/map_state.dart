@@ -9,8 +9,8 @@
 // provider layers must still start — offline-contract invariant).
 // Phase 0.5 slice. Depends on atlas_core + atlas_geo + atlas_layers only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
-import '../../../../atlas_layers/lib/atlas_layers.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_layers/atlas_layers.dart';
 import '../camera/camera_state.dart';
 
 /// Renderer-independent map state: a validated camera plus an ordered,

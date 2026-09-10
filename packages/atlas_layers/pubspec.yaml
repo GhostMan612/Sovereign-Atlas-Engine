@@ -1,6 +1,9 @@
 name: atlas_layers
 description: Sovereign Atlas Engine layer composition and state.
 version: 0.1.0
+publish_to: none
 environment:
   sdk: '>=3.0.0 <4.0.0'
-# No dependencies (ADR-002). Engine edges: core, geo, provider_api, data.
+dependencies:
+  atlas_core:
+    path: ../atlas_core

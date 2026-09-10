@@ -15,7 +15,7 @@
 //   established equivalence; URLs/cache/bytes/timestamps never participate).
 // Phase 1.6 slice. Depends on atlas_core (+ sibling descriptor/result) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../provider/data_kind.dart';
 import '../provider/provider_descriptor.dart';
 import '../requests/tile_coordinate.dart';
@@ -53,7 +53,8 @@ final class AtlasResolvedResource {
   static String tileAddressFor(
     AtlasTileCoordinate tile,
     AtlasTileScheme scheme,
-  ) => 'z=${tile.z}/x=${tile.x}/y=${tile.y}@${scheme.name}';
+  ) =>
+      'z=${tile.z}/x=${tile.x}/y=${tile.y}@${scheme.name}';
 
   /// Binds a resolved result to its descriptor. Throws
   /// [AtlasRejectionException] (`INVALID_STATE`) unless the result resolved.
@@ -75,9 +76,8 @@ final class AtlasResolvedResource {
       identity: AtlasResourceIdentity(
         provider: result.provider!,
         kind: result.request.kind,
-        address: tileKind
-            ? tileAddressFor(result.tile!, result.request.scheme)
-            : '',
+        address:
+            tileKind ? tileAddressFor(result.tile!, result.request.scheme) : '',
       ),
       provider: result.provider!,
       kind: result.request.kind,

@@ -16,9 +16,9 @@
 
 import 'dart:io';
 
-import '../../../atlas_core/lib/atlas_core.dart';
-import '../../../atlas_provider_api/lib/atlas_provider_api.dart';
-import '../../../atlas_tiles/lib/atlas_tiles.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
+import 'package:atlas_tiles/atlas_tiles.dart';
 import 'provider_endpoint.dart';
 
 /// Injected byte transport: URL + headers in, raw bytes out (or throw).
@@ -69,8 +69,8 @@ Future<List<int>> httpTransport(Uri url, Map<String, String> headers) async {
 ({AtlasTileCoordinate coordinate, AtlasTileScheme scheme})? parseTileAddress(
   String address,
 ) {
-  final match = RegExp(r'^z=(\d+)/x=(\d+)/y=(\d+)@([A-Za-z0-9_]+)$')
-      .firstMatch(address);
+  final match =
+      RegExp(r'^z=(\d+)/x=(\d+)/y=(\d+)@([A-Za-z0-9_]+)$').firstMatch(address);
   if (match == null) return null;
   AtlasTileScheme? scheme;
   for (final candidate in AtlasTileScheme.values) {
@@ -169,17 +169,19 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
   Future<AtlasCacheEntry> serveEntry(
     AtlasCacheEntry entry,
     ExecutionContext context,
-  ) => throw UnsupportedError(
-    'tile fetch operations do not serve cache entries (Phase-3 store scope)',
-  );
+  ) =>
+      throw UnsupportedError(
+        'tile fetch operations do not serve cache entries (Phase-3 store scope)',
+      );
 
   @override
   Future<AtlasCacheEntry> storeHandoff(
     AtlasCacheEntry handoff,
     ExecutionContext context,
-  ) => throw UnsupportedError(
-    'tile fetch operations do not store handoffs (Phase-3 store scope)',
-  );
+  ) =>
+      throw UnsupportedError(
+        'tile fetch operations do not store handoffs (Phase-3 store scope)',
+      );
 }
 
 /// File-tree bundle reader (flat `{root}/{z}/{x}/{y}.{ext}`, no sqlite).
@@ -237,8 +239,7 @@ final class AtlasLocalBundleOperation implements AtlasExecutionOperation {
     if (context.cancellation.isCancelled) {
       throw const ExecutionCancelled();
     }
-    final path =
-        '$root/${parsed.coordinate.z}/${parsed.coordinate.x}/'
+    final path = '$root/${parsed.coordinate.z}/${parsed.coordinate.x}/'
         '${parsed.coordinate.y}.$ext';
     final bytes = await _readFile(path);
     if (bytes == null) {
@@ -258,15 +259,17 @@ final class AtlasLocalBundleOperation implements AtlasExecutionOperation {
   Future<AtlasCacheEntry> serveEntry(
     AtlasCacheEntry entry,
     ExecutionContext context,
-  ) => throw UnsupportedError(
-    'bundle operations do not serve cache entries (Phase-3 store scope)',
-  );
+  ) =>
+      throw UnsupportedError(
+        'bundle operations do not serve cache entries (Phase-3 store scope)',
+      );
 
   @override
   Future<AtlasCacheEntry> storeHandoff(
     AtlasCacheEntry handoff,
     ExecutionContext context,
-  ) => throw UnsupportedError(
-    'bundle operations do not store handoffs (Phase-3 store scope)',
-  );
+  ) =>
+      throw UnsupportedError(
+        'bundle operations do not store handoffs (Phase-3 store scope)',
+      );
 }

@@ -1,6 +1,11 @@
 name: atlas_tiles
-description: Sovereign Atlas Engine tile addressing, cache, pipeline, execution.
+description: Sovereign Atlas Engine tile addressing, cache, pipeline, execution, store.
 version: 0.1.0
+publish_to: none
 environment:
   sdk: '>=3.0.0 <4.0.0'
-# No dependencies (ADR-002). Engine edges: core, geo, provider_api.
+dependencies:
+  atlas_core:
+    path: ../atlas_core
+  atlas_provider_api:
+    path: ../atlas_provider_api

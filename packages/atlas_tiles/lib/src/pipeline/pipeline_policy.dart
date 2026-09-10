@@ -38,11 +38,11 @@ final class AtlasPipelinePolicy {
 
   @override
   int get hashCode => Object.hash(
-    acquireOnStale,
-    acquireOnExpired,
-    acquireOnInvalid,
-    fallbackToStaleOnFailure,
-  );
+        acquireOnStale,
+        acquireOnExpired,
+        acquireOnInvalid,
+        fallbackToStaleOnFailure,
+      );
 
   @override
   String toString() =>

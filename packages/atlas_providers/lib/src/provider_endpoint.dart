@@ -8,8 +8,8 @@
 // declares, never enforces.
 // Phase 2 slice. Depends on atlas_core + atlas_provider_api only.
 
-import '../../../atlas_core/lib/atlas_core.dart';
-import '../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 
 /// Declared provider policy (data for future enforcement, Phase 3).
 final class AtlasProviderPolicy {
@@ -59,15 +59,15 @@ final class AtlasProviderPolicy {
 
   @override
   int get hashCode => Object.hash(
-    onlineAllowed,
-    cacheAllowed,
-    prefetchAllowed,
-    maxTiles,
-    maxRequestsPerSecond,
-    requiresKey,
-    bulkGuard,
-    userAgent,
-  );
+        onlineAllowed,
+        cacheAllowed,
+        prefetchAllowed,
+        maxTiles,
+        maxRequestsPerSecond,
+        requiresKey,
+        bulkGuard,
+        userAgent,
+      );
 }
 
 /// Implementation-side provider: descriptor + acquisition template + policy.
@@ -152,14 +152,14 @@ final class AtlasProviderEndpoint {
 
   @override
   int get hashCode => Object.hash(
-    descriptor,
-    urlTemplate,
-    policy,
-    Object.hashAllUnordered(
-      params.entries.map((e) => Object.hash(e.key, e.value)),
-    ),
-    Object.hashAllUnordered(
-      headers.entries.map((e) => Object.hash(e.key, e.value)),
-    ),
-  );
+        descriptor,
+        urlTemplate,
+        policy,
+        Object.hashAllUnordered(
+          params.entries.map((e) => Object.hash(e.key, e.value)),
+        ),
+        Object.hashAllUnordered(
+          headers.entries.map((e) => Object.hash(e.key, e.value)),
+        ),
+      );
 }

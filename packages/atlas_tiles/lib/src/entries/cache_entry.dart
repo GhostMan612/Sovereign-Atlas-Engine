@@ -18,8 +18,8 @@
 // eviction state, renderer handles (all 1.7-D prohibitions).
 // Phase 1.7 slice. Depends on atlas_core + atlas_provider_api (identity type).
 
-import '../../../../atlas_core/lib/atlas_core.dart';
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../keys/cache_key.dart';
 
 /// Semantic cache entry: knowledge about a cached resource, storage-free.
@@ -64,13 +64,13 @@ final class AtlasCacheEntry {
 
   /// Pure invalidation: a revoked copy; this entry is untouched (immutable).
   AtlasCacheEntry invalidate() => AtlasCacheEntry(
-    key: key,
-    resource: resource,
-    storedAt: storedAt,
-    maxAgeSeconds: maxAgeSeconds,
-    payloadId: payloadId,
-    revoked: true,
-  );
+        key: key,
+        resource: resource,
+        storedAt: storedAt,
+        maxAgeSeconds: maxAgeSeconds,
+        payloadId: payloadId,
+        revoked: true,
+      );
 
   @override
   bool operator ==(Object other) =>

@@ -18,8 +18,8 @@
 //   (ATLAS-NORMATIVE distinction).
 // Phase 0.5 slice. Depends on atlas_core + atlas_geo only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
-import '../../../../atlas_geo/lib/atlas_geo.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_geo/atlas_geo.dart';
 
 /// Renderer-independent camera state.
 final class AtlasCameraState {
@@ -42,11 +42,11 @@ final class AtlasCameraState {
   /// Mantle-derived home camera (39.83/-98.58/z3.0, SOURCE-VERIFIED F-03).
   /// Recorded as DATA. Not an Atlas-global default (DEC-008 open).
   factory AtlasCameraState.home() => const AtlasCameraState(
-    center: AtlasCoordinate(latitude: 39.83, longitude: -98.58),
-    zoom: 3.0,
-    bearing: 0.0,
-    pitch: 0.0,
-  );
+        center: AtlasCoordinate(latitude: 39.83, longitude: -98.58),
+        zoom: 3.0,
+        bearing: 0.0,
+        pitch: 0.0,
+      );
 
   final AtlasCoordinate center;
   final double zoom;
@@ -136,12 +136,13 @@ final class AtlasCameraState {
     double? zoom,
     double? bearing,
     double? pitch,
-  }) => AtlasCameraState(
-    center: center ?? this.center,
-    zoom: zoom ?? this.zoom,
-    bearing: bearing ?? this.bearing,
-    pitch: pitch ?? this.pitch,
-  );
+  }) =>
+      AtlasCameraState(
+        center: center ?? this.center,
+        zoom: zoom ?? this.zoom,
+        bearing: bearing ?? this.bearing,
+        pitch: pitch ?? this.pitch,
+      );
 
   @override
   bool operator ==(Object other) =>

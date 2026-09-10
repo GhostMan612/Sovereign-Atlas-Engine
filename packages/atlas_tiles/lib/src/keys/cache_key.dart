@@ -12,8 +12,8 @@
 //   no hashing, no timestamps, no locale).
 // Phase 1.7 slice. Depends on atlas_core + atlas_provider_api (TileKey shape).
 
-import '../../../../atlas_core/lib/atlas_core.dart';
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 
 /// Cache-key namespace: which construction rule governs the value.
 enum AtlasCacheNamespace {

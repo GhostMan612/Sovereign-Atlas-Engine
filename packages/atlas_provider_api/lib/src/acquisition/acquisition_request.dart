@@ -12,7 +12,7 @@
 //   lifecycle transitions, never in the request).
 // Phase 1.8 slice. Depends on atlas_core (+ sibling resource/policy) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../resources/resource_identity.dart';
 import 'acquisition_policy.dart';
 

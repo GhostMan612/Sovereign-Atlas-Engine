@@ -7,7 +7,7 @@
 // Identity is structural data. It performs no I/O, builds no URLs, and knows
 // no provider SDK. Phase 1.4 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import 'tile_coordinate.dart';
 
 /// Namespaced tile identity: which provider, which layer, which address,
@@ -42,7 +42,6 @@ final class AtlasTileIdentity {
   int get hashCode => Object.hash(provider, layer, coordinate, scheme);
 
   @override
-  String toString() =>
-      'AtlasTileIdentity(${provider.value}/${layer.value}/'
+  String toString() => 'AtlasTileIdentity(${provider.value}/${layer.value}/'
       '${coordinate.z}/${coordinate.x}/${coordinate.y}/${scheme.name})';
 }

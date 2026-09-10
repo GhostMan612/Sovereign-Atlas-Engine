@@ -15,7 +15,7 @@
 //   (never a relevance score; no "best provider" invention).
 // Phase 1.5 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../provider/data_kind.dart';
 import '../requests/tile_coordinate.dart';
 
@@ -101,11 +101,11 @@ final class AtlasResolutionRequest {
 
   @override
   int get hashCode => Object.hash(
-    kind,
-    latitude,
-    longitude,
-    zoom,
-    scheme,
-    Object.hashAll(preferredProviders),
-  );
+        kind,
+        latitude,
+        longitude,
+        zoom,
+        scheme,
+        Object.hashAll(preferredProviders),
+      );
 }

@@ -9,7 +9,7 @@
 //   executor offers exactly one method per command type.
 // Phase 2.0 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
 
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../entries/cache_entry.dart';
 
 /// Directive: serve the named entry (2.0-I). `fallback` carries pipeline

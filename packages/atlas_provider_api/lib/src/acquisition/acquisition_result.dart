@@ -19,7 +19,7 @@
 //   payload ID (never bytes — 1.8-J). No paths/entries/HTTP/renderer fields.
 // Phase 1.8 slice. Depends on atlas_core (+ sibling request) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import 'acquisition_request.dart';
 
 /// Minimum justified acquisition lifecycle states.

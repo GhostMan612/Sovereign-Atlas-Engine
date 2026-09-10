@@ -21,7 +21,7 @@
 // Catalog order is significant (eligible output order); no sets, no maps, no
 // clocks, no randomness, no globals. Phase 1.5 slice.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../capabilities/provider_capability.dart';
 import '../provider/data_kind.dart';
 import '../provider/provider_descriptor.dart';
@@ -72,9 +72,8 @@ abstract final class AtlasResolver {
         );
       }
     }
-    final kindProviders = catalog
-        .where((p) => p.kinds.contains(request.kind))
-        .toList();
+    final kindProviders =
+        catalog.where((p) => p.kinds.contains(request.kind)).toList();
     if (kindProviders.isEmpty) {
       return AtlasResolutionResult(
         request: request,
@@ -83,9 +82,8 @@ abstract final class AtlasResolver {
         reason: 'no catalog provider serves ${request.kind.name}',
       );
     }
-    final tileZoom = tileKind
-        ? AtlasTileAddressing.tileZoomFor(request.zoom)
-        : 0;
+    final tileZoom =
+        tileKind ? AtlasTileAddressing.tileZoomFor(request.zoom) : 0;
     final eligible = <AtlasProviderDescriptor>[];
     var blockedCapability = 0;
     var blockedZoom = 0;
@@ -120,8 +118,7 @@ abstract final class AtlasResolver {
         request: request,
         status: AtlasResolutionStatus.noMatch,
         eligible: const [],
-        reason:
-            '${kindProviders.length} serve(s) ${request.kind.name}; '
+        reason: '${kindProviders.length} serve(s) ${request.kind.name}; '
             '0 eligible ($blockers)',
       );
     }

@@ -17,7 +17,7 @@
 //   materializations, identities. No bytes, no paths, no handles, no views.
 // Phase 1.9 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
 
-import '../../../../atlas_provider_api/lib/atlas_provider_api.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../entries/cache_entry.dart';
 import '../lookup/cache_lookup.dart';
 
@@ -130,17 +130,17 @@ final class AtlasPipelineOutcome {
 
   @override
   int get hashCode => Object.hash(
-    status,
-    source,
-    reason,
-    cacheOutcome,
-    entry,
-    acquisitionRequest,
-    acquisition,
-    materialization,
-    cacheHandoff,
-    failure,
-  );
+        status,
+        source,
+        reason,
+        cacheOutcome,
+        entry,
+        acquisitionRequest,
+        acquisition,
+        materialization,
+        cacheHandoff,
+        failure,
+      );
 
   @override
   String toString() => 'AtlasPipelineOutcome($status via $source)';

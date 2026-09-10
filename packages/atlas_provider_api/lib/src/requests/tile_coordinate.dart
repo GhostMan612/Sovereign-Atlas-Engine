@@ -12,7 +12,7 @@
 //   (see tile_request.dart), not a scheme: both orders address the same tile.
 // Phase 1.4 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 
 /// Tile grid scheme: which corner row 0 addresses.
 enum AtlasTileScheme {

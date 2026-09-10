@@ -16,7 +16,7 @@
 //   No clock, no timers, no tokens, no ids, no randomness, no globals.
 // Phase 1.8 slice. Depends on atlas_core (+ siblings) only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import 'acquisition_request.dart';
 import 'acquisition_result.dart';
 
@@ -132,11 +132,11 @@ final class AtlasAcquisition {
 
   /// Current semantic result (no execution performed by reading it).
   AtlasAcquisitionResult toResult() => AtlasAcquisitionResult(
-    request: request,
-    state: state,
-    failure: failure,
-    payloadId: payloadId,
-  );
+        request: request,
+        state: state,
+        failure: failure,
+        payloadId: payloadId,
+      );
 
   void _requireState(AtlasAcquisitionState required, String message) {
     if (state != required) {
@@ -150,14 +150,15 @@ final class AtlasAcquisition {
     int? updatedAt,
     AtlasAcquisitionFailure? failure,
     AtlasId? payloadId,
-  }) => AtlasAcquisition(
-    request: request,
-    state: state ?? this.state,
-    startedAt: startedAt ?? this.startedAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-    failure: failure ?? this.failure,
-    payloadId: payloadId ?? this.payloadId,
-  );
+  }) =>
+      AtlasAcquisition(
+        request: request,
+        state: state ?? this.state,
+        startedAt: startedAt ?? this.startedAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+        failure: failure ?? this.failure,
+        payloadId: payloadId ?? this.payloadId,
+      );
 
   @override
   bool operator ==(Object other) =>

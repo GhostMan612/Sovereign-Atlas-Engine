@@ -15,7 +15,7 @@
 //   documented absence of invented wrap logic (DEC-005 open).
 // Phase 1.1 slice. Depends on atlas_core + coordinate.dart + polygon.dart ring rules.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../coordinates/coordinate.dart';
 import 'polygon.dart';
 

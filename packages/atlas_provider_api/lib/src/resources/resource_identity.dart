@@ -15,7 +15,7 @@
 //   (INVALID_IDENTITY) so the URL==identity collapse is structurally refused.
 // Phase 1.6 slice. Depends on atlas_core only.
 
-import '../../../../atlas_core/lib/atlas_core.dart';
+import 'package:atlas_core/atlas_core.dart';
 import '../provider/data_kind.dart';
 
 /// Opaque identity of a resolved resource.
