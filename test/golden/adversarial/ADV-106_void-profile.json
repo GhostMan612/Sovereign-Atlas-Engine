@@ -1,0 +1,1 @@
+{"expected": {"has_null": true}, "id": "ADV-106", "inputs": {"cell": 100.0, "cols": 3, "heights": [0.0, 0.0, 0.0, 0.0, null, 0.0, 0.0, 0.0, 0.0], "origin": [0.0, 0.0], "path": [[0.0, 0.0004], [0.0, 0.001]], "rows": 3}}

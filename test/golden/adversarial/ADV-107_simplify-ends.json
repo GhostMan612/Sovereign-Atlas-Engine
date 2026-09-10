@@ -1,0 +1,1 @@
+{"expected": {"ends_kept": true}, "id": "ADV-107", "inputs": {"line": [[0.0, 0.0], [0.3, 0.002], [0.6, -0.002], [1.0, 0.0]], "tolerance_m": 10.0}}

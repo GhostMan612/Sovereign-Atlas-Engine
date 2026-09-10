@@ -2,6 +2,7 @@
 .packages
 .pub-cache/
 pubspec.lock
+!apps/atlas/pubspec.lock
 build/
 coverage/
 .idea/

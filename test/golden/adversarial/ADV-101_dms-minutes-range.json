@@ -1,0 +1,1 @@
+{"expected": {"rejection": "MALFORMED_DMS"}, "id": "ADV-101", "inputs": {"text": "51°99'26\"N"}}

@@ -1,0 +1,1 @@
+{"expected": {"rejection": "MALFORMED_GEOJSON"}, "id": "ADV-103", "inputs": {"document": {"geometry": null, "properties": {}, "type": "Feature"}, "origin": "test-suite"}}
