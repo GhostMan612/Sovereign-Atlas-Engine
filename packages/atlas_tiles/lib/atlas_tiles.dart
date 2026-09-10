@@ -1,9 +1,7 @@
-// Sovereign Atlas Engine — atlas_tiles public barrel.
-//
-// Phase 1.7 semantic cache slice (storage-independent). Relative imports keep
-// the slice verifiable with a bare Dart SDK and no package manifests (DEC-016
-// open). At workspace initialization these become `package:atlas_tiles/...`
-// imports. Depends: atlas_core + atlas_provider_api only (no new deps).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/entries/cache_entry.dart';
 export 'src/execution/cancellation.dart';

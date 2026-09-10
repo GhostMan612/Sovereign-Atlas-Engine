@@ -1,23 +1,15 @@
-// Sovereign Atlas Engine — atlas_providers
-// Pack planner: declarations become refusals HERE (not Phase 4).
-//
-// Contract: blueprint 2.1/3.4 policy declarations + phase-3 note §4.
-// - Pure tile enumeration over explicit inclusive ranges (no discovery).
-// - Refusals (total function, never throws): BULK_GUARD (guarded provider +
-//   unapproved bulk), PACK_TOO_LARGE (count > maxTiles), PREFETCH_REFUSED
-//   (disallowed prefetch), INVALID_RANGE (incoherent bounds).
-// - Estimates require explicit bytes-per-tile (no invented averages).
-// Phase 3 slice. Depends on atlas_core + atlas_provider_api only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'provider_endpoint.dart';
 
-/// Pack refusal (declared policy, not an error throw).
 final class AtlasPackRefusal {
   const AtlasPackRefusal({required this.reason, this.detail = ''});
 
-  /// BULK_GUARD | PACK_TOO_LARGE | PREFETCH_REFUSED | INVALID_RANGE.
   final String reason;
   final String detail;
 
@@ -32,7 +24,6 @@ final class AtlasPackRefusal {
   int get hashCode => Object.hash(reason, detail);
 }
 
-/// Approved pack plan: explicit tile list + declared estimate.
 final class AtlasPackPlan {
   const AtlasPackPlan({
     required this.tiles,
@@ -47,10 +38,8 @@ final class AtlasPackPlan {
   int get entryCount => tiles.length;
 }
 
-/// Pure pack planner (enumeration + enforcement, no IO).
 abstract final class AtlasPackPlanner {
-  /// Plans [endpoint] over inclusive [zMin]..[zMax] × [xMin]..[xMax] ×
-  /// [yMin]..[yMax]. Returns a plan or a refusal (never throws on policy).
+
   static Object plan({
     required AtlasProviderEndpoint endpoint,
     required int zMin,

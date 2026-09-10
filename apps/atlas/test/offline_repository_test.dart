@@ -1,9 +1,7 @@
-// Sovereign Atlas — Offline Areas track tests.
-//
-// Repository contract proofs with injected fakes (deterministic clock +
-// scripted chunk sources). Every engine decision (refusals, terminals, seal,
-// store indexing) is asserted through the app orchestrator — the wiring,
-// not the engine, is what's under test (engine behavior is fixture-proven).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:async';
 import 'dart:convert';
@@ -32,7 +30,7 @@ OfflineRepository testRepo({
     chunkSourceFactory: (_) =>
         source ?? (tile) async => [tile.z, tile.x, tile.y],
     clock: clock ?? () => now,
-    // Isolated journal per repository (never touches the host docs dir).
+
     directoryProvider: () async =>
         dir ?? Directory.systemTemp.createTempSync('atlas_repo_'),
     sharedLimiter: sharedLimiter,
@@ -40,8 +38,6 @@ OfflineRepository testRepo({
   );
 }
 
-/// A transport that accepts and never answers (deterministic stall — the
-/// shape of the observed Esri incident, without any network).
 AtlasChunkSource get stalledSource =>
     (_) => Completer<List<int>>().future;
 
@@ -90,7 +86,7 @@ void main() {
         ),
         1,
       );
-      // Would enumerate ~1.5B tiles if attempted: must saturate instead.
+
       expect(
         OfflineRepository.countTiles(
           zMin: 0,
@@ -208,8 +204,7 @@ void main() {
       );
       expect(record.plan, isNull);
       expect(record.appBlock, contains('APP_PACK_TOO_LARGE'));
-      // Wording must describe the true rationale (bounded enumeration +
-      // RAM serve map; completed packs persist) — never "future work".
+
       expect(record.appBlock, contains('journal'));
     });
 
@@ -254,7 +249,7 @@ void main() {
       await repo.startDownload(record.packId);
       expect(record.lifecycle, OfflinePackLifecycle.complete);
       expect(record.receivedTiles, 1);
-      expect(record.receivedBytes, 3); // [z, x, y]
+      expect(record.receivedBytes, 3);
       expect(record.seal, matches(RegExp(r'^[0-9a-f]{16}$')));
       expect(record.cacheEntryPresent, isTrue);
       expect(repo.store.stats.entryCount, 1);
@@ -346,16 +341,11 @@ void main() {
       gate.complete();
       await future;
       expect(record.lifecycle, OfflinePackLifecycle.cancelled);
-      expect(record.receivedTiles, 1); // bytes held for resume
+      expect(record.receivedTiles, 1);
     });
 
     test('quota pause then resume after refill completes', () async {
-      // Centralized limiter (capacity 2, refill 1/s): pack A spends both
-      // tokens completing; pack B pauses immediately on the empty bucket;
-      // after one refill second pack B resumes to completion. This is the
-      // recoverable shape (shared bucket refills across packs); a per-pack
-      // limiter could never resume past its own pause (resume re-walks
-      // every tile at one take per iteration against a capped bucket).
+
       var now = 1000;
       final repo = testRepo(
         clock: () => now,
@@ -381,7 +371,7 @@ void main() {
       expect(second.receivedTiles, 0);
       expect(second.failureDetail, contains('quota'));
 
-      now += 2; // two tokens refill the shared bucket (one per tile)
+      now += 2;
       await repo.startDownload(second.packId);
       expect(second.lifecycle, OfflinePackLifecycle.complete);
       expect(second.receivedTiles, 2);
@@ -395,11 +385,10 @@ void main() {
       );
       final record = planOne(repo);
       await repo.startDownload(record.packId);
-      // DEC-020 mapping: existing failed terminal, timeout identity kept
-      // in the detail (no new state, no taxonomy change).
+
       expect(record.lifecycle, OfflinePackLifecycle.failed);
       expect(record.failureDetail, contains('TimeoutException'));
-      // No false completion, no false indexing, nothing served.
+
       expect(repo.store.stats.entryCount, 0);
       expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
       expect(record.seal, isNull);
@@ -429,7 +418,7 @@ void main() {
       await repo.startDownload(record.packId);
       expect(record.lifecycle, OfflinePackLifecycle.failed);
       expect(record.failureDetail, contains('TimeoutException'));
-      // The completed tile survives; only the stalled in-flight one is lost.
+
       expect(record.receivedTiles, 1);
       stallSecond = false;
       await repo.startDownload(record.packId);
@@ -446,8 +435,7 @@ void main() {
       final record = planOne(repo);
       final future = repo.startDownload(record.packId);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      // Cancel lands mid-await: the engine cannot observe it there, so the
-      // timeout fires — but the app records the user's act, not the clock.
+
       repo.cancelDownload(record.packId);
       await future;
       expect(record.lifecycle, OfflinePackLifecycle.cancelled);
@@ -466,18 +454,14 @@ void main() {
       final future = repo.startDownload(record.packId);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       await repo.deletePack(record.packId);
-      // Without the bound this await would hang forever (the observed
-      // wedge: finally never runs, restart silently ignored).
+
       await future;
       watch.stop();
       expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
       expect(repo.lookup(record.packId), isNull);
       expect(repo.packs, isEmpty);
       expect(repo.store.stats.entryCount, 0);
-      // And the restart path is alive afterwards (no stale running entry:
-      // a fresh download runs to its own terminal instead of being
-      // silently ignored). The source still stalls, so that terminal is
-      // failed — the point is that it TERMINATES.
+
       expect(repo.isDownloading, isFalse);
       final again = planOne(repo);
       await repo.startDownload(again.packId);
@@ -510,12 +494,11 @@ void main() {
       );
       final future = repo.startDownload(record.packId);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      // Delete while the first chunk is still gated.
+
       await repo.deletePack(record.packId);
       expect(repo.lookup(record.packId), isNull);
       gate.complete();
-      // The orphaned future must settle WITHOUT throwing and WITHOUT
-      // re-registering anything.
+
       await future;
       expect(repo.lookup(record.packId), isNull);
       expect(repo.packs, isEmpty);
@@ -526,7 +509,7 @@ void main() {
       );
       expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
       expect(repo.events.join('\n'), contains('settled after delete'));
-      // Repository remains usable.
+
       final again = planOne(repo);
       await repo.startDownload(again.packId);
       expect(again.lifecycle, OfflinePackLifecycle.complete);
@@ -546,17 +529,15 @@ void main() {
       );
       final record = planOne(repo);
       final download = repo.startDownload(record.packId);
-      // Let the chunk loop finish so the flow parks inside _persistPack.
+
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      // Delete now: store entry removed synchronously, then both paths
-      // park at the same journal gate.
+
       final removal = repo.deletePack(record.packId);
       expect(repo.lookup(record.packId), isNull);
       persistGate.complete();
       await download;
       await removal;
-      // The post-persist ownership checkpoint must undo the completion's
-      // registrations: no resurrection through the persist window either.
+
       expect(repo.lookup(record.packId), isNull);
       expect(repo.packs, isEmpty);
       expect(repo.store.stats.entryCount, 0);
@@ -599,13 +580,13 @@ void main() {
       final first = await completeAt(0);
       final second = await completeAt(1);
       expect(repo.store.stats.entryCount, 2);
-      // Third insert evicts the oldest (first) — engine-reported, consumed.
+
       final third = await completeAt(2);
       expect(repo.store.stats.entryCount, 2);
       expect(first.cacheEntryPresent, isFalse);
       expect(second.cacheEntryPresent, isTrue);
       expect(third.cacheEntryPresent, isTrue);
-      // The live gate agrees with the corrected flags.
+
       expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
       expect(repo.resolveTileBytes('esri-imagery', '0/2/0'), [0]);
       expect(repo.events.join('\n'), contains('evicted from index by LRU'));
@@ -628,15 +609,15 @@ void main() {
       expect(record.lifecycle, OfflinePackLifecycle.failed);
       expect(record.failureDetail, contains('PERSIST_FAILED'));
       expect(record.cacheEntryPresent, isFalse);
-      // No false completion, no false indexing, nothing served.
+
       expect(repo.store.stats.entryCount, 0);
       expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
-      // Recovery path: resume retries the persist once the journal heals.
+
       failJournal = false;
       await repo.startDownload(record.packId);
       expect(record.lifecycle, OfflinePackLifecycle.complete);
       expect(record.cacheEntryPresent, isTrue);
-      // And unrelated packs work throughout.
+
       final other = repo.planPack(
         providerId: 'esri-imagery',
         zMin: 1,
@@ -681,8 +662,7 @@ void main() {
       expect(repo.store.stats.entryCount, 0);
       expect(repo.lookup(record.packId), isNotNull);
       expect(record.cacheEntryPresent, isFalse);
-      // Eviction is total: bytes, seal, and manifest go with the index
-      // (half-held state would make "available offline" a lie).
+
       expect(record.bytesHeld, isFalse);
       expect(record.seal, isNull);
       expect(record.manifestJson, isNull);
@@ -747,19 +727,18 @@ void main() {
       expect(restored.tileKeys, {'0/0/0'});
       expect(restored.receivedTiles, 1);
       expect(relaunched.store.stats.entryCount, 1);
-      // Bytes resolve through the relaunched instance (same code path the
-      // renderer uses after a real process restart).
+
       expect(
         relaunched.resolveTileBytes('esri-imagery', '0/0/0'),
         [0, 0, 0],
       );
       expect(relaunched.offlineTileHits, 1);
-      // Manifest export shape survives the journal round-trip.
+
       final manifest = AtlasPackManifest.fromJson(
         (jsonDecode(restored.manifestJson!) as Map).cast<String, dynamic>(),
       );
       expect(manifest.seal, record.seal);
-      expect(repo.offlineTileHits, 0); // untouched original
+      expect(repo.offlineTileHits, 0);
     });
 
     test('restore with no journal is a logged no-op', () async {
@@ -829,8 +808,8 @@ void main() {
       final indexFile = File('${dir.path}/offline_packs/$kPackIndexFile');
       final entries =
           (jsonDecode(indexFile.readAsStringSync()) as List).toList();
-      entries.add(42); // not an object: must not abort the restore
-      entries.add({'pack_id': 'pack-ghost'}); // missing keys: malformed
+      entries.add(42);
+      entries.add({'pack_id': 'pack-ghost'});
       indexFile.writeAsStringSync(jsonEncode(entries));
 
       final repo = testRepo(dir: dir);
@@ -839,13 +818,13 @@ void main() {
       expect(restored, isNotNull);
       expect(restored!.lifecycle, OfflinePackLifecycle.complete);
       expect(restored.seal, record.seal);
-      // No half-loaded index state: exactly the valid pack is indexed.
+
       expect(repo.store.stats.entryCount, 1);
       expect(repo.lookup('pack-ghost'), isNull);
       final log = repo.events.join('\n');
       expect(log, contains('not an object'));
       expect(log, contains('malformed'));
-      // Repository remains usable after the mixed restore.
+
       final next = planOne(repo);
       await repo.startDownload(next.packId);
       expect(next.lifecycle, OfflinePackLifecycle.complete);
@@ -861,7 +840,7 @@ void main() {
         directoryProvider: () async =>
             throw const FileSystemException('no docs dir'),
       );
-      await repo.restore(); // must not throw
+      await repo.restore();
       expect(repo.packs, isEmpty);
       expect(repo.events.first, contains('aborted on unexpected error'));
     });
@@ -871,7 +850,6 @@ void main() {
       final (_, first, _) = await completeIn(dir);
       expect(first.packId, 'pack-1000-1');
 
-      // Same directory, same fixed clock: naive minting would collide.
       final repo = testRepo(dir: dir, clock: () => 1000);
       await repo.restore();
       expect(repo.lookup('pack-1000-1')!.seal, first.seal);
@@ -880,11 +858,11 @@ void main() {
       expect(second.packId, 'pack-1000-2');
       final third = planOne(repo);
       expect(third.packId, 'pack-1000-3');
-      // Original restored record intact; new records intact and distinct.
+
       expect(repo.lookup('pack-1000-1')!.seal, first.seal);
       expect(repo.lookup('pack-1000-2'), same(second));
       expect(repo.lookup('pack-1000-3'), same(third));
-      // Repeated collisions keep walking safely.
+
       for (var i = 0; i < 3; i++) {
         planOne(repo);
       }

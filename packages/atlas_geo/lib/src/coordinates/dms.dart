@@ -1,14 +1,10 @@
-// Sovereign Atlas Engine — atlas_geo
-// DMS parsing/formatting (strict, never guessing).
-//
-// Contract: blueprint 4.1 (coordinate systems, DMS row).
-// Phase 4 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// Degrees/minutes/seconds value (hemisphere carried by sign convention:
-/// latitude S and longitude W are negative in decimal; DMS components here
-/// are non-negative magnitudes plus an explicit hemisphere letter).
 final class AtlasDms {
   const AtlasDms({
     required this.degrees,
@@ -22,8 +18,6 @@ final class AtlasDms {
   final double seconds;
   final String hemisphere;
 
-  /// Parses `51°30'26"N`-style text (also accepts `51 30 26 N`, `51d30m26sN`).
-  /// Throws [AtlasRejectionException] (`MALFORMED_DMS`) on malformed input.
   factory AtlasDms.parse(String text) {
     final match = RegExp(
       r"^\s*(\d+)\s*(?:°|d|\s)\s*(\d+)\s*(?:['|m\s])\s*(\d+(?:\.\d+)?)\s*(?:\x22|s)?\s*([NSEW])\s*$",
@@ -54,13 +48,11 @@ final class AtlasDms {
     );
   }
 
-  /// Decimal degrees (S/W negative).
   double toDecimal() {
     final magnitude = degrees + minutes / 60.0 + seconds / 3600.0;
     return (hemisphere == 'S' || hemisphere == 'W') ? -magnitude : magnitude;
   }
 
-  /// Formats decimal degrees for [isLatitude] (N/S/E/W applied by sign).
   static AtlasDms fromDecimal(double decimal, {required bool isLatitude}) {
     final hemisphere =
         isLatitude ? (decimal < 0 ? 'S' : 'N') : (decimal < 0 ? 'W' : 'E');

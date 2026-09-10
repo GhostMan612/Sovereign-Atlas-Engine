@@ -1,8 +1,7 @@
-// Sovereign Atlas Engine — atlas_geo public barrel.
-//
-// Phase 0.5 vertical slice. Relative imports keep the slice verifiable with a
-// bare Dart SDK and no package manifests (DEC-016 open). At workspace
-// initialization these become `package:atlas_geo/...` imports.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/coordinates/coordinate.dart';
 export 'src/coordinates/distance.dart';

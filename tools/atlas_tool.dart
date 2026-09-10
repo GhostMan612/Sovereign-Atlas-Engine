@@ -1,8 +1,8 @@
-// Sovereign Atlas Engine — workspace tool (ADR-002, stdlib only).
-//
-// Usage: dart tools/atlas_tool.dart [analyze|format-check|test|all]
-// Exit code 0 = clean; non-zero names the failing step. No dependencies,
-// no network, no inference: every step shells to the Dart SDK.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'dart:io';
 
 const packages = [

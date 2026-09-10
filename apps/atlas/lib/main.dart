@@ -1,11 +1,8 @@
-// Sovereign Atlas — first host shell (ADR-005 app track).
-//
-// Boundary: UI + flutter_map adapter here; engine semantics stay in
-// packages/ (this file imports engine CONTRACTS only — no engine package
-// imports Flutter, ever). Basemap set, templates, and attribution all come
-// from the engine provider registry (single source of truth, blueprint
-// 2.2 engine completion); the casual picker (blueprint 2.4) is a thin view
-// over it.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'package:atlas_providers/atlas_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -20,7 +17,6 @@ void main() {
   runApp(const AtlasApp());
 }
 
-/// Casual basemap choices (blueprint 2.4) bound to engine provider ids.
 const Map<String, String> _casualBasemaps = {
   'Standard': 'osm-standard',
   'Satellite': 'esri-imagery',
@@ -28,9 +24,6 @@ const Map<String, String> _casualBasemaps = {
   'Dark': 'esri-dark-gray',
 };
 
-/// Host root. Holds the [OfflineRepository] so the map page, the Offline
-/// Areas track, and Diagnostics share one orchestrator (single store, single
-/// record set, single event log). Injectable for tests.
 class AtlasApp extends StatefulWidget {
   const AtlasApp({super.key, OfflineRepository? repository})
       : _repositoryOverride = repository;
@@ -49,8 +42,7 @@ class _AtlasAppState extends State<AtlasApp> {
     super.initState();
     _repository = widget._repositoryOverride ??
         OfflineRepository(registry: AtlasBuiltinProviders.registry());
-    // Relaunch path: re-index disk-persisted packs (async; tiles served
-    // from network until restore lands — startup race, documented).
+
     if (widget._repositoryOverride == null) {
       _repository.restore();
     }
@@ -174,8 +166,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                   key: ValueKey<String>(_providerId),
                   urlTemplate: _template,
                   userAgentPackageName: 'com.sovereignatlas.atlas',
-                  // Store-first resolution (offline packs serve here);
-                  // network fallback is standard flutter_map behavior.
+
                   tileProvider: AtlasOfflineTileProvider(
                     repository: widget.repository,
                     providerId: _providerId,

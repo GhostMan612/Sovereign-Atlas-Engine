@@ -1,15 +1,10 @@
-// Sovereign Atlas Engine — atlas_geo
-// Graticule + custom grid spacing (pure parameters, never pixels).
-//
-// Contract: blueprint 4.5 (grid engine, engine side). Zoom→interval selection
-// is an explicit step table (no invented continuity); line generation emits
-// coordinate values for a bounding box (rendering consumes them downstream).
-// UTM/MGRS/H3 visualization stays hooks (blocked/deferred precedents).
-// Phase 4 slice. Depends on atlas_core + siblings only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import '../geometry/polygon_types.dart';
 
-/// Graticule line set value (meridians + parallels in decimal degrees).
 final class AtlasGraticule {
   const AtlasGraticule({required this.meridians, required this.parallels});
 
@@ -36,9 +31,8 @@ final class AtlasGraticule {
       Object.hash(Object.hashAll(meridians), Object.hashAll(parallels));
 }
 
-/// Zoom-stepped graticule parameters (4.5 grid density by zoom, declared).
 abstract final class AtlasGrids {
-  /// Nice-degree intervals keyed by maximum zoom (first match wins).
+
   static const List<(int, double)> zoomSteps = [
     (2, 30.0),
     (4, 10.0),
@@ -51,7 +45,6 @@ abstract final class AtlasGrids {
     (99, 0.005),
   ];
 
-  /// Interval in decimal degrees for integer [zoom] (declared table).
   static double intervalForZoom(int zoom) {
     for (final step in zoomSteps) {
       if (zoom <= step.$1) return step.$2;
@@ -59,7 +52,6 @@ abstract final class AtlasGrids {
     return 0.005;
   }
 
-  /// Meridian/parallel values covering [bounds] at [interval] degrees.
   static AtlasGraticule graticuleFor(
     AtlasBoundingBox bounds,
     double interval,

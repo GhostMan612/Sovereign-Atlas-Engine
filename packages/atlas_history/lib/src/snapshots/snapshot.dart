@@ -1,18 +1,11 @@
-// Sovereign Atlas Engine — atlas_history
-// Historical snapshots: source context preserved, never flattened.
-//
-// Contract: blueprint Phase 7 (historical datasets, timeline, provenance-
-// through-time) + AGENTS.md sensitivity rule (historical/Indigenous data
-// keeps source context). A snapshot binds features to their origin story:
-// source id, source version/epoch label, retrieval instant, license, and a
-// free-text source note. Snapshots are IMMUTABLE values; change over time is
-// modeled by the timeline holding several, never by editing one.
-// Phase 7 slice. Depends on atlas_core + atlas_data only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_data/atlas_data.dart';
 
-/// One immutable historical capture with its full source context.
 final class AtlasHistoricalSnapshot {
   const AtlasHistoricalSnapshot({
     required this.id,
@@ -27,7 +20,6 @@ final class AtlasHistoricalSnapshot {
 
   final AtlasId id;
 
-  /// Explicit epoch the snapshot describes (event time, not ingest time).
   final int at;
   final String sourceId;
   final String? sourceEpoch;

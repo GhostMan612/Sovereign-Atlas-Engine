@@ -1,10 +1,8 @@
-// Sovereign Atlas — on-device failure-terminal proof (hardening pass).
-//
-// Drives a real download attempt with the transport blocked and proves the
-// honest failed terminal on hardware: failure detail surfaces, nothing is
-// indexed, nothing is served, and the app remains usable afterwards.
-// (Host tests prove the same shape with throwing sources; this proves it
-// through the real engine httpTransport against a dead stack.)
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'dart:io';
 
 import 'package:atlas/main.dart';
@@ -12,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-/// Denies every HTTP client construction (transport-level offline).
 final class BlockedTransport extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -61,16 +58,14 @@ void main() {
     }
     // ignore: avoid_print
     print('OFFLINE_FAILURE_RESULT: $terminal');
-    // The transport is dead: success here would be a FABRICATION bug.
+
     expect(terminal, 'failed');
     expect(find.textContaining('SocketException'), findsWidgets);
 
-    // Nothing indexed, nothing served, Saved Areas honestly empty.
     await tester.tap(find.text('Saved Areas'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Nothing available offline'), findsOneWidget);
 
-    // App remains usable: Diagnostics opens over the failed state.
     await tester.tap(find.text('Storage'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Pack index: 0/64'), findsOneWidget);

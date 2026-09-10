@@ -1,19 +1,11 @@
-// Sovereign Atlas Engine — atlas_tiles
-// Execution commands: the closed value set serving pipeline directives.
-//
-// Contract: 2.0-D (three types, 1:1 with directives, terminals map to none)
-// + 2.0-I/J (stage boundaries kept apart by the type system).
-// - Immutable values with equality; semantic payloads only — never
-//   operations, contexts, callbacks, futures, clocks, or credentials.
-// - No generic execute-resource abstraction exists by construction: the
-//   executor offers exactly one method per command type.
-// Phase 2.0 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import '../entries/cache_entry.dart';
 
-/// Directive: serve the named entry (2.0-I). `fallback` carries pipeline
-/// provenance (usable hit vs declared stale fallback), never policy.
 final class ServeEntryCommand {
   const ServeEntryCommand({required this.entry, this.fallback = false});
 
@@ -34,7 +26,6 @@ final class ServeEntryCommand {
   String toString() => 'ServeEntryCommand($entry fallback=$fallback)';
 }
 
-/// Directive: run one acquisition attempt for the request (2.0-J).
 final class RunAcquisitionCommand {
   const RunAcquisitionCommand({required this.request});
 
@@ -52,8 +43,6 @@ final class RunAcquisitionCommand {
   String toString() => 'RunAcquisitionCommand($request)';
 }
 
-/// Directive: offer the candidate handoff entry to the bound operation
-/// (2.0-I §2: offer, acknowledged — never a persistence claim).
 final class StoreHandoffCommand {
   const StoreHandoffCommand({required this.handoff});
 

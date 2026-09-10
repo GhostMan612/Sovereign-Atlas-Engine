@@ -1,28 +1,11 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// Acquisition states, failure taxonomy, and results (pure semantics).
-//
-// Contracts: 1.8-E/F/G/H (inventory: PROPOSED → PROVISIONAL where noted).
-// - States implemented: notStarted/inProgress/succeeded/failed/cancelled/
-//   timedOut. PARTIAL/DEFERRED/UNAVAILABLE-as-state rejected as unjustified
-//   (no contract supports them here; unavailability is a FAILURE category).
-// - FAILED ≠ UNAVAILABLE: failed = an attempt ran and did not succeed;
-//   unavailable = the resource cannot currently be provided (no attempt
-//   semantics implied). CANCELLED ≠ FAILED: cancellation is an explicit
-//   terminal outcome with different downstream meaning.
-// - Failure taxonomy is CLOSED (8 string-free enum values — no HTTP codes,
-//   ADV-052 guards this): invalidTarget, unsupported, unavailable, timeout,
-//   cancelled, policyRejected, integrityFailure, unknown.
-// - Retry table (PROVISIONAL, 1.8-H): timeout/unavailable/unknown retryable;
-//   invalidTarget/unsupported/cancelled/policyRejected/integrityFailure not.
-//   Advisory flags only — no backoff/counters/timers exist anywhere here.
-// - Results carry request echo + state + optional failure + optional opaque
-//   payload ID (never bytes — 1.8-J). No paths/entries/HTTP/renderer fields.
-// Phase 1.8 slice. Depends on atlas_core (+ sibling request) only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'acquisition_request.dart';
 
-/// Minimum justified acquisition lifecycle states.
 enum AtlasAcquisitionState {
   notStarted,
   inProgress,
@@ -32,7 +15,6 @@ enum AtlasAcquisitionState {
   timedOut,
 }
 
-/// Semantic failure categories (closed set — no transport codes).
 enum AtlasAcquisitionFailure {
   invalidTarget,
   unsupported,
@@ -44,7 +26,6 @@ enum AtlasAcquisitionFailure {
   unknown,
 }
 
-/// Advisory retry eligibility per failure (PROVISIONAL table, 1.8-H).
 extension AtlasAcquisitionRetry on AtlasAcquisitionFailure {
   bool get retryable {
     switch (this) {
@@ -62,7 +43,6 @@ extension AtlasAcquisitionRetry on AtlasAcquisitionFailure {
   }
 }
 
-/// Semantic acquisition outcome. No transport/storage/renderer members.
 final class AtlasAcquisitionResult {
   const AtlasAcquisitionResult({
     required this.request,
@@ -74,10 +54,8 @@ final class AtlasAcquisitionResult {
   final AtlasAcquisitionRequest request;
   final AtlasAcquisitionState state;
 
-  /// Failure category (failed/timedOut/cancelled states carry their own).
   final AtlasAcquisitionFailure? failure;
 
-  /// Opaque payload reference on success (never bytes — 1.8-J boundary).
   final AtlasId? payloadId;
 
   @override

@@ -1,25 +1,12 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// AtlasResolutionRequest: semantic "what resource is needed" (never how).
-//
-// Contract: 1.5-B (inventory: PROPOSED → PROVISIONAL).
-// Dimensions are exactly the contracted minimum: data kind, location,
-// semantic zoom, tile scheme, explicit provider preference. No transport,
-// renderer, URL, credential, or acquisition field exists or may be added
-// without a contract.
-// - Location is raw doubles (provider_api → core only; no geo dependency —
-//   the ±90/±180 bounds below cite ATLAS-COORD-001 as authority and mirror it
-//   without duplicating its policy role).
-// - Zoom is a semantic float (camera zoom may be fractional); tile-zoom
-//   derivation (floor) lives in tile_addressing.dart, not here.
-// - Preference is an ORDERED explicit caller choice consumed only by selection
-//   (never a relevance score; no "best provider" invention).
-// Phase 1.5 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../provider/data_kind.dart';
 import '../requests/tile_coordinate.dart';
 
-/// Renderer-independent semantic resource request.
 final class AtlasResolutionRequest {
   const AtlasResolutionRequest({
     required this.kind,
@@ -30,28 +17,17 @@ final class AtlasResolutionRequest {
     this.preferredProviders = const [],
   });
 
-  /// Requested data family (e.g. rasterTiles, elevation). Never tile-forced:
-  /// non-tile kinds resolve without any tile address (1.5-H).
   final AtlasDataKind kind;
 
-  /// Requested position in decimal degrees (WGS84 understanding).
   final double latitude;
   final double longitude;
 
-  /// Requested semantic zoom. Finite, ≥ 0. Fractional values are meaningful
-  /// (camera capability); integer tile-zoom derivation is separate.
   final double zoom;
 
-  /// Tile addressing scheme (meaningful for tile kinds only; carried
-  /// opaquely otherwise, never validated against kind here).
   final AtlasTileScheme scheme;
 
-  /// Explicit caller preference order (provider ids). Selection applies this
-  /// order against the eligible set; unknown ids are ignored deterministically.
   final List<AtlasId> preferredProviders;
 
-  /// Request validity: finite in-range position, finite non-negative zoom.
-  /// Coordinate bounds cite ATLAS-COORD-001 (±90/±180).
   AtlasValidation validate() {
     if (!latitude.isFinite || !longitude.isFinite) {
       return const AtlasValidation.invalid(

@@ -1,13 +1,8 @@
-// Sovereign Atlas — forced-timeout device proof (DEC-020).
-//
-// Deterministic trigger, not a natural stall: the repository is injected
-// with a never-completing chunk source and a 2 s per-tile bound, then the
-// REAL app flow (navigate → plan → download) must reach the REAL failed
-// terminal with TimeoutException identity — proving the mapping on
-// hardware. Real socket timing is inherently nondeterministic and is NOT
-// claimed; the mechanism is host-proven, the mapping is device-proven.
-// Uses the existing AtlasApp(repository:) seam (also used by widget
-// tests) — no test hooks in production code.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'dart:async';
 
 import 'package:atlas/main.dart';
@@ -49,8 +44,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('download-pack')));
     await tester.pumpAndSettle();
 
-    // Real seconds must pass for the real 2 s bound to fire (fake-clock
-    // pumps alone cannot trip a real timer).
     var terminal = '';
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(seconds: 1));
@@ -66,11 +59,10 @@ void main() {
     }
     // ignore: avoid_print
     print('OFFLINE_TIMEOUT_RESULT: $terminal');
-    // Success against a never-answering source would be fabrication.
+
     expect(terminal, 'failed');
     expect(find.textContaining('TimeoutException'), findsWidgets);
 
-    // Nothing indexed, nothing served, app fully usable afterwards.
     await tester.tap(find.text('Saved Areas'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Nothing available offline'), findsOneWidget);

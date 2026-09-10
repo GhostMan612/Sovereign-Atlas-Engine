@@ -1,15 +1,8 @@
-// Sovereign Atlas — Offline Areas on-device proof (DEVICE-005).
-//
-// Runs ON the emulator with the PRODUCTION chunk source (real HTTP through
-// engine URL resolution + engine transport). Two proofs, both by semantic
-// locators:
-// 1. Refusal path needs no network: default OSM plan without approval
-//    surfaces BULK_GUARD on device.
-// 2. Download path: 1-tile Esri pack downloads for real. The terminal is
-//    recorded, not assumed: `complete` proves end-to-end bytes-to-seal;
-//    `failed` with engine detail proves honest failure surfacing. Either is
-//    a terminal the UI surfaced (the test fails only if NO terminal
-//    arrives). The actual outcome is recorded in DEVICE-005.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'package:atlas/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +20,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Offline Areas'), findsOneWidget);
 
-    // 1. Refusal path (offline-safe): default OSM, no approval.
     await tester.tap(find.byTooltip('new-pack'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -39,7 +31,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('BULK_GUARD'), findsWidgets);
 
-    // 2. Download path: switch to Esri (prefetch allowed, no bulk guard).
     await tester.tap(find.byKey(const ValueKey('provider-dropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Esri World Imagery').last);

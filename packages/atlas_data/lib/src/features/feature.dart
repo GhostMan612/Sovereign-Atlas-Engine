@@ -1,22 +1,13 @@
-// Sovereign Atlas Engine — atlas_data
-// Normalized feature model (ADR-001 contract: id, geometry, properties,
-// source, sourceVersion, retrievedAt, license, confidence, accuracy,
-// sensitivity) + dataset descriptors.
-//
-// Contract: blueprint Phase 5 (Atlas Data Layers, model side). Geometry is
-// carried as explicit coordinate nests (Point/LineString/Polygon rings —
-//validated on normalize, never assumed); properties stay untyped maps
-// (schemas describe, never coerce — a future schema package can tighten).
-// Time is explicit epoch seconds throughout.
-// Phase 5 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Normalized geometry families (GeoJSON-compatible names, engine-owned).
 enum AtlasGeometryKind { point, lineString, polygon }
 
-/// Normalized feature: geometry + properties + full provenance/currency.
 final class AtlasFeature {
   const AtlasFeature({
     this.id,
@@ -35,8 +26,6 @@ final class AtlasFeature {
   final String? id;
   final AtlasGeometryKind geometryKind;
 
-  /// Coordinate nest: point [lon,lat] | line [[lon,lat]…] | polygon
-  /// [[[lon,lat]…]…] (exterior + holes). Numbers only; validated on use.
   final List<dynamic> coordinates;
   final Map<String, dynamic> properties;
   final String source;
@@ -47,7 +36,6 @@ final class AtlasFeature {
   final double? accuracyMeters;
   final String? sensitivity;
 
-  /// Structural validation: nest shape + finite numbers + valid positions.
   AtlasValidation validate() {
     final coords = coordinates;
     bool position(dynamic p) =>
@@ -132,8 +120,6 @@ final class AtlasFeature {
       );
 }
 
-/// Dataset descriptor: named feature collection contract (ADR-001: schemas,
-// GeoJSON/MBTiles/raster/vector normalization contracts live here).
 final class AtlasDatasetDescriptor {
   const AtlasDatasetDescriptor({
     required this.id,

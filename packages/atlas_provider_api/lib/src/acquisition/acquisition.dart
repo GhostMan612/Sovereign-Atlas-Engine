@@ -1,29 +1,12 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// AtlasAcquisition: deterministic lifecycle holder (no engine inside).
-//
-// Contract: 1.8-E/I (inventory: PROPOSED → PROVISIONAL transitions).
-// - Starts via `AtlasAcquisition.start(request, nowSeconds)` (validates first;
-//   invalid requests throw with their validation rejection — construction ≠
-//   silent acceptance).
-// - Transitions (all pure, all explicit, all synchronous):
-//   begin() notStarted→inProgress · cancel(now) notStarted/inProgress→cancelled
-//   · checkTimeout(now): inProgress + deadline exceeded → timedOut (strictly
-//   greater; equal stays — mirrors the freshness inclusive convention) ·
-//   complete(payloadId, now) inProgress→succeeded · fail(failure, now)
-//   inProgress→failed. Anything else throws INVALID_STATE (explicit, never
-//   silent no-op).
-// - Time arrives ONLY as explicit int epoch parameters (1.7-J law extended).
-//   No clock, no timers, no tokens, no ids, no randomness, no globals.
-// Phase 1.8 slice. Depends on atlas_core (+ siblings) only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'acquisition_request.dart';
 import 'acquisition_result.dart';
 
-/// A single acquisition's semantic state. Immutable; transitions return copies.
-///
-/// Construction ≠ validation by design (a held request may be invalid; only
-/// [start] and transitions enforce). The default state is notStarted.
 final class AtlasAcquisition {
   const AtlasAcquisition({
     required this.request,
@@ -37,15 +20,12 @@ final class AtlasAcquisition {
   final AtlasAcquisitionRequest request;
   final AtlasAcquisitionState state;
 
-  /// Explicit start instant (epoch seconds). Null until begun.
   final int? startedAt;
 
-  /// Explicit last-transition instant. Null until the first transition.
   final int? updatedAt;
   final AtlasAcquisitionFailure? failure;
   final AtlasId? payloadId;
 
-  /// Starts an acquisition (validates the request first).
   static AtlasAcquisition start(
     AtlasAcquisitionRequest request,
     int nowSeconds,
@@ -57,7 +37,6 @@ final class AtlasAcquisition {
     return AtlasAcquisition(request: request).begin(nowSeconds);
   }
 
-  /// notStarted → inProgress. Only from notStarted.
   AtlasAcquisition begin(int nowSeconds) {
     _requireState(
       AtlasAcquisitionState.notStarted,
@@ -70,7 +49,6 @@ final class AtlasAcquisition {
     );
   }
 
-  /// notStarted/inProgress → cancelled. No token, no platform call.
   AtlasAcquisition cancel(int nowSeconds) {
     if (state != AtlasAcquisitionState.notStarted &&
         state != AtlasAcquisitionState.inProgress) {
@@ -88,8 +66,6 @@ final class AtlasAcquisition {
     );
   }
 
-  /// Pure deadline evaluation (not a timer): inProgress + elapsed >
-  /// timeoutSeconds → timedOut. All other states pass through unchanged.
   AtlasAcquisition checkTimeout(int nowSeconds) {
     final timeout = request.policy.timeoutSeconds;
     if (state != AtlasAcquisitionState.inProgress ||
@@ -107,7 +83,6 @@ final class AtlasAcquisition {
     return this;
   }
 
-  /// inProgress → succeeded, binding an opaque payload reference (never bytes).
   AtlasAcquisition complete(AtlasId payloadId, int nowSeconds) {
     _requireState(
       AtlasAcquisitionState.inProgress,
@@ -120,7 +95,6 @@ final class AtlasAcquisition {
     );
   }
 
-  /// inProgress → failed with an explicit taxonomy category.
   AtlasAcquisition fail(AtlasAcquisitionFailure failure, int nowSeconds) {
     _requireState(AtlasAcquisitionState.inProgress, 'fail requires inProgress');
     return _copyWith(
@@ -130,7 +104,6 @@ final class AtlasAcquisition {
     );
   }
 
-  /// Current semantic result (no execution performed by reading it).
   AtlasAcquisitionResult toResult() => AtlasAcquisitionResult(
         request: request,
         state: state,

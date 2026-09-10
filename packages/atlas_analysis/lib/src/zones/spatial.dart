@@ -1,22 +1,12 @@
-// Sovereign Atlas Engine — atlas_analysis
-// Radial zones + bounding-box clip + densify + simplify (real algorithms).
-//
-// Contract: blueprint 4.3 (buffer/clip/simplify/densify interfaces, real
-// where closed-form) + 11 (spatial workspace primitives).
-// - Radial zone: center + radius meters (haversine membership — the honest
-//   "buffer" for points; polygon buffering stays future, documented).
-// - Clip: Sutherland–Hodgman against non-crossing boxes (antimeridian
-//   refusal consistent with DEC-005).
-// - Densify: great-circle interpolation at explicit step meters.
-// - Simplify: Douglas–Peucker with explicit tolerance meters (planar
-//   equirectangular projection, documented approximation).
-// Phase 9/11 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Radial zone value (center + radius; membership via haversine).
 final class AtlasRadialZone {
   const AtlasRadialZone({required this.center, required this.radiusMeters});
 
@@ -37,9 +27,8 @@ final class AtlasRadialZone {
   int get hashCode => Object.hash(center, radiusMeters);
 }
 
-/// Closed-form spatial services.
 abstract final class AtlasSpatial {
-  /// Sutherland–Hodgman clip of a ring against a non-crossing box.
+
   static List<AtlasCoordinate> clipToBox(
     List<AtlasCoordinate> ring,
     AtlasBoundingBox box,
@@ -85,9 +74,6 @@ abstract final class AtlasSpatial {
     return output;
   }
 
-  /// Great-circle densification at explicit [stepMeters] (endpoints kept).
-  /// Intermediate points use spherical interpolation (slerp on the unit
-  /// sphere — true great-circle, not lon/lat lerping).
   static List<AtlasCoordinate> densify(
     List<AtlasCoordinate> line,
     double stepMeters,
@@ -133,7 +119,6 @@ abstract final class AtlasSpatial {
     );
   }
 
-  /// Douglas–Peucker simplification at [toleranceMeters] (endpoints kept).
   static List<AtlasCoordinate> simplify(
     List<AtlasCoordinate> line,
     double toleranceMeters,

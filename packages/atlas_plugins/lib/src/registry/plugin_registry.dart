@@ -1,27 +1,18 @@
-// Sovereign Atlas Engine — atlas_plugins
-// Plugin registry: explicit register/enable/disable + permission queries.
-//
-// Contract: blueprint Phase 12 (discovery/lifecycle/permissions as data).
-// Registration is explicit (no scanning, no discovery protocol — that would
-// be IO); duplicates refuse loudly; enable requires a valid manifest;
-// permission queries answer from declared grants (enforcement downstream).
-// Lifecycle here means registry state (registered/disabled), never process
-// control (no isolate/thread/process concepts anywhere near plugins).
-// Phase 12 slice. Depends on atlas_core + siblings only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../plugin/plugin.dart';
 
-/// Registry-state lifecycle (admin data, not process control).
 enum AtlasPluginState { registered, enabled, disabled }
 
-/// Explicit plugin registry value holder.
 final class AtlasPluginRegistry {
   AtlasPluginRegistry() : _entries = {};
 
   final Map<String, (_Entry, AtlasPluginState)> _entries;
 
-  /// Registers [manifest] (duplicates throw StateError — closed honesty).
   void register(AtlasPluginManifest manifest) {
     final check = manifest.validate();
     if (!check.isValid) {
@@ -50,7 +41,6 @@ final class AtlasPluginRegistry {
 
   List<String> get ids => _entries.keys.toList();
 
-  /// Declared-grant query (does [id] hold [permission]?).
   bool grants(String id, AtlasPluginPermission permission) =>
       _entries[id]?.$1.manifest.permissions.contains(permission) ?? false;
 }

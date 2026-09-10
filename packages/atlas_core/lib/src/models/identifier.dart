@@ -1,17 +1,11 @@
-// Sovereign Atlas Engine — atlas_core
-// AtlasId: non-empty domain identifier value object.
-//
-// Contract: domain-model.md (identity concept, PROPOSED). Uniqueness scope is
-// owned by the containing collection, not by this type. Phase 0.5 slice.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'validation.dart';
 import '../errors/rejection.dart';
 
-/// Opaque domain identifier.
-///
-/// Equality is by exact string value. Empty identifiers are rejected by
-/// [AtlasIds.check]; the const constructor itself performs no validation so
-/// validated data stays cheap to construct.
 final class AtlasId {
   const AtlasId(this.value);
 
@@ -28,11 +22,8 @@ final class AtlasId {
   String toString() => 'AtlasId($value)';
 }
 
-/// Constructors and checks for [AtlasId].
 abstract final class AtlasIds {
-  /// Rejects empty identifiers (`DUPLICATE`/empty-identity class of failures
-  /// is reported as `INVALID_IDENTITY`; duplicate detection itself belongs to
-  /// collections — see geometry-contract §5 and DEC-013).
+
   static AtlasValidation check(String value) {
     if (value.isEmpty) {
       return const AtlasValidation.invalid(

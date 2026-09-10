@@ -1,17 +1,11 @@
-// Sovereign Atlas Engine — atlas_location
-// Location fix + heading + append-only track log (pure models).
-//
-// Contract: ADR-001 location charter (GPS/tracking/heading abstractions;
-// UI widgets and tactical semantics stay out). Fixes carry explicit time +
-// accuracy (unknown accuracy = null, never zero-filled); heading is degrees
-// clockwise from north with optional source tag; the log appends (no edit,
-// no reorder — history honesty matches the timeline precedent).
-// Location slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Single position observation (platform-agnostic fix value).
 final class AtlasLocationFix {
   const AtlasLocationFix({
     required this.position,

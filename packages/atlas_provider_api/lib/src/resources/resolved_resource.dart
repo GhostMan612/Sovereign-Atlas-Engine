@@ -1,19 +1,7 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// AtlasResolvedResource: what resolution identified (never bytes obtained).
-//
-// Contract: 1.6-B/D/H (inventory: PROPOSED → PROVISIONAL).
-// - Built ONLY from a resolved `AtlasResolutionResult` plus its descriptor via
-//   `fromResolution` (throws INVALID_STATE otherwise — caller-contract
-//   enforcement, matching parse-of-malformed precedent).
-// - Tiled kinds carry their tile address (+ scheme); every other kind carries
-//   no tile reference at all (1.6-D acceptance test: elevation/boundary/parcel/
-//   historical/structure/local/geojson/vector-non-tiled resolve cleanly).
-//   `AtlasDataKind` reuse means no second taxonomy (no duplication).
-// - Attribution/license/sensitivity travel as OPAQUE descriptor hooks (no
-//   provenance engine here — 1.6-B "where already contracted", nothing more).
-// - Equality is identity-struct equality (1.6-O: resource identity is the
-//   established equivalence; URLs/cache/bytes/timestamps never participate).
-// Phase 1.6 slice. Depends on atlas_core (+ sibling descriptor/result) only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../provider/data_kind.dart';
@@ -22,7 +10,6 @@ import '../requests/tile_coordinate.dart';
 import '../resolution/resolution_result.dart';
 import 'resource_identity.dart';
 
-/// A resolved (identified, not acquired) geographic resource.
 final class AtlasResolvedResource {
   const AtlasResolvedResource({
     required this.identity,
@@ -39,25 +26,19 @@ final class AtlasResolvedResource {
   final AtlasId provider;
   final AtlasDataKind kind;
 
-  /// Tile address for tile kinds; null for every other kind (never forced).
   final AtlasTileCoordinate? tile;
   final AtlasTileScheme? scheme;
 
-  /// Opaque descriptor hooks (attribution/license/sensitivity strings).
   final String? attribution;
   final String? license;
   final String? sensitivity;
 
-  /// Canonical tile-address rendering for identity addresses (documented form,
-  /// never a URL): `z=<z>/x=<x>/y=<y>@<scheme>`.
   static String tileAddressFor(
     AtlasTileCoordinate tile,
     AtlasTileScheme scheme,
   ) =>
       'z=${tile.z}/x=${tile.x}/y=${tile.y}@${scheme.name}';
 
-  /// Binds a resolved result to its descriptor. Throws
-  /// [AtlasRejectionException] (`INVALID_STATE`) unless the result resolved.
   factory AtlasResolvedResource.fromResolution({
     required AtlasResolutionResult result,
     required AtlasProviderDescriptor provider,

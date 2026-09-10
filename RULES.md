@@ -19,7 +19,11 @@
    // The Future Dictates the Past and the Past is Always Present.
    // ============================================================
    ```
-4. **Grandfather clause (Atlas-specific).** Existing engine/app files predate this law and carry contract citations by design — do NOT mass-rewrite them. New files follow the Directives strictly. When an existing file is substantially rewritten, it gains the genesis header; its contract citations stay (evidence law §4.3 outranks style).
+4. **ABSOLUTE — no grandfathering** (operator directive 2026-09-10).
+   All 117 `.dart` files were stripped to genesis-header-only in one
+   verified pass (engine suite 453/413 + app 52/52 identical before and
+   after — semantics preserved). Every file in this repo now obeys the
+   Directives. Keep it that way.
 
 ### 1.2 External directories are READ-ONLY
 Never create, modify, move, or delete ANYTHING under:

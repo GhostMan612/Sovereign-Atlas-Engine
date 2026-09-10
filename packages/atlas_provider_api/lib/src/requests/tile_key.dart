@@ -1,17 +1,10 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// AtlasTileKey: the layer-scoped storage-key SHAPE (not a cache engine).
-//
-// Contract: ATLAS-TILE-ID-001 (tile-contract.md §1).
-// Status: SOURCE-VERIFIED shape `<layer>/{z}_{x}_{y}` (SRC-C F-10, TILE-004),
-// carried as the cache-relative key with exact round-trip. The key is
-// deliberately layer-scoped, matching the observed shape: cross-provider
-// distinction lives in [AtlasTileIdentity], never in this string (TILE-001).
-// No namespace extension is added (extension DEFERRED per 1.4-A inventory).
-// Phase 1.4 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// Layer-scoped tile key with exact string round-trip.
 final class AtlasTileKey {
   const AtlasTileKey({
     required this.layer,
@@ -25,11 +18,8 @@ final class AtlasTileKey {
   final int x;
   final int y;
 
-  /// Renders `<layer>/{z}_{x}_{y}` (SOURCE-VERIFIED shape).
   String get keyString => '$layer/${z}_${x}_${y}';
 
-  /// Parses [keyString] back. Throws [AtlasRejectionException] (`MALFORMED`)
-  /// on structural or numeric failure — never a silent default.
   static AtlasTileKey parse(String keyString) {
     AtlasRejectionException malformed(String detail) =>
         AtlasRejectionException(AtlasRejection('MALFORMED', detail));

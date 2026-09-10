@@ -1,9 +1,7 @@
-// Sovereign Atlas Engine — atlas_providers public barrel.
-//
-// Blueprint Phase 2 (Basemap Matrix) engine side, ADR-003. Concrete provider
-// implementations live here (never in atlas_provider_api, ADR-001). Depends:
-// atlas_core + atlas_provider_api + atlas_tiles. Transport is dart:io behind
-// an injected function type (no hosted dependencies).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/attribution.dart';
 export 'src/builtin_providers.dart';

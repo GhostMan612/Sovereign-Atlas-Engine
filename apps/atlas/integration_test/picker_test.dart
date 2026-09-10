@@ -1,9 +1,8 @@
-// Sovereign Atlas on-device interaction proof (DEVICE-004).
-//
-// Runs ON the attached emulator (flutter test integration_test), NOT on the
-// host: taps use semantic locators (tooltip/text), never blind coordinates.
-// Proves the picker flow end to end where DEVICE-003's coordinate taps
-// could not reach.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'package:atlas/main.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';

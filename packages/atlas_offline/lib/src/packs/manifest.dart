@@ -1,19 +1,10 @@
-// Sovereign Atlas Engine — atlas_offline
-// Pack manifest: what a pack IS (never how it moves).
-//
-// Contract: blueprint 3.2 (manifest.json shape) + phase-3 note §3.
-// - Per-entry FNV-1a/64 checksums + aggregate seal over sorted
-//   `address:checksum;` pairs. FNV is NON-cryptographic (documented; a
-//   cryptographic seal is a later upgrade, never claimed here).
-// - JSON round-trip is the export path without IO (import/export policy
-//   hooks live downstream; the model must survive the trip byte-exact).
-// Phase 3 slice. Depends on atlas_core + atlas_provider_api only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// 64-bit FNV-1a checksum, hex16. Deterministic, non-cryptographic.
-/// Dart ints wrap modulo 2^64 (fixed 64-bit); the hex form is rendered from
-/// the unsigned half-words so high-bit hashes stay 16 chars, never `-…`.
 String fnv1a64(List<int> bytes) {
   var hash = 0xcbf29ce484222325;
   for (final byte in bytes) {
@@ -25,7 +16,6 @@ String fnv1a64(List<int> bytes) {
   return '$high$low';
 }
 
-/// One packed payload reference: tile address + content checksum.
 final class AtlasPackEntry {
   const AtlasPackEntry({required this.address, required this.checksum});
 
@@ -50,7 +40,6 @@ final class AtlasPackEntry {
   int get hashCode => Object.hash(address, checksum);
 }
 
-/// Pack manifest value (blueprint 3.2 shape, engine-minimal).
 final class AtlasPackManifest {
   const AtlasPackManifest({
     required this.packId,
@@ -68,13 +57,11 @@ final class AtlasPackManifest {
   final int zoomMin;
   final int zoomMax;
 
-  /// Explicit epoch creation time (no clock in the model).
   final int createdAt;
   final List<AtlasPackEntry> entries;
   final String? sourceVersion;
   final String? attribution;
 
-  /// Aggregate seal over sorted `address:checksum;` pairs.
   String get seal {
     final sorted = entries.toList()
       ..sort((a, b) => a.address.compareTo(b.address));

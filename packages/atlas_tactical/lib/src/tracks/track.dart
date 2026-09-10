@@ -1,15 +1,12 @@
-// Sovereign Atlas Engine — atlas_tactical
-// Ordered waypoint trail (append-only value; shared-service length).
-//
-// Contract: blueprint Phase 10 (tracks). Length reuses haversine legs
-// (4.4 shared-services rule — no parallel math stack).
-// Phase 10 slice. Depends on atlas_core + atlas_geo + sibling waypoint.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
 import '../waypoints/waypoint.dart';
 
-/// Ordered waypoint trail value.
 final class AtlasTrack {
   const AtlasTrack({
     required this.id,
@@ -23,7 +20,6 @@ final class AtlasTrack {
 
   int get pointCount => points.length;
 
-  /// Trail length in meters (haversine legs; empty/singleton = 0).
   double get lengthMeters {
     var totalKm = 0.0;
     for (var i = 0; i + 1 < points.length; i++) {

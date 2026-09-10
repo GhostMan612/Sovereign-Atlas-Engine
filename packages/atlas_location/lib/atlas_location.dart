@@ -1,7 +1,7 @@
-// Sovereign Atlas Engine — atlas_location public barrel.
-//
-// Location/heading/tracking abstractions (pure models — platform channels
-// stay host-side). Depends: atlas_core + atlas_geo.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/fix/location_fix.dart';
 export 'src/heading/heading.dart';

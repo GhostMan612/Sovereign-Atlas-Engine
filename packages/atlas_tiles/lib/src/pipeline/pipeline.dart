@@ -1,31 +1,7 @@
-// Sovereign Atlas Engine — atlas_tiles
-// Pipeline semantics: deterministic coordination of closed contracts.
-//
-// Contract: 1.9-C/D/E/H/K/L (inventory §§2–5; placement §6).
-// - `decide` is a STATELESS pure function over supplied stage results: the
-//   resolution result, an optional cache entry, an optional acquisition
-//   result, an optional materialization, explicit time, and declared policy.
-//   No retained state object exists (retention implies an engine); no stage
-//   is executed here — resolution/acquisition/materialization arrive as
-//   results, cache arrives as an entry evaluated by the owned lookup.
-// - Evaluation order (each step documented at the call site):
-//   resolution terminals → identity binding → materialization short-circuit
-//   → cache evaluation → usable-hit short-circuit → acquisition routing →
-//   policy routing. Cache evaluation always precedes acquisition routing
-//   (a null entry evaluates to miss); a usable hit outranks a supplied
-//   acquisition result (usable cache is authoritative for usability).
-// - Binding needs no provider descriptor: the identity triple is fully
-//   determined by the result (provider id, request kind, tile rendering or
-//   the empty qualifier). Descriptor hooks stay null here and reattach
-//   downstream (equality is identity-based, so routing is unaffected).
-// - Handoff construction is replacement-by-construction (cache precedent):
-//   key + identity + explicit storedAt + payload id, maxAge left undeclared
-//   (undeclared freshness reads stale downstream — honest, never silent).
-// - Kind-agnostic throughout: tile fields are never read here, so local,
-//   geojson, elevation and every other kind flow exactly like tiles.
-// - Time arrives ONLY as explicit int epoch parameters. No clock, no ids,
-//   no randomness, no platform state.
-// Phase 1.9 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
@@ -35,10 +11,8 @@ import '../lookup/cache_lookup.dart';
 import 'pipeline_outcome.dart';
 import 'pipeline_policy.dart';
 
-/// Stateless semantic pipeline: coordination decisions, never machinery.
 abstract final class AtlasPipeline {
-  /// Candidate handoff key for [identity]: resource namespace, canonical
-  /// `provider/kind/address` value (URL-free by identity validation).
+
   static AtlasCacheKey handoffKeyFor(
     AtlasResourceIdentity identity,
   ) =>
@@ -48,8 +22,6 @@ abstract final class AtlasPipeline {
             '${identity.provider.value}/${identity.kind.name}/${identity.address}',
       );
 
-  /// Candidate handoff entry for an acquired payload: pure construction with
-  /// explicit [nowSeconds]; maxAge stays undeclared (see header).
   static AtlasCacheEntry cacheHandoffFor({
     required AtlasResolvedResource resource,
     required AtlasId payloadId,
@@ -62,7 +34,6 @@ abstract final class AtlasPipeline {
         payloadId: payloadId,
       );
 
-  /// Routes one pipeline step over supplied stage results (see header order).
   static AtlasPipelineOutcome decide({
     required AtlasResolutionResult resolution,
     AtlasCacheEntry? cacheEntry,
@@ -72,7 +43,7 @@ abstract final class AtlasPipeline {
     required AtlasPipelinePolicy policy,
     AtlasAcquisitionPolicy acquisitionPolicy = const AtlasAcquisitionPolicy(),
   }) {
-    // 1. Resolution terminals terminate with their own provenance intact.
+
     switch (resolution.status) {
       case AtlasResolutionStatus.invalidRequest:
         return _terminal(AtlasPipelineStatus.invalidRequest, resolution.reason);
@@ -88,8 +59,7 @@ abstract final class AtlasPipeline {
       case AtlasResolutionStatus.resolved:
         break;
     }
-    // 2. Bind the resource identity (descriptor-free, see header). A resolved
-    // result without a provider, or with a URL-bearing address, cannot bind.
+
     final provider = resolution.provider;
     if (provider == null) {
       return _terminal(
@@ -121,8 +91,7 @@ abstract final class AtlasPipeline {
         identityCheck.rejection!.category,
       );
     }
-    // 3. Materialization short-circuit: the boundary is already reached
-    // (ready OR deferred). A foreign materialization is caller misuse.
+
     if (materialization != null) {
       if (materialization.resource != resource) {
         return const AtlasPipelineOutcome(
@@ -146,9 +115,9 @@ abstract final class AtlasPipeline {
         materialization: materialization,
       );
     }
-    // 4. Cache evaluation always precedes acquisition routing.
+
     final decision = AtlasCache.lookup(cacheEntry, nowSeconds);
-    // 5. A usable hit outranks everything below (authoritative for usability).
+
     if (decision.outcome == AtlasCacheOutcome.hit) {
       return AtlasPipelineOutcome(
         status: AtlasPipelineStatus.useCache,
@@ -158,8 +127,7 @@ abstract final class AtlasPipeline {
         entry: decision.entry,
       );
     }
-    // 6. A supplied acquisition result routes on its terminal state. Pending
-    // states are not results (refused); foreign results are caller misuse.
+
     if (acquisition != null) {
       if (acquisition.request.resource != resource.identity) {
         return const AtlasPipelineOutcome(
@@ -238,8 +206,7 @@ abstract final class AtlasPipeline {
           );
       }
     }
-    // 7. No acquisition supplied: miss always acquires; stale/expired/invalid
-    // acquire only with declared consent, else terminate as cacheRefused.
+
     final consent = switch (decision.outcome) {
       AtlasCacheOutcome.miss => true,
       AtlasCacheOutcome.stale => policy.acquireOnStale,

@@ -1,37 +1,17 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// AtlasTileAddressing: deterministic geographic → tile-coordinate resolution.
-//
-// Contract: 1.5-C (inventory: ATLAS-NORMATIVE definitional standard).
-// Standard web-mercator slippy grid shared by the observed z/x/y schemes:
-//   x = floor((lon + 180) / 360 * 2^z)
-//   y = floor(clamp01((1 − ln(tanφ + secφ) / π) / 2) * 2^z)
-// Documented edge handling (no silent invention):
-// - lon ≡ ±180 is one meridian: exactly ±180.0 addresses as −180.0 (math
-//   identity, explicit here; validation policy still rejects |lon| > 180 and
-//   DEC-004 stays open).
-// - |lat| > mercatorMaxLatitude (±85.05112878, grid definitional bound):
-//   throws OUT_OF_RANGE — no silent polar clamp (1.5-C polar evaluation).
-// - The [0,1] clamp on the mercator fraction is float hygiene (prevents dust
-//   like maxlat-z5 → y=−1, verified in inventory), not policy: inputs are
-//   already range-validated when it applies.
-// - Fractional zoom floors to tile-zoom (PROVISIONAL web-map standard;
-//   overzoom rendering is downstream business, not addressing).
-// Pure math on doubles (no geo dependency — see request docs). Deterministic.
-// Phase 1.5 slice. Depends on atlas_core + dart:math only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
 import 'package:atlas_core/atlas_core.dart';
 import '../requests/tile_coordinate.dart';
 
-/// Geographic → tile-grid addressing. No I/O, no providers, no state.
 abstract final class AtlasTileAddressing {
-  /// Web-mercator latitude bound (grid definitional standard, degrees).
+
   static const double mercatorMaxLatitude = 85.05112878;
 
-  /// Addresses ([latitude], [longitude]) at integer tile-zoom [z].
-  /// Throws [AtlasRejectionException] (NON_FINITE / OUT_OF_RANGE /
-  /// INVALID_TILE) instead of coercing.
   static AtlasTileCoordinate address({
     required double latitude,
     required double longitude,
@@ -73,7 +53,7 @@ abstract final class AtlasTileAddressing {
         ),
       );
     }
-    // Meridian identity: +180 ≡ −180 for addressing (explicit, documented).
+
     final lon = longitude == 180.0 ? -180.0 : longitude;
     final n = 1 << z;
     final x = (((lon + 180.0) / 360.0) * n).floor();
@@ -86,8 +66,6 @@ abstract final class AtlasTileAddressing {
     return AtlasTileCoordinate(z: z, x: x, y: y);
   }
 
-  /// Integer tile-zoom for a semantic [zoom]: floor (PROVISIONAL standard).
-  /// Throws INVALID_REQUEST for non-finite or negative zoom.
   static int tileZoomFor(double zoom) {
     if (!zoom.isFinite || zoom < 0) {
       throw const AtlasRejectionException(

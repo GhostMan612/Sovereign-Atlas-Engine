@@ -1,23 +1,15 @@
-// Sovereign Atlas Engine — atlas_terrain
-// Slope, aspect, hillshade, profiles over explicit grids (pure math).
-//
-// Contract: blueprint Phase 8 (terrain engine side). Horn's 3×3 finite
-// differences on the grid (cell size is the explicit resolution — no DEM
-// fetching, no resampling invention). Voids poison the window (result null
-// rather than invented fill). Hillshade follows the standard azimuth/
-// altitude formulation (0–255). Profiles sample explicit coordinate lists
-// through bilinear interpolation WITH void propagation (a void corner voids
-// the sample — documented, never smoothed).
-// Phase 8 slice. Depends on atlas_core + atlas_geo + grid only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
 import 'package:atlas_geo/atlas_geo.dart';
 import '../grid/elevation_grid.dart';
 
-/// Slope/aspect/hillshade/profile services (deterministic, closed-form).
 abstract final class AtlasTerrain {
-  /// Slope in degrees at (row, col) via Horn's method. Null on void windows.
+
   static double? slopeDeg(AtlasElevationGrid grid, int row, int col) {
     final window = _window(grid, row, col);
     if (window == null) return null;
@@ -30,8 +22,6 @@ abstract final class AtlasTerrain {
     return math.atan(math.sqrt(dzdx * dzdx + dzdy * dzdy)) * 180.0 / math.pi;
   }
 
-  /// Aspect in degrees clockwise from north at (row, col). Null on voids or
-  /// flat cells (flat has no aspect — documented, never zero-filled).
   static double? aspectDeg(AtlasElevationGrid grid, int row, int col) {
     final window = _window(grid, row, col);
     if (window == null) return null;
@@ -47,8 +37,6 @@ abstract final class AtlasTerrain {
     return aspect;
   }
 
-  /// Hillshade 0–255 for sun at [azimuthDeg] (clockwise from north) and
-  /// [altitudeDeg] above horizon. Null on void windows.
   static double? hillshade(
     AtlasElevationGrid grid,
     int row,
@@ -70,14 +58,12 @@ abstract final class AtlasTerrain {
     return (shade.clamp(0.0, 1.0) * 255.0);
   }
 
-  /// Elevations along [path] via bilinear sampling (void-propagating).
   static List<double?> profile(
     AtlasElevationGrid grid,
     List<AtlasCoordinate> path,
   ) =>
       [for (final point in path) _sample(grid, point)];
 
-  /// 3×3 window or null when any cell is void/out of bounds.
   static List<List<double>>? _window(
     AtlasElevationGrid grid,
     int row,
@@ -96,9 +82,6 @@ abstract final class AtlasTerrain {
     return window;
   }
 
-  /// Bilinear sample at a coordinate positioned relative to the grid origin
-  /// (equirectangular local mapping with latitude cosine correction; void
-  /// corners void the sample).
   static double? _sample(AtlasElevationGrid grid, AtlasCoordinate point) {
     final metersPerDegree = 1.0 / AtlasLengthUnits.degreesPerMeter();
     final latCos = math.cos(grid.origin.latitude * math.pi / 180.0).abs().clamp(

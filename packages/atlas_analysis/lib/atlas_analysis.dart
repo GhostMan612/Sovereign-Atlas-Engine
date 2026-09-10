@@ -1,8 +1,7 @@
-// Sovereign Atlas Engine — atlas_analysis public barrel.
-//
-// Blueprint Phases 9/11 engine side (ADR-004). Pure spatial analysis over
-// explicit geometry + injected samplers; no UI, no hardware. Depends:
-// atlas_core + atlas_geo.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/intersect/segments.dart';
 export 'src/los/visibility.dart';

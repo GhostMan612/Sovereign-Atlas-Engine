@@ -1,17 +1,7 @@
-// Sovereign Atlas Engine — atlas_geo
-// Area, centroid, containment, perimeter, nearest-point (spherical earth).
-//
-// Contract: blueprint 4.2/4.4 (core geometry + measurement framework).
-// - Area: Chamberlain–Duquette spherical trapezoid sum over the ring
-//   (exact on the sphere of [AtlasLengthUnits.earthMeanRadiusMeters]).
-// - Centroid: area-weighted planar mean on lon/lat (APPROXIMATE —
-//   documented; exact spherical centroids need no contract yet).
-// - Point-in-polygon: ray casting on lon/lat with explicit edge rules
-//   (vertices/edges count as inside; holes subtract; antimeridian-crossing
-//   rings refuse via UNRESOLVED_ANTIMERIDIAN — DEC-005 consistency).
-// - Perimeter reuses haversine; nearest point is equirectangular-local
-//   planar projection (documented approximation, meter-scale accuracy).
-// Phase 4 slice. Depends on atlas_core + siblings only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
@@ -20,10 +10,8 @@ import '../coordinates/distance.dart';
 import '../coordinates/units.dart';
 import '../geometry/polygon_types.dart';
 
-/// Shared spherical-geometry measurement services (4.4 uses these directly).
 abstract final class AtlasMeasure {
-  /// Spherical polygon area in square meters (exterior minus holes).
-  /// Requires ≥4 closed points per ring (validated rings assumed).
+
   static double ringAreaSqM(List<AtlasCoordinate> ring) {
     const earth = AtlasLengthUnits.earthMeanRadiusMeters;
     var total = 0.0;
@@ -36,7 +24,6 @@ abstract final class AtlasMeasure {
     return (total * earth * earth / 2.0).abs();
   }
 
-  /// Polygon area in square meters (exterior minus holes).
   static double polygonAreaSqM(AtlasPolygon polygon) {
     var area = ringAreaSqM(polygon.exterior);
     for (final hole in polygon.holes) {
@@ -45,7 +32,6 @@ abstract final class AtlasMeasure {
     return area;
   }
 
-  /// Approximate centroid (area-weighted planar mean; see header).
   static AtlasCoordinate centroid(AtlasPolygon polygon) {
     var sumLat = 0.0;
     var sumLon = 0.0;
@@ -78,8 +64,6 @@ abstract final class AtlasMeasure {
     );
   }
 
-  /// Ray-casting containment (holes subtract). Boundary counts as inside.
-  /// Antimeridian-crossing boxes refuse (DEC-005 consistency).
   static bool containsPoint(AtlasPolygon polygon, AtlasCoordinate point) {
     var inside = _ringContains(polygon.exterior, point);
     for (final hole in polygon.holes) {
@@ -112,8 +96,7 @@ abstract final class AtlasMeasure {
     final dy = b.latitude - a.latitude;
     final squared = dx * dx + dy * dy;
     if (squared < eps) {
-      // Degenerate (zero-length) edge — closed-ring duplicates included:
-      // only the coincident point counts, never the whole plane.
+
       final dLon = p.longitude - a.longitude;
       final dLat = p.latitude - a.latitude;
       return dLon * dLon + dLat * dLat <= eps;
@@ -127,7 +110,6 @@ abstract final class AtlasMeasure {
     return dot <= squared + eps;
   }
 
-  /// Closed-ring perimeter in meters (haversine legs).
   static double perimeterM(List<AtlasCoordinate> ring) {
     var totalKm = 0.0;
     for (var i = 0; i < ring.length - 1; i++) {
@@ -136,8 +118,6 @@ abstract final class AtlasMeasure {
     return AtlasLengthUnits.fromKilometers(totalKm);
   }
 
-  /// Nearest point on segment a–b to p (planar equirectangular projection
-  /// around p; meter-scale accuracy, documented approximation).
   static AtlasCoordinate nearestOnSegment(
     AtlasCoordinate a,
     AtlasCoordinate b,

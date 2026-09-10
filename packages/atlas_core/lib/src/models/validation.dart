@@ -1,30 +1,22 @@
-// Sovereign Atlas Engine — atlas_core
-// AtlasValidation: the explicit valid/invalid outcome of a domain check.
-//
-// Contract: ATLAS-VALID-001. Invalid values MUST NOT silently become valid
-// (coordinate-contract §2, ATLAS-NORMATIVE). Validation reports the reason
-// instead of coercing. Phase 0.5 slice. Pure Dart, zero dependencies.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import '../errors/rejection.dart';
 
-/// Outcome of validating a domain value.
-///
-/// Valid outcomes carry no rejection. Invalid outcomes MUST carry one —
-/// callers are expected to surface it, never to guess a replacement value.
 final class AtlasValidation {
-  /// Successful validation. No information is attached.
+
   const AtlasValidation.valid()
       : isValid = true,
         rejection = null;
 
-  /// Failed validation. [rejection] explains the category and detail.
   const AtlasValidation.invalid(AtlasRejection rejection)
       : isValid = false,
         rejection = rejection;
 
   final bool isValid;
 
-  /// Present if and only if [isValid] is false.
   final AtlasRejection? rejection;
 
   @override

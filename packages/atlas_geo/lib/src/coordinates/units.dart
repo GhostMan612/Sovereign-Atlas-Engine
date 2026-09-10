@@ -1,15 +1,10 @@
-// Sovereign Atlas Engine — atlas_geo
-// Unit conversions + projected/datum holders.
-//
-// Contract: blueprint 4.1 (coordinate systems). Conversion factors are exact
-// definitions; projected coordinates and datum metadata are explicit holders
-// (UTM/MGRS full conversion stays hooks — blocked precedent MGRS-001;
-// zone/band helpers live in atlas_tactical/mgrs).
-// Phase 4 slice. Depends on atlas_core only (dart:math for derived values).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
-/// Exact-by-definition length conversions (SI + imperial + nautical).
 abstract final class AtlasLengthUnits {
   static const double metersPerKilometer = 1000.0;
   static const double metersPerMile = 1609.344;
@@ -26,18 +21,12 @@ abstract final class AtlasLengthUnits {
   static double fromFeet(double v) => v * metersPerFoot;
   static double fromNauticalMiles(double v) => v * metersPerNauticalMile;
 
-  /// Mean earth radius in meters (6371.0088 km — the SOURCE-VERIFIED F-02
-  /// reference radius shared with haversine legs, so area and perimeter
-  /// agree on one earth).
   static const double earthMeanRadiusMeters = 6371008.8;
 
-  /// Degrees latitude per meter at the equator (spherical approximation).
   static double degreesPerMeter() =>
       360.0 / (2.0 * math.pi * earthMeanRadiusMeters);
 }
 
-/// Projected (planar) coordinate holder: easting/northing in [unit] under a
-/// NAMED projection (projection math itself is downstream of this holder).
 final class AtlasProjectedCoordinate {
   const AtlasProjectedCoordinate({
     required this.easting,
@@ -64,7 +53,6 @@ final class AtlasProjectedCoordinate {
   int get hashCode => Object.hash(easting, northing, projection, unit);
 }
 
-/// Datum metadata holder (identity + ellipsoid hook; no transform math here).
 final class AtlasDatum {
   const AtlasDatum({required this.name, this.ellipsoid = 'WGS84'});
 

@@ -1,15 +1,10 @@
-// Sovereign Atlas Engine — atlas_plugins
-// Plugin manifest: identity, version, capabilities, permissions (data).
-//
-// Contract: blueprint Phase 12 + ADR-004 (admin data; grants name packages
-// as strings — never imports, never a backdoor hub). Versions are explicit
-// strings compared segment-wise (no semver library, no network registry).
-// Permissions are closed-enum grants (unknown names refuse at parse).
-// Phase 12 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// Closed permission set a plugin may request.
 enum AtlasPluginPermission {
   readTiles,
   readFeatures,
@@ -18,7 +13,6 @@ enum AtlasPluginPermission {
   useNetwork,
 }
 
-/// Plugin manifest value.
 final class AtlasPluginManifest {
   const AtlasPluginManifest({
     required this.id,
@@ -59,11 +53,8 @@ final class AtlasPluginManifest {
     return const AtlasValidation.valid();
   }
 
-  /// Current engine version (single source for compatibility checks).
   static const String _engineVersion = '0.1.0';
 
-  /// Segment-wise numeric version compare (non-numeric segments compare
-  /// lexically; missing segments count as zero).
   static int _compareVersions(String a, String b) {
     final as = a.split('.');
     final bs = b.split('.');

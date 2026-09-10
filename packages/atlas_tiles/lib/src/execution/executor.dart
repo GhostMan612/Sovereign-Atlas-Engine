@@ -1,16 +1,7 @@
-// Sovereign Atlas Engine — atlas_tiles
-// Executor: serves the three command types against bound operations.
-//
-// Contract: 2.0-I/J (boundary crossings), 2.0-E (lifecycle truthfulness),
-// 2.0-F (cooperation protocol), 2.0-L (total translation table).
-// - Exactly ONE method per command type — no generic serve method exists
-//   (the I/J/K guard, structurally enforced).
-// - Cancel-before-start never contacts the operation. Binding miss reports
-//   unsupportedBinding without contact. The executor performs no lifecycle
-//   transition on anything but its own serving report.
-// - Total: no throw escapes except Dart-level misuse (null required args).
-//   Operation throws map to operationThrown with type + message only.
-// Phase 2.0 slice. Depends on atlas_core + atlas_provider_api (+ siblings).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'execution_command.dart';
@@ -19,10 +10,8 @@ import 'execution_lifecycle.dart';
 import 'execution_result.dart';
 import 'operation_binding.dart';
 
-/// Serves execution commands. Stateless; all inputs explicit per call.
 abstract final class AtlasExecutor {
-  /// Serves [command] against the operation bound to the entry's resource
-  /// identity (2.0-I: named entry served, never re-decided).
+
   static Future<ServeEntryResult> serveEntry({
     required ServeEntryCommand command,
     required ExecutionContext context,
@@ -86,8 +75,6 @@ abstract final class AtlasExecutor {
     }
   }
 
-  /// Runs one acquisition attempt through the bound operation (2.0-J: one
-  /// command, one attempt, one report — never retried, never scheduled).
   static Future<RunAcquisitionResult> runAcquisition({
     required RunAcquisitionCommand command,
     required ExecutionContext context,
@@ -115,8 +102,7 @@ abstract final class AtlasExecutor {
         case AtlasAcquisitionState.succeeded:
         case AtlasAcquisitionState.failed:
         case AtlasAcquisitionState.timedOut:
-          // Carried verbatim — even inner failure is execution-succeeded
-          // (2.0-E §4: truthful reporting completes the serving act).
+
           return RunAcquisitionResult(
             command: command,
             state: ExecutionState.succeeded,
@@ -125,8 +111,7 @@ abstract final class AtlasExecutor {
             acquisition: reported,
           );
         case AtlasAcquisitionState.cancelled:
-          // Requested + reported ⇒ serving stopped by cancellation;
-          // unrequested ⇒ operation-level event, carried like any outcome.
+
           if (cancelRequested()) {
             return RunAcquisitionResult(
               command: command,
@@ -166,8 +151,6 @@ abstract final class AtlasExecutor {
     }
   }
 
-  /// Offers the handoff entry to the bound operation (2.0-I §2: offer and
-  /// acknowledged-report, never a persistence claim).
   static Future<StoreHandoffResult> storeHandoff({
     required StoreHandoffCommand command,
     required ExecutionContext context,

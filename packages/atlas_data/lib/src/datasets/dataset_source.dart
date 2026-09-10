@@ -1,19 +1,12 @@
-// Sovereign Atlas Engine — atlas_data
-// Dataset source descriptor: live/remote dataset origins (Phase 6 support).
-//
-// Contract: blueprint Phase 6 (live data families need declared origins) +
-// ADR-001 (atlas_data owns dataset descriptors). A source names the API
-// root + family + policy hooks; FETCHING lives downstream (provider
-// operations / dataset adapters). No URLs are followed here — this is
-// declaration data, and key material has no field (secrets ADR open).
-// Phase 5/6 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// Live dataset families with declared origins.
 enum AtlasDatasetFamily { weather, elevation, signals, boundaries, custom }
 
-/// Declared origin of a live dataset family.
 final class AtlasDatasetSource {
   const AtlasDatasetSource({
     required this.id,
@@ -29,7 +22,6 @@ final class AtlasDatasetSource {
 
   final AtlasDatasetFamily family;
 
-  /// API root (declaration only — never followed by this package).
   final String apiRoot;
   final String? updateCadence;
   final String? license;

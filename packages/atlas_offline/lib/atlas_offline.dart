@@ -1,8 +1,7 @@
-// Sovereign Atlas Engine — atlas_offline public barrel.
-//
-// Blueprint Phase 3 (Offline Atlas) engine side. Pack manifests, sequential
-// downloads, and pure policy primitives. Depends: atlas_core +
-// atlas_provider_api only (provider policy types stay in atlas_providers).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/downloads/downloader.dart';
 export 'src/packs/manifest.dart';

@@ -1,26 +1,17 @@
-// Sovereign Atlas Engine — atlas_analysis
-// Segment intersection (planar lon/lat, exact predicates).
-//
-// Contract: blueprint 4.3/11 (intersect interface, real for segments).
-// Orientation predicates are exact sign tests on doubles (no epsilon
-// invention beyond a documented 1e-12 collinearity tolerance); endpoint
-// touches count as intersecting (4.2 edge rule consistency). Full polygon
-// boolean ops (union/difference) stay future (documented, no stubs that
-// lie — callers get segments + clip, not fake unions).
-// Phase 9/11 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Segment intersection result value.
 final class AtlasSegmentHit {
   const AtlasSegmentHit({required this.at, required this.t, required this.u});
 
-  /// Intersection point.
   final AtlasCoordinate at;
 
-  /// Fraction along a→b and c→d (0..1 at endpoints).
   final double t;
   final double u;
 
@@ -36,7 +27,6 @@ final class AtlasSegmentHit {
   int get hashCode => Object.hash(at, t, u);
 }
 
-/// Exact-predicate segment services.
 abstract final class AtlasSegments {
   static const double _eps = 1e-12;
 
@@ -60,7 +50,6 @@ abstract final class AtlasSegments {
         c.latitude <= latMax;
   }
 
-  /// Intersection of segments a–b and c–d (null when disjoint; touches hit).
   static AtlasSegmentHit? intersect(
     AtlasCoordinate a,
     AtlasCoordinate b,
@@ -91,7 +80,7 @@ abstract final class AtlasSegments {
               -denom;
       return AtlasSegmentHit(at: point(t), t: t, u: u);
     }
-    // Collinear touches (endpoint on the other segment).
+
     if (o1.abs() <= _eps && _between(a, b, c)) {
       return AtlasSegmentHit(at: c, t: _fraction(a, b, c), u: 0.0);
     }

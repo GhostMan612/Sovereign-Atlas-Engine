@@ -1,8 +1,7 @@
-// Sovereign Atlas Engine — atlas_tactical public barrel.
-//
-// Blueprint Phase 10 (tactical/field domain) model side: waypoints, tracks,
-// geofencing, radio-link estimation, reticle/sharing models, MGRS hooks.
-// Mesh transport itself stays in integrations/. Depends: core + geo.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/geofencing/geofence.dart';
 export 'src/mgrs/mgrs.dart';

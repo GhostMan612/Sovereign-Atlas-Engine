@@ -1,26 +1,7 @@
-// Sovereign Atlas — first host shell, Offline Areas track (blueprint 3.5).
-//
-// OfflineRepository: app-side orchestrator over engine offline primitives.
-// Owns: the engine memory store (pack-slot accounting), pack records,
-// downloader lifecycles, the HTTP chunk source (engine URL resolution +
-// engine transport — the app states WHICH tile, the engine states HOW the
-// URL reads), manifest assembly + seal verification on completion, the disk
-// journal (byte persistence + pack index for relaunch), the RAM serve map
-// feeding the renderer adapter, and a bounded event log feeding
-// Diagnostics.
-//
-// What this file does NOT do (engine-owned, never duplicated):
-// - tile enumeration or refusal decisions (AtlasPackPlanner),
-// - chunk looping, resume, quota, cancellation (AtlasPackDownloader),
-// - checksums or seals (fnv1a64 / AtlasPackManifest),
-// - store semantics (AtlasMemoryStore),
-// - URL template mechanics (AtlasTileRequest.resolveUrl).
-//
-// Byte/knowledge split (engine 1.7-H): the engine store holds KNOWLEDGE
-// (index entries); bytes live downstream here (RAM serve map + disk
-// journal). Resolution serves bytes ONLY when the engine index entry is
-// resident (live gate in resolveTileBytes) — unindexed bytes are pending
-// deletion, never "available offline".
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:async';
 import 'dart:convert';
@@ -36,38 +17,17 @@ import 'package:path_provider/path_provider.dart';
 
 import 'offline_pack.dart';
 
-/// Pack slots in the engine store. Pack-level accounting (one entry per
-/// pack), NOT tile-level: a 512-entry tile store would make pack sizes
-/// absurd. 64 is an explicit app choice (documented, adjustable), not an
-/// engine or provider declaration.
 const int kPackStoreCapacity = 64;
 
-/// Session-memory guard: plan tile counts above this are refused app-side.
-/// Bytes are session-resident (no file persistence yet), so unbounded plans
-/// would OOM the host. Counted by pure arithmetic BEFORE the engine planner
-/// ever enumerates (the planner has no cap of its own when the provider
-/// declares no maxTiles — all builtins declare none).
 const int kMaxSessionTiles = 4096;
 
-/// Diagnostics event log bound (oldest drops first).
 const int kEventLogBound = 200;
 
-/// Default per-tile acquisition bound (DEC-020 app policy, documented,
-/// adjustable). Rationale: tile fetches normally settle in seconds; 30 s
-/// tolerates slow mobile links while bounding the worst case. The bound
-/// guarantees every downloader await settles, so `finally` cleanup always
-/// runs (closes the stale-`_downloads` restart wedge by construction).
-/// Constructor-injectable for tests (milliseconds there).
 const Duration kDefaultPerTileTimeout = Duration(seconds: 30);
 
-/// Disk journal layout under the app documents directory:
-/// `offline_packs/<packId>/<z>_<x>_<y>.tile` + `offline_packs/index.json`.
 const String kPackJournalDir = 'offline_packs';
 const String kPackIndexFile = 'index.json';
 
-/// Default chunk source: engine URL resolution over the endpoint template +
-/// engine production transport. Throws [AtlasTransportException] on HTTP
-/// failure (surfaces as the downloader `failed` terminal with detail).
 AtlasChunkSource defaultChunkSource(AtlasProviderEndpoint endpoint) {
   final template = endpoint.urlTemplate!;
   return (tile) async {
@@ -83,27 +43,10 @@ AtlasChunkSource defaultChunkSource(AtlasProviderEndpoint endpoint) {
   };
 }
 
-/// Bounds one chunk fetch with [bound] (DEC-020 detection point: the chunk
-/// source is the only layer that observes a stall). Expiry throws
-/// [TimeoutException], which the downloader's existing catch records as
-/// `failed` with the identity preserved in `failureDetail` — no new
-/// terminal, no taxonomy change.
 AtlasChunkSource withPerTileTimeout(AtlasChunkSource inner, Duration bound) {
   return (tile) => inner(tile).timeout(bound);
 }
 
-/// App orchestrator for the Offline Areas track. Testable: [clock],
-/// [chunkSourceFactory], and [directoryProvider] inject fakes
-/// (widget/integration builds use the production defaults).
-///
-/// Rate limiting is CENTRALIZED (blueprint 3.4): one optional [sharedLimiter]
-/// throttles every pack download. This is structural, not cosmetic: the
-/// engine downloader takes one timestamp per run and re-walks every tile on
-/// resume (one limiter take per iteration, received tiles included), so a
-/// per-pack limiter can never bank enough tokens to resume past a pause it
-/// caused itself (capacity < tiles ⇒ pause; resume needs ≥ tiles takes but
-/// can hold at most capacity). A shared limiter refills across packs and
-/// resumes, which is the only shape under which quota-pause is recoverable.
 final class OfflineRepository extends ChangeNotifier {
   OfflineRepository({
     required this._registry,
@@ -126,8 +69,6 @@ final class OfflineRepository extends ChangeNotifier {
   final Future<Directory> Function() _directoryProvider;
   final int Function() _clock;
 
-  /// Per-tile acquisition bound (DEC-020). Wraps the chunk source so every
-  /// downloader await settles — stalled tiles become `failed`, never hangs.
   final Duration perTileTimeout;
 
   final Map<String, OfflinePackRecord> _packs = {};
@@ -137,9 +78,6 @@ final class OfflineRepository extends ChangeNotifier {
   final List<String> _events = [];
   int _packSequence = 0;
 
-  /// Renderer-observable counters (polled by Diagnostics; deliberately NOT
-  /// notified per tile — notifyListeners per tile would rebuild the UI at
-  /// tile rate).
   int _offlineTileHits = 0;
   int _networkTileRequests = 0;
 
@@ -149,15 +87,11 @@ final class OfflineRepository extends ChangeNotifier {
   AtlasProviderRegistry get registry => _registry;
   AtlasMemoryStore get store => _store;
 
-  /// Serve map: `$providerId/$tileKey` → bytes (RAM). Gated by the engine
-  /// index at resolve time (see [resolveTileBytes]).
   final Map<String, Uint8List> _serveBytes = {};
   final Map<String, String> _servePacks = {};
 
-  /// Insertion-ordered records (plan order = display order).
   List<OfflinePackRecord> get packs => _packs.values.toList();
 
-  /// Newest-first event log copy (Diagnostics page).
   List<String> get events => _events.reversed.toList();
 
   OfflinePackRecord? lookup(String packId) => _packs[packId];
@@ -169,8 +103,6 @@ final class OfflineRepository extends ChangeNotifier {
     }
   }
 
-  /// Saturating tile count over inclusive ranges (no enumeration). Returns
-  /// [kMaxSessionTiles] + 1 as the saturating "too many" sentinel.
   static int countTiles({
     required int zMin,
     required int zMax,
@@ -188,9 +120,6 @@ final class OfflineRepository extends ChangeNotifier {
     return total;
   }
 
-  /// Plans a pack: app-side validation first, then the engine planner.
-  /// Always registers a record (approved plans AND refusals/blocks are both
-  /// "available offline" knowledge worth showing). Returns the record.
   OfflinePackRecord planPack({
     required String providerId,
     required int zMin,
@@ -205,9 +134,7 @@ final class OfflineRepository extends ChangeNotifier {
   }) {
     _packSequence += 1;
     final now = _clock();
-    // Collision loop across the restore boundary: restored ids occupy the
-    // same `pack-<epoch>-<seq>` space, so mint-then-check (never overwrite,
-    // never merge — no last-write-wins).
+
     var packId = 'pack-$now-$_packSequence';
     while (_packs.containsKey(packId)) {
       _packSequence += 1;
@@ -239,8 +166,7 @@ final class OfflineRepository extends ChangeNotifier {
       return record;
     }
     if (bytesPerTile <= 0) {
-      // Engine rule: estimates require an explicit basis. The form requires
-      // the field; this is the defense in depth (never defaulted here).
+
       record.appBlock =
           'ESTIMATE_REQUIRED: bytes-per-tile must be positive (no default '
           'estimate is ever assumed).';
@@ -249,8 +175,7 @@ final class OfflineRepository extends ChangeNotifier {
       return record;
     }
     if (endpoint.isLocal) {
-      // Bundle-backed endpoints have no URL template: nothing exists yet
-      // that turns them into bytes (bundle ingestion is future work).
+
       record.appBlock =
           'NO_LOCATOR: "${endpoint.descriptor.title}" is bundle-backed with '
           'no URL template; pack download has no byte source.';
@@ -303,16 +228,12 @@ final class OfflineRepository extends ChangeNotifier {
   bool get isDownloading =>
       _downloads.values.any((d) => d.state == AtlasDownloadState.downloading);
 
-  /// Starts or resumes the download for [packId]. One engine
-  /// [AtlasPackDownloader.download] call runs to its terminal; UI pause
-  /// requests interleave between chunk awaits (engine cooperative design).
-  /// Received bytes persist in [_receivedBytes] across resume calls.
   Future<void> startDownload(String packId) async {
     final record = _packs[packId];
     if (record == null || record.plan == null || record.appBlock != null) {
       return;
     }
-    if (_downloads[packId] != null) return; // already running
+    if (_downloads[packId] != null) return;
     final endpoint = _registry.lookup(record.providerId);
     if (endpoint == null) return;
 
@@ -334,10 +255,7 @@ final class OfflineRepository extends ChangeNotifier {
     notifyListeners();
     try {
       final terminal = await downloader.download(_clock());
-      // Deletion is authoritative: a pack removed while its future was in
-      // flight must never re-register. Cancel alone is insufficient (the
-      // engine observes it cooperatively between chunks, and the future
-      // may already have settled) — verify ownership after the await.
+
       if (!_stillOwned(record)) {
         _log('download $packId settled after delete; result discarded');
         return;
@@ -349,14 +267,7 @@ final class OfflineRepository extends ChangeNotifier {
         case AtlasDownloadState.complete:
           await _completePack(record, endpoint);
         case AtlasDownloadState.failed:
-          // Cancellation retains priority over timeout (DEC-020): the
-          // engine cannot observe cancel mid-await, so a timeout firing
-          // while cancel was requested is recorded as cancelled. Only the
-          // synthetic timeout event is reinterpreted — genuine transport
-          // errors keep their `failed` meaning even with cancel pending.
-          // The downloader collapses everything to a detail string, so the
-          // `TimeoutException` runtime-type prefix is the available seam
-          // (asserted in tests; see withPerTileTimeout).
+
           if (_cancellations[packId]?.isCancelled == true &&
               downloader.failureDetail.startsWith('TimeoutException')) {
             record.lifecycle = OfflinePackLifecycle.cancelled;
@@ -384,7 +295,7 @@ final class OfflineRepository extends ChangeNotifier {
               '${record.receivedTiles}/${record.tileCount}');
         case AtlasDownloadState.planned:
         case AtlasDownloadState.downloading:
-          // Unreachable: download() only returns terminals.
+
           break;
       }
     } finally {
@@ -394,9 +305,6 @@ final class OfflineRepository extends ChangeNotifier {
     }
   }
 
-  /// Assembles the manifest from received bytes, verifies self-consistency
-  /// (validate + stable seal), indexes the pack in the engine store, and
-  /// persists bytes + index to the disk journal.
   Future<void> _completePack(
     OfflinePackRecord record,
     AtlasProviderEndpoint endpoint,
@@ -414,8 +322,7 @@ final class OfflineRepository extends ChangeNotifier {
       zoomMax: record.zMax,
       createdAt: record.createdAtEpoch,
       entries: entries,
-      // sourceVersion: undeclared by every builtin endpoint (no version
-      // field exists on descriptors) — null is honest, never defaulted.
+
       attribution: endpoint.descriptor.attribution,
     );
     final check = manifest.validate();
@@ -430,10 +337,7 @@ final class OfflineRepository extends ChangeNotifier {
     record.manifestJson =
         const JsonEncoder.withIndent('  ').convert(manifest.toJson());
     record.tileKeys = keys.toSet();
-    // Lifecycle flips BEFORE persistence: the download DID complete, and
-    // _writeIndex only journals complete+held packs (the index must
-    // contain this pack when _persistPack writes it). Availability flags
-    // (cacheEntryPresent/bytesHeld) still flip only after persist success.
+
     record.lifecycle = OfflinePackLifecycle.complete;
     final evicted = _store.put(
       AtlasCacheEntry(
@@ -445,17 +349,12 @@ final class OfflineRepository extends ChangeNotifier {
         payloadId: AtlasId(manifest.seal),
       ),
     );
-    // The engine REPORTS LRU eviction through put's return: consume it so
-    // no record claims indexed availability the live gate cannot serve.
+
     if (evicted != null) _noteEvicted(evicted);
     try {
       await _persistPack(record);
     } catch (error) {
-      // Completion REQUIRES persistence: a RAM-complete but unpersisted
-      // pack must not stand as complete or indexed (resume retries the
-      // persist — received bytes are kept for exactly that path). The
-      // journal rewrite below also drops it from index.json (it was
-      // included by the persist attempt's own index write).
+
       _store.remove(
         AtlasCacheKey(
           namespace: AtlasCacheNamespace.resource,
@@ -471,9 +370,7 @@ final class OfflineRepository extends ChangeNotifier {
       _log('download ${record.packId} FAILED: journal write ($error)');
       return;
     }
-    // Second ownership checkpoint: deletion may have landed inside the
-    // persist window (after the first guard). Undo this completion's
-    // registrations and discard — deletion stays authoritative.
+
     if (!_stillOwned(record)) {
       _store.remove(
         AtlasCacheKey(
@@ -492,15 +389,9 @@ final class OfflineRepository extends ChangeNotifier {
         '${record.receivedBytes} B, seal ${manifest.seal}');
   }
 
-  /// Ownership check: the record object the async path holds must still be
-  /// the registered one (identity, not mere id presence — replacement is
-  /// also refused, not just removal).
   bool _stillOwned(OfflinePackRecord record) =>
       identical(_packs[record.packId], record);
 
-  /// Flags the record whose index entry the engine just evicted (LRU).
-  /// Only pack index entries ever pass through this store (resource
-  /// namespace, pack-id values, written solely below and in _restoreOne).
   void _noteEvicted(AtlasCacheEntry evicted) {
     final victim = _packs[evicted.key.value];
     if (victim == null || !victim.cacheEntryPresent) return;
@@ -508,10 +399,6 @@ final class OfflineRepository extends ChangeNotifier {
     _log('pack ${victim.packId} evicted from index by LRU (bytes unserved)');
   }
 
-  /// Best-effort journal cleanup for a failed persist (never throws: the
-  /// failure is already recorded on the record; cleanup must not replace
-  /// it). Removes the partial pack dir AND rewrites the index (the failed
-  /// attempt's own index write already included this pack).
   Future<void> _dropPackJournalQuietly(String packId) async {
     try {
       final journal = await _journalDir();
@@ -519,28 +406,20 @@ final class OfflineRepository extends ChangeNotifier {
       if (await dir.exists()) await dir.delete(recursive: true);
       await _writeIndex(journal);
     } catch (_) {
-      // Best effort only.
+
     }
   }
 
-  /// Cooperative pause (observed between chunks; resume via [startDownload]).
   void pauseDownload(String packId) {
     _downloads[packId]?.pause();
   }
 
-  /// Cooperative cancel (observed between chunks; bytes held for resume —
-  /// use [deletePack] for clean deletion per engine discard semantics).
   void cancelDownload(String packId) {
     _cancellations[packId]?.requestCancel();
     _log('cancel requested for $packId');
     notifyListeners();
   }
 
-  /// Clean deletion: drops the store index entry, RAM + disk bytes, the
-  /// journal entry, and the record. Cancels first: the in-flight future
-  /// may settle after this returns, and the post-await guard in
-  /// [startDownload] then discards its result (deletion authoritative,
-  /// never resurrection — cancel alone would be racy).
   Future<void> deletePack(String packId) async {
     _cancellations[packId]?.requestCancel();
     _downloads[packId]?.pause();
@@ -562,10 +441,6 @@ final class OfflineRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Manage Storage: evicts EVERYTHING (engine index, RAM serve bytes, disk
-  /// journal) while keeping records as history, flagged unindexed +
-  /// bytelss. Eviction is total by design: half-held bytes (indexed but
-  /// deleted, or held but unindexed) would make "available offline" a lie.
   Future<void> clearStore() async {
     _store.clear();
     _receivedBytes.clear();
@@ -585,15 +460,6 @@ final class OfflineRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ------------------------------------------------------------------
-  // Resolution: the renderer seam.
-  // ------------------------------------------------------------------
-
-  /// Serves one tile's bytes for [providerId] + engine-format [tileKey]
-  /// (`z/x/y`). Bytes serve ONLY when the pack's engine index entry is
-  /// resident (live knowledge gate — unindexed bytes are pending deletion,
-  /// never "available offline"). Null = local miss (caller falls back to
-  /// network where policy permits, or degrades when it does not).
   Uint8List? resolveTileBytes(String providerId, String tileKey) {
     final serveKey = '$providerId/$tileKey';
     final bytes = _serveBytes[serveKey];
@@ -607,8 +473,6 @@ final class OfflineRepository extends ChangeNotifier {
     return bytes;
   }
 
-  /// Records a renderer miss that fell through to the network path
-  /// (Diagnostics-observable; no per-tile notify — see counter note).
   void recordNetworkRequest() {
     _networkTileRequests += 1;
   }
@@ -627,16 +491,12 @@ final class OfflineRepository extends ChangeNotifier {
         final bytes = held[key];
         if (bytes == null) continue;
         final serveKey = '${record.providerId}/$key';
-        // Newest completed record wins (insertion order).
+
         _serveBytes[serveKey] = Uint8List.fromList(bytes);
         _servePacks[serveKey] = record.packId;
       }
     }
   }
-
-  // ------------------------------------------------------------------
-  // Disk journal (app-side persistence; engine never touches disk).
-  // ------------------------------------------------------------------
 
   static String _fileNameFor(String tileKey) =>
       '${tileKey.replaceAll('/', '_')}.tile';
@@ -707,13 +567,6 @@ final class OfflineRepository extends ChangeNotifier {
     if (await journal.exists()) await journal.delete(recursive: true);
   }
 
-  /// Restores disk-persisted packs into a FRESH repository (relaunch path:
-  /// engine store is empty, RAM is empty — the journal rebuilds both).
-  /// Corrupt entries (missing files, oversized key lists, unparseable JSON)
-  /// are SKIPPED with a log line, never half-loaded (integrity honesty).
-  /// The journal is untrusted input: nothing thrown anywhere in here may
-  /// escape (startup calls this unawaited — a zone error at launch would
-  /// be the failure mode).
   Future<void> restore() async {
     try {
       await _restoreUnsafe();
@@ -741,9 +594,7 @@ final class OfflineRepository extends ChangeNotifier {
     }
     var restored = 0;
     for (final raw in entries) {
-      // The per-entry cast lives OUTSIDE _restoreOne's try by construction
-      // (it produces the argument), so non-objects are guarded HERE —
-      // otherwise one malformed entry aborts the whole restore.
+
       if (raw is! Map) {
         _log('restore: entry skipped (not an object)');
         continue;
@@ -765,8 +616,7 @@ final class OfflineRepository extends ChangeNotifier {
   ) async {
     try {
       final packId = json['pack_id'] as String;
-      // Resident state wins over the journal (mirrors the plan-time
-      // collision loop: no overwrite, no merge, no last-write-wins).
+
       if (_packs.containsKey(packId)) {
         _log('restore: $packId skipped (id already resident)');
         return null;

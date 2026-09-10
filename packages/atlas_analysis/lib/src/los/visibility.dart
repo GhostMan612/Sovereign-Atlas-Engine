@@ -1,25 +1,15 @@
-// Sovereign Atlas Engine — atlas_analysis
-// Line-of-sight + radial viewshed over injected elevation samplers.
-//
-// Contract: blueprint Phase 9 (visibility/LOS engine side). Elevation enters
-// ONLY through the injected sampler (ADR-004: no analysis→terrain edge):
-// `elevationAt(point)` returns meters or null (void). LOS marches the
-// great-circle dense path at explicit step meters; obstruction = terrain
-// above the sight line (earth curvature ignored — documented flat-earth
-// simplification; refraction ignored). Viewshed samples explicit bearings at
-// explicit range (polar grid, documented discretization — not continuous
-// visibility). Observer/target heights are explicit parameters.
-// Phase 9 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:math' as math;
 
 import 'package:atlas_geo/atlas_geo.dart';
 import '../zones/spatial.dart';
 
-/// Injected elevation sampler: point in, meters or null (void) out.
 typedef AtlasElevationSampler = double? Function(AtlasCoordinate point);
 
-/// LOS result value (visible flag + obstruction detail, if any).
 final class AtlasLineOfSight {
   const AtlasLineOfSight({
     required this.visible,
@@ -43,11 +33,8 @@ final class AtlasLineOfSight {
   int get hashCode => Object.hash(visible, obstructionAt, obstructionHeight);
 }
 
-/// Visibility services (deterministic given the same sampler).
 abstract final class AtlasVisibility {
-  /// Line-of-sight from [from] (+[fromHeightM]) to [to] (+[toHeightM]),
-  /// marched at [stepMeters]. Voids are transparent (unknown ≠ blocked —
-  /// documented; conservative callers densify their own grids).
+
   static AtlasLineOfSight lineOfSight({
     required AtlasCoordinate from,
     required AtlasCoordinate to,
@@ -79,8 +66,6 @@ abstract final class AtlasVisibility {
     return const AtlasLineOfSight(visible: true);
   }
 
-  /// Radial viewshed: [bearings] rays to [rangeMeters] at [stepMeters].
-  /// Returns visible range per bearing (full range = clear to the edge).
   static Map<double, double> viewshed({
     required AtlasCoordinate observer,
     required double observerHeightM,

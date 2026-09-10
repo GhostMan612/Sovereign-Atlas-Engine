@@ -1,20 +1,13 @@
-// Sovereign Atlas Engine — atlas_providers
-// Built-in provider definitions (blueprint 2.2 proven set).
-//
-// Contract: ADR-003 (declared source claims, PROVISIONAL zoom ceilings —
-// correct with source, never silently "fixed") + 1.4 endpoint-free
-// descriptors (every locator lives on the endpoint side, never here).
-// Templates below are stable public endpoint patterns; policies record real
-// provider terms (notably the OSM Tile Usage Policy: valid user-agent owed,
-// bulk downloading discouraged).
-// Phase 2 slice. Depends on atlas_core + atlas_provider_api only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'provider_endpoint.dart';
 import 'provider_registry.dart';
 
-/// The blueprint 2.2 proven set as declarative endpoint values.
 abstract final class AtlasBuiltinProviders {
   static const _tileKinds = {AtlasDataKind.rasterTiles};
 
@@ -128,7 +121,7 @@ abstract final class AtlasBuiltinProviders {
           requiresKey: false,
         ),
         urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-        // Explicit single-subdomain default (no rotation invented, 1.4 rule).
+
         params: const {'s': 'a'},
       );
 
@@ -174,7 +167,6 @@ abstract final class AtlasBuiltinProviders {
         urlTemplate: null,
       );
 
-  /// All seven in blueprint order (registration/catalog order).
   static List<AtlasProviderEndpoint> get all => [
         osmStandard,
         esriImagery,
@@ -185,6 +177,5 @@ abstract final class AtlasBuiltinProviders {
         localBundle,
       ];
 
-  /// Closed registry of the proven set.
   static AtlasProviderRegistry registry() => AtlasProviderRegistry(all);
 }

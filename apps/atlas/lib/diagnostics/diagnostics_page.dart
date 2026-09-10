@@ -1,21 +1,15 @@
-// Sovereign Atlas — first host shell, application diagnostics.
-//
-// DiagnosticsPage: operator-visible health of the APP (not analytics, not
-// telemetry — no such infrastructure exists or is claimed). Shows the wired
-// engine surface, registry self-validation, store and download state, and
-// the repository event log. Every row is a live value, never a sample.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:flutter/material.dart';
 
 import '../offline/offline_pack.dart';
 import '../offline/offline_repository.dart';
 
-/// Must match apps/atlas/pubspec.yaml version (kept in sync by hand;
-/// asserted in widget tests against the records the app actually builds —
-/// the version string itself is release metadata, shown as-is).
 const String kAtlasAppVersion = '0.1.0+1';
 
-/// Engine packages the host wires (matches pubspec path dependencies).
 const List<String> kWiredEnginePackages = [
   'atlas_core',
   'atlas_provider_api',
@@ -37,8 +31,7 @@ class DiagnosticsPage extends StatelessWidget {
       if (registry.lookup(id)!.validate().isValid) validEndpoints += 1;
     }
     final stats = repository.store.stats;
-    // "Unfinished" is the honest scope: planned/refused/blocked records are
-    // inert, not running — only `downloading` is actually in flight.
+
     final unfinished = repository.packs.where((p) => !p.isTerminal).length;
     final downloading = repository.packs
         .where((p) => p.lifecycle == OfflinePackLifecycle.downloading)

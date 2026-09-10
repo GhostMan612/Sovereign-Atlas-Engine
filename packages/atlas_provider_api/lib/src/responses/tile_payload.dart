@@ -1,28 +1,17 @@
-// Sovereign Atlas Engine — atlas_provider_api
-// Tile payload/entry shapes: pure data for a FUTURE cache, never a cache.
-//
-// Contract area: ATLAS-TILE-CACHE-001 (shapes only; behavior deferred with
-// atlas_tiles/atlas_offline).
-// Status: PROPOSED → PROVISIONAL. These types answer "what would a stored tile
-// consist of" so later engines share vocabulary: an opaque payload identity +
-// byte length, and an entry binding identity + key + payload with a
-// consistency check (key address must equal identity address). No storage, no
-// eviction, no TTL, no I/O, no hashing (crypto would be a dependency).
-// Phase 1.4 slice. Depends on atlas_core (+ requests siblings) only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../requests/tile_identity.dart';
 import '../requests/tile_key.dart';
 
-/// Opaque payload reference: identity + byte length. Bytes themselves live
-/// outside this model (transport/cache concern, deferred).
 final class AtlasTilePayload {
   const AtlasTilePayload({required this.id, required this.byteLength});
 
   final AtlasId id;
 
-  /// Declared length in bytes. Must be non-negative (zero = explicitly empty,
-  /// distinct from missing — cf. cache 200+non-empty gate, F-10).
   final int byteLength;
 
   AtlasValidation validate() {
@@ -48,7 +37,6 @@ final class AtlasTilePayload {
   int get hashCode => Object.hash(id, byteLength);
 }
 
-/// Stored-tile shape: which tile, under which key, pointing at which payload.
 final class AtlasTileEntry {
   const AtlasTileEntry({
     required this.identity,
@@ -60,9 +48,6 @@ final class AtlasTileEntry {
   final AtlasTileKey key;
   final AtlasId payloadId;
 
-  /// Structural validation: payload id non-empty, key address consistent with
-  /// identity address (PROPOSED integrity rule — a key pointing elsewhere
-  /// than its identity claims is malformed, not merely unusual).
   AtlasValidation validate() {
     final payloadCheck = AtlasIds.check(payloadId.value);
     if (!payloadCheck.isValid) return payloadCheck;

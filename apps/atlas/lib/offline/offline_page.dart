@@ -1,10 +1,7 @@
-// Sovereign Atlas — first host shell, Offline Areas track (blueprint 3.5).
-//
-// OfflinePage: Downloads / Saved Areas / Manage Storage / Provider Status.
-// Every number shown comes from engine values via the repository (plan tile
-// counts, estimates, progress, seals, store stats, declared policy). No
-// thresholds, no averages, no freshness judgments are invented here: age is
-// shown raw (no "stale" line exists — none is declared anywhere).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_providers/atlas_providers.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +10,6 @@ import '../diagnostics/diagnostics_page.dart';
 import 'offline_pack.dart';
 import 'offline_repository.dart';
 
-/// Raw age formatting (no stale threshold — none is declared).
 String formatAge(int seconds) {
   if (seconds < 0) return 'clock-skew';
   if (seconds < 60) return '${seconds}s';
@@ -386,10 +382,6 @@ class _ProviderCard extends StatelessWidget {
   }
 }
 
-/// New-pack sheet: explicit ranges + explicit estimate basis + policy
-/// acknowledgements. Nothing is defaulted except the range minimums (one
-/// tile) and the provider (first registered); the estimate field is
-/// REQUIRED (no invented averages, engine rule).
 class _NewPackSheet extends StatefulWidget {
   const _NewPackSheet({required this.repository});
 

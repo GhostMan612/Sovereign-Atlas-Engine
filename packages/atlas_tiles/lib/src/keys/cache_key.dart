@@ -1,30 +1,18 @@
-// Sovereign Atlas Engine — atlas_tiles
-// AtlasCacheKey: namespaced, validated, storage-free cache identity.
-//
-// Contract: 1.7-C (inventory: PROPOSED → PROVISIONAL; key rules below).
-// - Identity-bearing dimensions: namespace + value (both required, non-empty).
-// - `tile` namespace values MUST parse as AtlasTileKey (structural enforcement
-//   turns URL-masquerade into INVALID_KEY instead of a collision risk).
-// - `resource` namespace values MUST be non-empty and URL-free (mirrors the
-//   resource-identity prohibition; 1.7-L adversarial target).
-// - Unknown namespaces reject (no silent acceptance of new dimensions).
-// - Canonical form is the validated value string (deterministic; no storage,
-//   no hashing, no timestamps, no locale).
-// Phase 1.7 slice. Depends on atlas_core + atlas_provider_api (TileKey shape).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 
-/// Cache-key namespace: which construction rule governs the value.
 enum AtlasCacheNamespace {
-  /// Tile-grid scope; values obey the TileKey shape.
+
   tile,
 
-  /// Resource scope; values obey the resource-identity string rule.
   resource,
 }
 
-/// Storage-free cache identity: WHAT a lookup asks for (never where it lives).
 final class AtlasCacheKey {
   const AtlasCacheKey({required this.namespace, required this.value});
 

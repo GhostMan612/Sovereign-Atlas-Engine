@@ -1,19 +1,13 @@
-// Sovereign Atlas Engine — atlas_tactical
-// Geofences: radial + polygon zones with explicit breach semantics.
-//
-// Contract: blueprint Phase 10 (geofencing contracts). Radial membership
-// reuses haversine; polygon membership reuses the shared PIP service (no
-// parallel geometry). A fence is armed or not (explicit); evaluation is a
-// pure function of fence + position (no tracking state inside the fence).
-// Phase 10 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Geofence kinds (kept apart — radial math never approximates polygons).
 enum AtlasGeofenceKind { radial, polygon }
 
-/// Armed zone value with pure breach evaluation.
 final class AtlasGeofence {
   const AtlasGeofence.radial({
     required this.id,
@@ -38,8 +32,6 @@ final class AtlasGeofence {
   final AtlasPolygon? polygon;
   final bool armed;
 
-  /// True when armed and [position] sits inside (boundary counts as inside,
-  /// consistent with shared PIP edge rules).
   bool breachedBy(AtlasCoordinate position) {
     if (!armed) return false;
     if (kind == AtlasGeofenceKind.radial) {

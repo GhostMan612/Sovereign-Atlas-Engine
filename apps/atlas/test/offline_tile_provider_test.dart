@@ -1,10 +1,7 @@
-// Sovereign Atlas — offline rendering seam tests.
-//
-// Proofs over the exact flutter_map seam (TileProvider.
-// getImageWithCancelLoadingSupport): local hit, local miss with standard
-// fallback, knowledge gating (unindexed bytes never serve), local-only
-// degradation when the transport itself is dead, and provider isolation
-// (no cross-provider byte leakage).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:async';
 import 'dart:io';
@@ -18,7 +15,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Recording stand-in for the network fallback (never touches a socket).
 final class FakeFallback extends TileProvider {
   int calls = 0;
   TileCoordinates? lastCoordinates;
@@ -38,8 +34,6 @@ final class FakeFallback extends TileProvider {
   }
 }
 
-/// Fallback whose CONSTRUCTION-side throws (simulates dead transport at
-/// delegation time — the provider must degrade, never crash).
 final class ThrowingFallback extends TileProvider {
   @override
   bool get supportsCancelLoading => true;
@@ -140,9 +134,7 @@ void main() {
   test('unindexed bytes never serve (knowledge gate)', () async {
     final repo = seededRepo(dir);
     await completeOne(repo);
-    // Bypass the repository: drop the engine index out from under held
-    // bytes. Resolution must refuse (bytes without knowledge are pending
-    // deletion, never "available offline").
+
     repo.store.clear();
     final fallback = FakeFallback();
     final provider = AtlasOfflineTileProvider(
@@ -167,14 +159,14 @@ void main() {
       providerId: 'esri-imagery',
       networkFallback: ThrowingFallback(),
     );
-    // Hit still serves real bytes with the transport dead.
+
     final hit = provider.getImageWithCancelLoadingSupport(
       const TileCoordinates(0, 0, 0),
       testLayer(),
       Completer<void>().future,
     );
     expect((hit as MemoryImage).bytes, [0, 0, 0]);
-    // Miss degrades to transparent instead of throwing into the renderer.
+
     final miss = provider.getImageWithCancelLoadingSupport(
       const TileCoordinates(1, 1, 0),
       testLayer(),
@@ -189,11 +181,11 @@ void main() {
 
   test('provider isolation: no cross-provider byte leakage', () async {
     final repo = seededRepo(dir);
-    await completeOne(repo); // esri-imagery 0/0/0 held
+    await completeOne(repo);
     final fallback = FakeFallback();
     final provider = AtlasOfflineTileProvider(
       repository: repo,
-      providerId: 'osm-standard', // same key, different provider
+      providerId: 'osm-standard',
       networkFallback: fallback,
     );
     provider.getImageWithCancelLoadingSupport(

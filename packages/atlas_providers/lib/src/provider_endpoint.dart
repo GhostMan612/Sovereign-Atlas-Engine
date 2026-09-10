@@ -1,17 +1,11 @@
-// Sovereign Atlas Engine — atlas_providers
-// Endpoint + policy: implementation-side provider data (descriptors stay
-// endpoint-free, 1.4 normative rule).
-//
-// Contract: blueprint 2.1 checklist (scheme/zoom/attribution/license/caching/
-// prefetch/auth/version declarations) + 3.4 policy declarations as DATA.
-// Enforcement (rate limits, bulk guards, pack size) is Phase 3; this file
-// declares, never enforces.
-// Phase 2 slice. Depends on atlas_core + atlas_provider_api only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 
-/// Declared provider policy (data for future enforcement, Phase 3).
 final class AtlasProviderPolicy {
   const AtlasProviderPolicy({
     required this.onlineAllowed,
@@ -28,20 +22,14 @@ final class AtlasProviderPolicy {
   final bool cacheAllowed;
   final bool prefetchAllowed;
 
-  /// Prefetch ceiling (null = undeclared, never defaulted).
   final int? maxTiles;
 
-  /// Declared request rate ceiling (null = undeclared).
   final double? maxRequestsPerSecond;
 
-  /// Whether acquisition needs key material (no key plumbing exists yet —
-  /// attempts against requiresKey endpoints report policyRejected, ADR-003).
   final bool requiresKey;
 
-  /// Bulk-use restriction text (e.g. OSM Tile Usage Policy note).
   final String? bulkGuard;
 
-  /// Identifying user-agent owed to the provider (e.g. OSM policy).
   final String? userAgent;
 
   @override
@@ -70,9 +58,6 @@ final class AtlasProviderPolicy {
       );
 }
 
-/// Implementation-side provider: descriptor + acquisition template + policy.
-/// Templates are caller-side config DATA (1.4 mechanics); fetching lives in
-/// the operation, never here.
 final class AtlasProviderEndpoint {
   const AtlasProviderEndpoint({
     required this.descriptor,
@@ -84,21 +69,14 @@ final class AtlasProviderEndpoint {
 
   final AtlasProviderDescriptor descriptor;
 
-  /// Tile URL template (`{z}/{x}/{y}` + explicit params). Null = bundle-
-  /// backed (local provider; no locator).
   final String? urlTemplate;
 
-  /// Explicit template params (e.g. `{'s': 'a'}`). No derivation, no
-  /// rotation — the definition states every value (1.4 rule).
   final Map<String, String> params;
 
-  /// Request headers (e.g. policy-owed User-Agent). Data, never secrets:
-  /// no key material may appear here (no plumbing exists).
   final Map<String, String> headers;
 
   final AtlasProviderPolicy policy;
 
-  /// Bundle-backed (local) rather than locator-backed.
   bool get isLocal => urlTemplate == null;
 
   AtlasValidation validate() {

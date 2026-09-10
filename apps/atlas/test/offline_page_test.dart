@@ -1,9 +1,7 @@
-// Sovereign Atlas — Offline Areas track widget tests.
-//
-// UI proofs over a real engine registry with fake chunk sources: tabs
-// render, the form enforces the estimate rule, refusals surface verbatim,
-// and an approved pack downloads end to end through the same buttons the
-// operator presses.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:io';
 
@@ -19,7 +17,7 @@ OfflineRepository uiRepo() {
     registry: AtlasBuiltinProviders.registry(),
     chunkSourceFactory: (_) => (tile) async => [tile.z, tile.x, tile.y],
     clock: () => 1000,
-    // Isolated journal (never touches the host docs dir).
+
     directoryProvider: () async =>
         Directory.systemTemp.createTempSync('atlas_ui_'),
   );
@@ -60,7 +58,7 @@ void main() {
     );
     await openSheet(tester);
     await pressPlan(tester);
-    // Shown both on the sheet result and on the registered record card.
+
     expect(find.textContaining('ESTIMATE_REQUIRED'), findsWidgets);
   });
 
@@ -72,7 +70,7 @@ void main() {
     await openSheet(tester);
     await fillBytes(tester, '20000');
     await pressPlan(tester);
-    // Shown both on the sheet result and on the registered record card.
+
     expect(find.textContaining('BULK_GUARD'), findsWidgets);
     expect(find.textContaining('Tile Usage Policy'), findsWidgets);
   });
@@ -88,9 +86,9 @@ void main() {
     await tester.pump();
     await pressPlan(tester);
     expect(find.byKey(const ValueKey('download-pack')), findsOneWidget);
-    // Count + estimate appear on the sheet button and the record card.
+
     expect(find.textContaining('1 tiles'), findsWidgets);
-    // 1 tile x 20000 B = 20000 B = 19.5 KiB.
+
     expect(find.textContaining('19.5 KiB'), findsWidgets);
   });
 
@@ -99,7 +97,7 @@ void main() {
     final repo = uiRepo();
     await tester.pumpWidget(MaterialApp(home: OfflinePage(repository: repo)));
     await openSheet(tester);
-    // Default provider is osm-standard (first registered): approval needed.
+
     await fillBytes(tester, '20000');
     await tester.tap(find.byKey(const ValueKey('approved-bulk')));
     await tester.pump();
@@ -110,7 +108,7 @@ void main() {
     expect(find.byKey(const ValueKey('download-pack')), findsNothing);
     await tester.tap(find.text('Saved Areas'));
     await tester.pumpAndSettle();
-    // Downloads card (offstage) + Saved Areas entry.
+
     expect(find.text('OpenStreetMap Standard'), findsWidgets);
     expect(find.textContaining('1 tiles'), findsWidgets);
     expect(find.textContaining('age '), findsWidgets);
@@ -144,7 +142,7 @@ void main() {
     expect(find.textContaining('Providers registered: 7'), findsOneWidget);
     expect(find.textContaining('Endpoints self-valid: 7/7'), findsOneWidget);
     expect(find.textContaining('Pack index: 0/64'), findsOneWidget);
-    // Label accuracy: inert planned records are "unfinished", never "active".
+
     expect(
       find.textContaining('unfinished: 0 (downloading: 0)'),
       findsOneWidget,

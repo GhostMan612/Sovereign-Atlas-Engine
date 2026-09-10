@@ -1,13 +1,8 @@
-// Sovereign Atlas Engine — atlas_offline
-// Token-bucket rate limiter: pure quota primitive (no timers, no threads).
-//
-// Contract: phase-3 note §6. Integer-second refill against EXPLICIT time;
-// fractional tokens never exist (floor on refill). Standalone value +
-// downloader hook (quotaPaused terminal). Enforcement of provider-declared
-// rates (blueprint 3.4) consumes this; the limiter itself knows no provider.
-// Phase 3 slice. Depends on nothing (pure arithmetic).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
-/// Pure token-bucket limiter (explicit time, deterministic).
 final class AtlasRateLimiter {
   AtlasRateLimiter({
     required this.capacity,
@@ -33,7 +28,6 @@ final class AtlasRateLimiter {
     _lastRefill = nowSeconds;
   }
 
-  /// Attempts one token at [nowSeconds]. True = admitted (token consumed).
   bool take(int nowSeconds) {
     _refill(nowSeconds);
     if (_available <= 0) return false;

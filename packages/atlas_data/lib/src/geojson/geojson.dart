@@ -1,21 +1,13 @@
-// Sovereign Atlas Engine — atlas_data
-// GeoJSON normalization: plain maps in, validated features out.
-//
-// Contract: blueprint Phase 5 (GeoJSON normalization contract). Accepts
-// decoded JSON maps (decoding itself is caller-side — no dart:convert here,
-// no IO): Feature / FeatureCollection / bare-geometry documents.
-// Unknown/unsupported geometry types throw MALFORMED_GEOJSON (never skipped
-// silently — silent drops corrupt datasets). CRS members other than WGS84
-// names refuse (coordinate contract consistency). Properties pass through
-// untouched; source defaults to the caller-supplied origin (explicit).
-// Phase 5 slice. Depends on atlas_core + siblings only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../features/feature.dart';
 
-/// Pure GeoJSON normalizer (maps only — never strings, never files).
 abstract final class AtlasGeoJson {
-  /// Normalizes a decoded GeoJSON document with [origin] as the source tag.
+
   static List<AtlasFeature> normalize(
     Map<String, dynamic> document, {
     required String origin,

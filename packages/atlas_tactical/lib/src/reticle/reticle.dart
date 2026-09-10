@@ -1,19 +1,12 @@
-// Sovereign Atlas Engine — atlas_tactical
-// Reticle model: named angular-offset marker set (pure display data).
-//
-// Contract: blueprint Phase 10 (reticle). A reticle is a named collection
-// of mil/moa-indexed stadia offsets plus an optional center label —
-// geometry for renderers to draw, never drawing itself. No ballistics
-// beyond explicit click values carried as data (drop tables stay
-// caller-side datasets, never invented constants).
-// Phase 10 slice. Depends on atlas_core only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 
-/// Angular unit for reticle offsets.
 enum AtlasAngularUnit { mils, moa }
 
-/// Single stadia mark: direction + offset from center.
 final class AtlasStadia {
   const AtlasStadia({
     required this.clockDirection,
@@ -21,7 +14,6 @@ final class AtlasStadia {
     this.label = '',
   });
 
-  /// Clock direction 1–12 (12 = up).
   final int clockDirection;
   final double offset;
   final String label;
@@ -38,7 +30,6 @@ final class AtlasStadia {
   int get hashCode => Object.hash(clockDirection, offset, label);
 }
 
-/// Named reticle value.
 final class AtlasReticle {
   const AtlasReticle({
     required this.id,
@@ -51,7 +42,6 @@ final class AtlasReticle {
   final AtlasAngularUnit unit;
   final List<AtlasStadia> stadia;
 
-  /// Click value in [unit] (explicit caller data, never ballistics).
   final double? clickValue;
 
   int get stadiaCount => stadia.length;

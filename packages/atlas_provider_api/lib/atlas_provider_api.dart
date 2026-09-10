@@ -1,8 +1,7 @@
-// Sovereign Atlas Engine — atlas_provider_api public barrel.
-//
-// Phase 1.4 slice. Relative imports keep the slice verifiable with a bare
-// Dart SDK and no package manifests (DEC-016 open). At workspace
-// initialization these become `package:atlas_provider_api/...` imports.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 export 'src/capabilities/provider_capability.dart';
 export 'src/acquisition/acquisition.dart';

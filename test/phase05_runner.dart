@@ -1,15 +1,7 @@
-// Sovereign Atlas Engine — Phase 0.5 contract-fixture runner (TEST TOOLING).
-//
-// This file is development/test infrastructure, NOT production engine code.
-// It may use dart:io and dart:convert (forbidden in atlas_core production).
-// Allowed by the 0.5 directive: "Tests may be created under the established
-// test structure." Run from the repository root with a bare Dart SDK:
-//
-//   dart test/phase05_runner.dart
-//
-// No package manifests are required: all imports are relative file paths.
-// Exit code 0 = no FAIL; 1 = at least one FAIL. BLOCKED and NOT_APPLICABLE
-// never fail the run; they are reported for architect adjudication.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:convert';
 import 'dart:io';
@@ -30,7 +22,6 @@ import 'package:atlas_tactical/atlas_tactical.dart';
 import 'package:atlas_terrain/atlas_terrain.dart';
 import 'package:atlas_tiles/atlas_tiles.dart';
 
-/// Per-fixture verdict.
 enum Verdict { pass, fail, blocked, notApplicable }
 
 final class _Outcome {
@@ -60,10 +51,6 @@ AtlasCoordinate _coord(Map<String, dynamic> m) => AtlasCoordinate(
 bool _close(double actual, double expected, double tolerance) =>
     AtlasComparison.withinTolerance(actual, expected, tolerance);
 
-// ---------------------------------------------------------------------------
-// GEO
-// ---------------------------------------------------------------------------
-
 void _geo(Map<String, dynamic> f) {
   final id = f['id'] as String;
   if (id == 'GEO-007') {
@@ -73,7 +60,7 @@ void _geo(Map<String, dynamic> f) {
   final inputs = f['inputs'] as Map<String, dynamic>;
   final expected = f['expected'] as Map<String, dynamic>;
   if (id == 'GEO-006') {
-    // Boundary-case array: every listed pole position must validate.
+
     var ok = true;
     for (final c in (inputs['cases'] as List).cast<Map<String, dynamic>>()) {
       if (!AtlasCoordinates.validate(
@@ -97,10 +84,6 @@ void _geo(Map<String, dynamic> f) {
     'valid=${check.isValid} want=$wantValid',
   );
 }
-
-// ---------------------------------------------------------------------------
-// DISTANCE / BEARING
-// ---------------------------------------------------------------------------
 
 void _distance(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -186,10 +169,6 @@ void _bearing(Map<String, dynamic> f) {
     'got=$value want=$want tol=$tolerance',
   );
 }
-
-// ---------------------------------------------------------------------------
-// CAMERA
-// ---------------------------------------------------------------------------
 
 void _camera(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -355,10 +334,6 @@ void _camera(Map<String, dynamic> f) {
       );
   }
 }
-
-// ---------------------------------------------------------------------------
-// LAYERS (order, attribution; descriptors belong to atlas_provider_api scope)
-// ---------------------------------------------------------------------------
 
 AtlasLayerDefinition _testDef(
   String id, {
@@ -556,10 +531,7 @@ void _layers(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ORDER-002') {
-    // Adapter projection under test: toggles plus the always-present
-    // graticule compose the ordered core list (test-side composition policy
-    // mirrors the fail-secure boot rule). Rank vocabulary comes from the
-    // fixture's toggle_to_rank map (aligned to the ORDER-001 baseline).
+
     final mapping =
         ((f['inputs'] as Map<String, dynamic>)['toggle_to_rank'] as Map)
             .cast<String, String>();
@@ -624,10 +596,6 @@ void _layers(Map<String, dynamic> f) {
   _record(id, Verdict.notApplicable, 'No layer-scope handler for $id.');
 }
 
-// ---------------------------------------------------------------------------
-// PROVIDERS + TILES (Phase 1.4 executable contracts; acquisition deferred)
-// ---------------------------------------------------------------------------
-
 AtlasTileScheme _scheme(String name) =>
     AtlasTileScheme.values.firstWhere((v) => v.name == name);
 
@@ -644,7 +612,6 @@ AtlasTileIdentity _tileIdentity(Map<String, dynamic> m) => AtlasTileIdentity(
           : AtlasTileScheme.xyz,
     );
 
-/// Phase 0.4 DESC-* fixtures (descriptor shape, provider-contract vocabulary).
 void _descriptor(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final inputs = f['inputs'] as Map<String, dynamic>;
@@ -671,9 +638,7 @@ void _descriptor(Map<String, dynamic> f) {
     nativeMinZoom: zoom == null ? null : (zoom[0] as num).toInt(),
     nativeMaxZoom: zoom == null ? null : (zoom[1] as num).toInt(),
   );
-  // Authority classes (e.g. DESC-007 AUTHORITATIVE) belong to the atlas_data
-  // provenance model, not to descriptors: recorded here as unmodeled, never
-  // defaulted. The descriptor answers identity/taxonomy/range only.
+
   final v = descriptor.validate();
   final ok = v.isValid &&
       (expected['identity_present'] as bool? ?? true) &&
@@ -685,7 +650,6 @@ void _descriptor(Map<String, dynamic> f) {
   );
 }
 
-/// Phase 0.4 + 1.4 providers/ fixtures.
 void _providers(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final inputs = f['inputs'] as Map<String, dynamic>;
@@ -724,7 +688,7 @@ void _providers(Map<String, dynamic> f) {
     );
     return;
   }
-  // PVD-003: endpoint-free shape proven by source grep (arch-check).
+
   final bannedImports = RegExp("import\\s+'(dart:io|package:http[^']*)'");
   final bannedField = RegExp(
     r'(final|late|var)\s+[\w<>,\? ]*\b(url|endpoint|credential|apiKey|secret)\w*\s*[;=]',
@@ -911,7 +875,7 @@ void _tiles(Map<String, dynamic> f) {
     }
     return;
   }
-  // ENTRY-001 / ENTRY-002.
+
   final entryJson = inputs['entry'] as Map<String, dynamic>;
   final identityJson = entryJson['identity'] as Map<String, dynamic>;
   final coordJson = identityJson['coordinate'] as Map<String, dynamic>;
@@ -952,10 +916,6 @@ void _tiles(Map<String, dynamic> f) {
     'PROVISIONAL rule; rejection=${entryCheck.rejection?.category}',
   );
 }
-
-// ---------------------------------------------------------------------------
-// RESOLUTION (Phase 1.5: meaning + deterministic decisions, never acquisition)
-// ---------------------------------------------------------------------------
 
 AtlasDataKind _resolutionKind(String name) =>
     AtlasDataKind.values.firstWhere((v) => v.name == name);
@@ -1055,9 +1015,6 @@ void _resolution(Map<String, dynamic> f) {
   );
 }
 
-/// 1.5-M + 1.7 arch-leakage self-check: resolution AND cache-semantic sources
-/// must contain no transport/renderer/storage/network-activity markers (code
-/// only; contracted vocabulary itself is never the violation).
 bool _resolutionLeakCheck(List<String> violations) {
   const banned = [
     'dart:io',
@@ -1116,10 +1073,6 @@ bool _resolutionLeakCheck(List<String> violations) {
   }
   return violations.isEmpty;
 }
-
-// ---------------------------------------------------------------------------
-// CACHE SEMANTICS (Phase 1.7: storage-independent decisions, explicit time)
-// ---------------------------------------------------------------------------
 
 AtlasCacheKey _cacheKey(Map<String, dynamic> m) => AtlasCacheKey(
       namespace: AtlasCacheNamespace.values.firstWhere(
@@ -1197,7 +1150,7 @@ void _cache(Map<String, dynamic> f) {
     return;
   }
   if (id == 'KEY-002' || id == 'KEY-003' || id == 'ADV-049') {
-    // Inequality fixtures: expected.equal is false in all three; a != b must hold.
+
     final a = _cacheKey(inputs['a'] as Map<String, dynamic>);
     final AtlasCacheKey b;
     if (inputs.containsKey('b')) {
@@ -1317,7 +1270,7 @@ void _cache(Map<String, dynamic> f) {
     );
     return;
   }
-  // LOOKUP-*, FRESH-*, RET-002, ADV-046/047/048: single-entry decisions.
+
   final entry = _cacheEntry(inputs['entry']);
   final now = (inputs['now'] as num).toInt();
   final decision = AtlasCache.lookup(entry, now);
@@ -1335,10 +1288,6 @@ void _cache(Map<String, dynamic> f) {
     'outcome=${decision.outcome.name}',
   );
 }
-
-// ---------------------------------------------------------------------------
-// ACQUISITION (Phase 1.8: semantic attempts/outcomes, never transport)
-// ---------------------------------------------------------------------------
 
 AtlasAcquisitionPolicy _acqPolicy(Map<String, dynamic> m) =>
     AtlasAcquisitionPolicy(
@@ -1384,8 +1333,7 @@ void _acquisition(Map<String, dynamic> f) {
       id == 'ACQ-002' ||
       id == 'ADV-055' ||
       id == 'ADV-061') {
-    // Target validation (+ network-flag independence for ADV-061: unknown
-    // JSON keys never reach constructors, so validity is identical).
+
     final request = _acqRequest(inputs);
     final v = request.validate();
     final held = AtlasAcquisition(request: request);
@@ -1448,8 +1396,7 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ACQ-010' || id == 'ADV-054') {
-    // ADV-054 probes completion mechanics, so it carries no resource of its
-    // own: a fixed valid request stands in (time stays explicit).
+
     final effectiveInputs = id == 'ADV-054'
         ? {
             'policy': <String, dynamic>{},
@@ -1498,9 +1445,7 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ACQ-015') {
-    // Boundary probe: exercised through the arch self-check (no transport/
-    // cache/renderer markers in acquisition sources) plus a live validation
-    // that request construction needs no network-shaped input.
+
     final request = AtlasAcquisitionRequest(
       resource: _acqResource({
         'provider': 'osm',
@@ -1539,9 +1484,7 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ADV-053' || id == 'ADV-057') {
-    // Shape audits: success results expose exactly request/state/failure/
-    // payloadId surface (verified structurally — the types have no other
-    // members; arch grep enforces the absences).
+
     final acquisition = _acqStarted({
       'policy': <String, dynamic>{},
       'resource': {
@@ -1618,9 +1561,7 @@ void _acquisition(Map<String, dynamic> f) {
     return;
   }
   if (id == 'ADV-060') {
-    // No attempt-id member exists: construction surface is request/state/
-    // startedAt/updatedAt/failure/payloadId only (arch-grep for id-carrying
-    // members enforced alongside).
+
     final acquisition = AtlasAcquisition(
       request: _acqRequest({
         'policy': <String, dynamic>{},
@@ -1642,10 +1583,6 @@ void _acquisition(Map<String, dynamic> f) {
   }
   _record(id, Verdict.fail, 'unknown acquisition fixture: $id');
 }
-
-// ---------------------------------------------------------------------------
-// GEOMETRY kernel (rings validity, segments, screening)
-// ---------------------------------------------------------------------------
 
 List<AtlasCoordinate> _ring(List<dynamic> pts) => [
       for (final p in pts.cast<List<dynamic>>())
@@ -1739,7 +1676,7 @@ void _geometry(Map<String, dynamic> f) {
     return;
   }
   if (id == 'GEOM-003') {
-    // good / bad-two-vertex / good-2 modelled as ring-validity screening.
+
     final good = _ring([
       [-93.3, 44.9],
       [-93.2, 44.9],
@@ -1776,7 +1713,7 @@ void _parcels(Map<String, dynamic> f) {
     );
     return;
   }
-  // PARCEL-002: two-vertex ring rejects.
+
   final inputs = f['inputs'] as Map<String, dynamic>;
   final ring = _ring(inputs['ring'] as List);
   final v = AtlasRings.validateRing(ring);
@@ -1791,8 +1728,7 @@ void _migration(Map<String, dynamic> f) {
   final id = f['id'] as String;
   final expected = f['expected'] as Map<String, dynamic>;
   if (id == 'FLOW-002') {
-    // Null endpoints are unrepresentable in the non-nullable segment type:
-    // malformed input cannot become a valid segment by construction.
+
     _record(
       id,
       Verdict.pass,
@@ -1811,7 +1747,7 @@ void _migration(Map<String, dynamic> f) {
     );
     return;
   }
-  // FLOW-001: distinct opaque endpoints validate (deterministic single segment).
+
   const segment = AtlasFlowSegment(
     from: AtlasCoordinate(latitude: 44.9, longitude: -93.3),
     to: AtlasCoordinate(latitude: 45.0, longitude: -93.2),
@@ -1825,10 +1761,6 @@ void _migration(Map<String, dynamic> f) {
     'valid=${v.isValid}',
   );
 }
-
-// ---------------------------------------------------------------------------
-// TACTICAL slice (rings in scope; pins/MGRS out of scope)
-// ---------------------------------------------------------------------------
 
 void _tactical(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -1855,8 +1787,7 @@ void _tactical(Map<String, dynamic> f) {
           ok = false;
           break;
         }
-        // Outer-vertex distance within 1% of the step radius (method check,
-        // not exact-vertex comparison — RING-001 tolerance model).
+
         final outer = set.rings[3][0];
         final d = AtlasGeoMath.haversineKm(set.center, outer);
         if (!_close(
@@ -1885,13 +1816,9 @@ void _tactical(Map<String, dynamic> f) {
     );
     return;
   }
-  // MGRS-001
+
   _record(id, Verdict.blocked, 'No conversion vectors (no library selected).');
 }
-
-// ---------------------------------------------------------------------------
-// ANGLES + BOXES (Phase 1.1 named ops and bounds)
-// ---------------------------------------------------------------------------
 
 void _angles(Map<String, dynamic> f) {
   final id = f['id'] as String;
@@ -1983,7 +1910,7 @@ void _boxes(Map<String, dynamic> f) {
     }
     return;
   }
-  // BOX-004: polygon bounds derivation.
+
   final inputs = f['inputs'] as Map<String, dynamic>;
   final polygon = AtlasPolygon(exterior: _ring(inputs['ring'] as List));
   if (!polygon.validate().isValid) {
@@ -1999,15 +1926,8 @@ void _boxes(Map<String, dynamic> f) {
   _record(id, ok ? Verdict.pass : Verdict.fail, 'bounds exact');
 }
 
-// ---------------------------------------------------------------------------
-// ADVERSARIAL
-// ---------------------------------------------------------------------------
-
 bool _noDynamicConstructors() {
-  // Production coordinate/geometry/camera entry points accept typed values
-  // only: no fromJson/fromDynamic/dynamic parsing exists in the slice (the
-  // camera wire parser is the single contractual exception and surfaces
-  // MALFORMED explicitly). Verified by reading the implementation sources.
+
   const sources = [
     'packages/atlas_core/lib/src/models/validation.dart',
     'packages/atlas_core/lib/src/models/identifier.dart',
@@ -2024,10 +1944,6 @@ bool _noDynamicConstructors() {
   }
   return true;
 }
-
-// ---------------------------------------------------------------------------
-// RESOURCES (Phase 1.6: resolved-resource + materialization boundary)
-// ---------------------------------------------------------------------------
 
 AtlasProviderDescriptor? _findDescriptor(
   List<AtlasProviderDescriptor> catalog,
@@ -2257,8 +2173,7 @@ void _resources(Map<String, dynamic> f) {
     _record(id, ok ? Verdict.pass : Verdict.fail, 'url=$representation');
     return;
   }
-  // BOUND-001 only: unguarded fallthrough here previously swallowed
-  // ADV-042/043 (fixed: explicit guard + unknown-id safety net).
+
   if (id == 'BOUND-001') {
     final catalog = catalogOf(inputs['catalog']);
     final resource = _bindForTest(
@@ -2315,7 +2230,7 @@ void _resources(Map<String, dynamic> f) {
     );
     return;
   }
-  // ADV-043: binding a non-resolved result must throw INVALID_STATE.
+
   final ambiguousCatalog = catalogOf(inputs['catalog']);
   final ambiguousResult = AtlasResolver.resolve(
     _resRequest(inputs['request'] as Map<String, dynamic>),
@@ -2349,10 +2264,6 @@ void _resources(Map<String, dynamic> f) {
   }
 }
 
-//---------------------------------------------------------------------------
-// PIPELINE (Phase 1.9: orchestration decisions, never execution)
-// ---------------------------------------------------------------------------
-
 AtlasResolutionResult _pipeResolution(Map<String, dynamic> m) {
   final q = m['request'] as Map<String, dynamic>;
   final tileJson = m['tile'] as Map<String, dynamic>?;
@@ -2384,8 +2295,6 @@ AtlasResolutionResult _pipeResolution(Map<String, dynamic> m) {
   );
 }
 
-/// Mirrors the pipeline's descriptor-free binding so materialization inputs
-/// can be built for the same resource the pipeline will bind.
 AtlasResolvedResource _pipeBoundResource(Map<String, dynamic> m) {
   final resolution = _pipeResolution(m);
   final tile = resolution.tile;
@@ -2487,8 +2396,7 @@ void _pipeline(Map<String, dynamic> f) {
   final resolutionJson = inputs['resolution'] as Map<String, dynamic>;
   final aqJson = inputs['acquisition'] as Map<String, dynamic>?;
   final matJson = inputs['materialization'];
-  // Binding mirrors the pipeline (resolved results only); resolution
-  // terminals return before any materialization is consulted.
+
   final resolved = (resolutionJson['status'] as String) == 'resolved';
   final outcome = AtlasPipeline.decide(
     resolution: _pipeResolution(resolutionJson),
@@ -2626,8 +2534,7 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     return;
   }
   if (id == 'ADV-051' || id == 'ADV-055' || id == 'ADV-061') {
-    // URL-target refusal / non-tile validity / network-flag independence:
-    // all reduce to request validation over inline resources.
+
     final r = inputs['resource'] as Map<String, dynamic>;
     final request = AtlasAcquisitionRequest(
       resource: _acqResource(r),
@@ -2667,8 +2574,7 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     return;
   }
   if (id == 'ADV-053' || id == 'ADV-057' || id == 'ADV-054') {
-    // Shape audits over a live success: request/state/failure/payloadId are
-    // the whole surface (absence enforced by arch grep alongside).
+
     final base = id == 'ADV-054'
         ? {
             'policy': <String, dynamic>{},
@@ -2838,8 +2744,7 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
       id == 'ADV-085' ||
       id == 'ADV-099' ||
       id == 'ADV-100') {
-    // Source-collapse scans: forbidden tokens must not appear in pipeline
-    // code lines (full-line comments excluded, same as the SELF check).
+
     final tokens = ((expected['forbidden_tokens'] as List?) ??
             (expected['forbidden_imports'] as List))
         .cast<String>();
@@ -2874,8 +2779,7 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     return;
   }
   if (id == 'ADV-073') {
-    // Explicit-time meta-scan: every pipeline fixture carries now, and no
-    // clock token exists in pipeline sources.
+
     final missing = <String>[];
     final dir = Directory('test/golden/pipeline');
     for (final file in dir.listSync().whereType<File>().where(
@@ -3226,12 +3130,6 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
   }
 }
 
-// ---------------------------------------------------------------------------
-// EXECUTION (Phase 2.0: substrate serving, scripted doubles live HERE only)
-// ---------------------------------------------------------------------------
-
-/// Scripted test operation (2.0-M §2): pre-declared outcomes + contact log.
-/// Production code must never contain this class (arch-scan enforced).
 final class _ScriptedOperation implements AtlasExecutionOperation {
   _ScriptedOperation(
     this.script,
@@ -3245,8 +3143,6 @@ final class _ScriptedOperation implements AtlasExecutionOperation {
   final bool cancelDuring;
   final List<String> log;
 
-  /// Cooperation point: logs contact, optionally simulates an arriving
-  /// cancel, then cooperates (signal) or proceeds per script.
   Future<T> _at<T>(String method, Future<T> Function() act) {
     log.add(method);
     if (cancelDuring) {
@@ -3524,10 +3420,6 @@ Future<void> _execution(Map<String, dynamic> f) async {
   );
 }
 
-// ---------------------------------------------------------------------------
-// GIS PHASES (blueprint 4–12 engine side)
-// ---------------------------------------------------------------------------
-
 AtlasCoordinate _cr(List<dynamic> pair) => AtlasCoordinate(
       latitude: (pair[1] as num).toDouble(),
       longitude: (pair[0] as num).toDouble(),
@@ -3615,7 +3507,7 @@ void _measure(Map<String, dynamic> f) {
                   polygon, _cr((inputs['edge'] as List).cast<dynamic>())) ==
               expected['edge'];
       if (expected.containsKey('hole')) {
-        // Hole center must read outside whenever a hole exists.
+
         ok = ok &&
             AtlasMeasure.containsPoint(
                   polygon,
@@ -4439,10 +4331,6 @@ Future<void> _gisAdv(Map<String, dynamic> f) async {
   }
 }
 
-// ---------------------------------------------------------------------------
-// RETENTION + PACKS (Blueprint Phase 3 engine side)
-// ---------------------------------------------------------------------------
-
 Future<void> _store(Map<String, dynamic> f) async {
   final id = f['id'] as String;
   final inputs = f['inputs'] as Map<String, dynamic>;
@@ -4749,7 +4637,7 @@ Future<void> _packs(Map<String, dynamic> f) async {
         Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
     detail = 'admitted=$got';
   } else {
-    // Download scenarios (PAK-009..013, PAK-015/016, ADV-095/096).
+
     final byteMap = <String, List<int>>{};
     if (inputs.containsKey('bytes_map')) {
       for (final kv
@@ -4856,10 +4744,6 @@ Future<void> _packs(Map<String, dynamic> f) async {
   }
   _record(id, ok ? Verdict.pass : Verdict.fail, detail);
 }
-
-//---------------------------------------------------------------------------
-// BASEMAP MATRIX (Blueprint Phase 2 engine side: registry + implementations)
-// ---------------------------------------------------------------------------
 
 AtlasProviderRegistry _bmRegistry() => AtlasBuiltinProviders.registry();
 
@@ -5317,10 +5201,6 @@ Future<void> _basemap(Map<String, dynamic> f) async {
   _record(id, ok ? Verdict.pass : Verdict.fail, detail);
 }
 
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
-
 void main() async {
   final root = Directory('test/golden');
   if (!root.existsSync()) {
@@ -5441,7 +5321,6 @@ void main() async {
     }
   }
 
-  // Determinism self-check: haversine repeatability (same input → same output).
   const a = AtlasCoordinate(latitude: 39.83, longitude: -98.58);
   const b = AtlasCoordinate(latitude: 48.85, longitude: 2.35);
   final d1 = AtlasGeoMath.haversineKm(a, b);
@@ -5452,7 +5331,6 @@ void main() async {
     'repeat=$d1',
   );
 
-  // 1.5-M arch-leakage self-check (resolution sources only).
   final leaks = <String>[];
   _record(
     'SELF-arch-leakage',

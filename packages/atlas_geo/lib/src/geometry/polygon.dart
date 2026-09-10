@@ -1,30 +1,13 @@
-// Sovereign Atlas Engine — atlas_geo
-// Minimal ring/polygon/segment validity kernel + skip-member collection policy.
-//
-// Contracts: ATLAS-GEOM-001 (geometry-contract.md), ATLAS-VALID-001.
-// Decided here (SOURCE-VERIFIED precedents F-05/F-06, generalized):
-// - LineString-equivalent: >= 2 valid coordinates.
-// - Ring-equivalent: >= 4 positions, first == last (closed), members valid.
-// - Corrupt members are SKIPPED, collections survive (skip-and-continue).
-// Explicitly NOT decided (DEC-007 OPEN, fixtures BLOCKED, not implemented):
-// - auto-close vs reject for unclosed rings (ADV-011),
-// - winding rules, empty-geometry legality beyond collections (ADV-010),
-// - tolerance-based equality (exact == used).
-// Empty feature collections ACCEPT as empty (PROPOSED, ADV-013/GEOM-003).
-// Zero-length flow segments REJECT as INVALID_GEOMETRY.
-// Status: PROVISIONAL — NOT ATLAS-NORMATIVE (0.5A Ruling 3a). Ownership:
-// DEC-007 (geometry strictness), still open; re-verdict on its closure.
-// (FLOW-003/ADV-022 execute against this provisional.)
-// Phase 0.5 slice. Depends on atlas_core + coordinate.dart only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../coordinates/coordinate.dart';
 
-/// Validity checks for position sequences.
 abstract final class AtlasRings {
-  /// A ring is valid when it has >= 4 positions, every member validates, and
-  /// it is explicitly closed (first == last). Closure is NOT auto-repaired:
-  /// unclosed input is invalid here and its handling stays DECISION REQUIRED.
+
   static AtlasValidation validateRing(List<AtlasCoordinate> ring) {
     if (ring.length < 4) {
       return const AtlasValidation.invalid(
@@ -49,7 +32,6 @@ abstract final class AtlasRings {
     return const AtlasValidation.valid();
   }
 
-  /// A segment path is valid with >= 2 valid coordinates.
   static AtlasValidation validatePath(List<AtlasCoordinate> path) {
     if (path.length < 2) {
       return const AtlasValidation.invalid(
@@ -67,11 +49,6 @@ abstract final class AtlasRings {
   }
 }
 
-/// Directed two-point segment (migration-flow primitive, CAP-010/F-05).
-///
-/// Endpoints are non-nullable by type. Zero-length segments (from == to)
-/// validate INVALID_GEOMETRY — PROPOSED rule (FLOW-003/ADV-022), disclosed
-/// for audit; the contract assigns no DEC.
 final class AtlasFlowSegment {
   const AtlasFlowSegment({required this.from, required this.to});
 
@@ -103,14 +80,6 @@ final class AtlasFlowSegment {
   int get hashCode => Object.hash(from, to);
 }
 
-/// Skip-member-keep-collection policy (SOURCE-VERIFIED precedent F-05/F-06).
-///
-/// Returns the surviving members; [skippedIndices] reports positions so the
-/// DEC-006 reporting channel has data to carry once resolved.
-///
-/// Empty input yields empty output. Status: PROVISIONAL — NOT ATLAS-NORMATIVE
-/// (0.5A Ruling 3b). Ownership: DEC-007 ("Empty geometry legal?"), still open
-/// (ADV-013 executes against this provisional).
 final class AtlasCollectionScreening<T> {
   const AtlasCollectionScreening({
     required this.kept,
@@ -120,7 +89,6 @@ final class AtlasCollectionScreening<T> {
   final List<T> kept;
   final List<int> skippedIndices;
 
-  /// Screens [members] with [isValid], keeping valid entries in order.
   static AtlasCollectionScreening<T> screen<T>(
     List<T> members,
     bool Function(T member) isValid,

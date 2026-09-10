@@ -1,14 +1,11 @@
-// Sovereign Atlas Engine — atlas_tactical
-// Waypoints + tracks (field domain values over shared geo services).
-//
-// Contract: blueprint Phase 10 (waypoints/tracks) + 4.4 (measurement uses
-// shared services — length reuses haversine legs, never a parallel stack).
-// Phase 10 slice. Depends on atlas_core + atlas_geo only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
 
-/// Named field position with explicit creation time and optional note.
 final class AtlasWaypoint {
   const AtlasWaypoint({
     required this.id,

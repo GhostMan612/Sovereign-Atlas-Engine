@@ -1,4 +1,8 @@
-// Sovereign Atlas shell tests: boot, readout, provider picker.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,7 +30,6 @@ void main() {
     await tester.tap(find.text('Satellite'));
     await tester.pumpAndSettle();
 
-    // Esri imagery template active (TileLayer keyed by provider id).
     final layers = tester.widgetList<TileLayer>(find.byType(TileLayer));
     expect(
       layers.any((l) => (l.urlTemplate ?? '').contains('arcgis')),

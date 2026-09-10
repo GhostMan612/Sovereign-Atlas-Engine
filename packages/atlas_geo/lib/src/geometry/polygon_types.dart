@@ -1,32 +1,18 @@
-// Sovereign Atlas Engine — atlas_geo
-// AtlasPolygon + AtlasBoundingBox: minimum polygon contract + explicit bounds.
-//
-// Contracts: ATLAS-GEOM-001 (directive §13/§14, Phase 1.1).
-// Status: PROPOSED → PROVISIONAL (contract-owned; orientation recorded-not-
-// enforced per DEC-007; antimeridian explicit per DEC-005, still open).
-// - Polygon: exterior ring + optional holes. Validity = AtlasRings rules per
-//   ring (≥4, closed, members valid). NO repair, NO auto-close, NO winding
-//   enforcement, NO topology. Malformed stays distinguishable from unusual.
-// - No polygon serialization (not fixture-required; directive §17).
-// - BoundingBox: south/west/north/east with range validation (south ≤ north).
-//   `crossesAntimeridian` (west > east) is an EXPLICIT flagged state, never an
-//   accidental comparison artifact. `contains` serves non-crossing boxes only;
-//   crossing boxes throw AtlasRejectionException(UNRESOLVED_ANTIMERIDIAN) —
-//   documented absence of invented wrap logic (DEC-005 open).
-// Phase 1.1 slice. Depends on atlas_core + coordinate.dart + polygon.dart ring rules.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'package:atlas_core/atlas_core.dart';
 import '../coordinates/coordinate.dart';
 import 'polygon.dart';
 
-/// Polygon with explicit holes. Ring order significant; orientation recorded.
 final class AtlasPolygon {
   const AtlasPolygon({required this.exterior, this.holes = const []});
 
   final List<AtlasCoordinate> exterior;
   final List<List<AtlasCoordinate>> holes;
 
-  /// Every ring validates; holes may be empty (no holes is valid).
   AtlasValidation validate() {
     final exteriorCheck = AtlasRings.validateRing(exterior);
     if (!exteriorCheck.isValid) return exteriorCheck;
@@ -37,7 +23,6 @@ final class AtlasPolygon {
     return const AtlasValidation.valid();
   }
 
-  /// Bounds of the exterior ring. Requires a valid polygon.
   AtlasBoundingBox get bounds {
     var south = exterior.first.latitude;
     var north = exterior.first.latitude;
@@ -82,7 +67,6 @@ final class AtlasPolygon {
   int get hashCode => Object.hash(Object.hashAll(exterior), holes.length);
 }
 
-/// Geographic bounds with explicit antimeridian state.
 final class AtlasBoundingBox {
   const AtlasBoundingBox({
     required this.south,
@@ -96,8 +80,6 @@ final class AtlasBoundingBox {
   final double north;
   final double east;
 
-  /// Range/shape validation. Crossing boxes (west > east) are VALID shapes
-  /// with an explicit flag — not errors, not accidents.
   AtlasValidation validate() {
     for (final edge in [south, west, north, east]) {
       if (!edge.isFinite) {
@@ -130,13 +112,8 @@ final class AtlasBoundingBox {
     return const AtlasValidation.valid();
   }
 
-  /// True when west > east: a legitimate crossing region (directive §14),
-  /// explicitly flagged. Not an error.
   bool get crossesAntimeridian => west > east;
 
-  /// Containment for NON-crossing boxes. Crossing boxes throw
-  /// AtlasRejectionException(UNRESOLVED_ANTIMERIDIAN): wrap semantics are
-  /// DEC-005-open and will not be invented here.
   bool contains(AtlasCoordinate point) {
     if (crossesAntimeridian) {
       throw const AtlasRejectionException(

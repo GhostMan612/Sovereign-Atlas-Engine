@@ -1,12 +1,10 @@
-// Sovereign Atlas Engine — atlas_location
-// Append-only fix log (no edit, no reorder — observation honesty).
-//
-// Contract: ADR-001 location charter (tracking abstractions).
-// Location slice. Depends on atlas_core + sibling fix type only.
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import '../fix/location_fix.dart';
 
-/// Append-only fix log value holder.
 final class AtlasTrackLog {
   AtlasTrackLog([Iterable<AtlasLocationFix>? fixes]) : _fixes = [...?fixes];
 

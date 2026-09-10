@@ -11,9 +11,10 @@
 - **Track status:** Offline Areas + offline rendering + hardening +
   chunk-source timeout (DEC-020) all landed and verified. The map is a
   proven foundation; it is not yet an instrument.
-- **Rule set:** `RULES.md` canonical (Sovereign Directives adopted, §1.1
-  grandfather clause for existing files), `AGENTS.md` trimmed to ramp,
-  slash commands in `.opencode/commands/`.
+- **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
+  all 117 `.dart` files stripped to genesis-header-only, gates identical
+  before/after), `AGENTS.md` trimmed to ramp, slash commands in
+  `.opencode/commands/`.
 - **Next milestone:** Phase B forensic/integration planning (NOT
   implementation): inventory `atlas_location` / `atlas_tactical` /
   `atlas_analysis` / `atlas_terrain` + app-host seams for the field

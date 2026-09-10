@@ -1,18 +1,7 @@
-// Sovereign Atlas Engine — atlas_providers
-// Tile fetch + local bundle operations: the first REAL executor bindings.
-//
-// Contract: ADR-003 + 2.0-J (one command, one attempt, one report) + 2.0-L
-// (transport failure ⇒ semantic `unavailable`, truthfully collapsible detail).
-// - Address parsing is the inverse of the canonical rendering
-//   (`z=<z>/x=<x>/y=<y>@<scheme>`); unparseable tile-kind addresses ⇒
-//   `invalidTarget`; non-tile kinds ⇒ `unsupported` (tile fetchers serve
-//   tiles only — kind honesty, never coercion).
-// - Transport is INJECTED (`AtlasTransport`); production wires dart:io,
-//   tests wire fakes. Fetched bytes are DISCARDED after receipt: the result
-//   carries payloadId = resource address (deterministic, no invented ids).
-// - serveEntry/storeHandoff throw UnsupportedError (documented Phase-3 seam:
-//   serving without a store would conflate cache/acquisition, 2.0-I/J).
-// Phase 2 slice. Depends on core + provider_api + tiles (operation iface).
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
 
 import 'dart:io';
 
@@ -21,14 +10,11 @@ import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'package:atlas_tiles/atlas_tiles.dart';
 import 'provider_endpoint.dart';
 
-/// Injected byte transport: URL + headers in, raw bytes out (or throw).
-/// Production: [httpTransport]. Tests: fakes. No other transport exists.
 typedef AtlasTransport = Future<List<int>> Function(
   Uri url,
   Map<String, String> headers,
 );
 
-/// Transport failure detail (operations collapse this to `unavailable`).
 final class AtlasTransportException implements Exception {
   const AtlasTransportException(this.message, {this.statusCode});
 
@@ -40,8 +26,6 @@ final class AtlasTransportException implements Exception {
       'AtlasTransportException(${statusCode ?? 'no-status'}: $message)';
 }
 
-/// Production transport over dart:io (non-2xx ⇒ throw; redirects followed
-/// by HttpClient default policy).
 Future<List<int>> httpTransport(Uri url, Map<String, String> headers) async {
   final client = HttpClient();
   try {
@@ -64,8 +48,6 @@ Future<List<int>> httpTransport(Uri url, Map<String, String> headers) async {
   }
 }
 
-/// Parses the canonical tile address rendering back to coordinate + scheme.
-/// Null = not tile-form (caller maps to invalidTarget/unsupported).
 ({AtlasTileCoordinate coordinate, AtlasTileScheme scheme})? parseTileAddress(
   String address,
 ) {
@@ -87,7 +69,6 @@ Future<List<int>> httpTransport(Uri url, Map<String, String> headers) async {
   );
 }
 
-/// Executor operation fetching tiles for one endpoint definition.
 final class AtlasTileFetchOperation implements AtlasExecutionOperation {
   AtlasTileFetchOperation({required this.endpoint, required this.transport});
 
@@ -107,10 +88,7 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
         failure: AtlasAcquisitionFailure.invalidTarget,
       );
     }
-    // Tile fetchers serve tile-FORM addresses of any kind (elevation tiles
-    // included). Kind honesty applies to non-tile addresses: tile kinds
-    // with malformed addresses are invalid targets; other kinds are
-    // unsupported here (never coerced).
+
     final parsed = parseTileAddress(resource.address);
     if (parsed == null) {
       final tileKind = resource.kind == AtlasDataKind.rasterTiles ||
@@ -124,7 +102,7 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
       );
     }
     if (endpoint.policy.requiresKey) {
-      // No key plumbing exists (secrets ADR open): truthful refusal.
+
       return AtlasAcquisitionResult(
         request: request,
         state: AtlasAcquisitionState.failed,
@@ -149,16 +127,14 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
     } on ExecutionCancelled {
       rethrow;
     } catch (_) {
-      // Any transport failure: the resource cannot currently be provided
-      // (1.8 `unavailable`, retryable advisory preserved downstream).
+
       return AtlasAcquisitionResult(
         request: request,
         state: AtlasAcquisitionState.failed,
         failure: AtlasAcquisitionFailure.unavailable,
       );
     }
-    // Bytes discarded on receipt; the reference IS the address
-    // (deterministic — no invented payload ids).
+
     return AtlasAcquisition.start(
       request,
       context.nowSeconds,
@@ -184,10 +160,8 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
       );
 }
 
-/// File-tree bundle reader (flat `{root}/{z}/{x}/{y}.{ext}`, no sqlite).
 typedef AtlasFileReader = Future<List<int>?> Function(String path);
 
-/// Executor operation serving a local file-tree bundle.
 final class AtlasLocalBundleOperation implements AtlasExecutionOperation {
   AtlasLocalBundleOperation({
     required this.endpoint,
@@ -220,7 +194,7 @@ final class AtlasLocalBundleOperation implements AtlasExecutionOperation {
         failure: AtlasAcquisitionFailure.invalidTarget,
       );
     }
-    // Tile-FORM addresses of any kind (same honesty rule as fetch ops).
+
     final parsed = parseTileAddress(resource.address);
     if (parsed == null) {
       final tileKind = resource.kind == AtlasDataKind.rasterTiles ||
