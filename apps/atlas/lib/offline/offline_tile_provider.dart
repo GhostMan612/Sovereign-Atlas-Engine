@@ -17,6 +17,8 @@
 // side. Counters live on the repository (hits + network requests) so they
 // survive provider rebuilds and feed Diagnostics.
 
+import 'package:atlas_offline/atlas_offline.dart';
+import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 
@@ -55,7 +57,15 @@ final class AtlasOfflineTileProvider extends TileProvider {
     TileLayer options,
     Future<void> cancelLoading,
   ) {
-    final key = '${coordinates.z}/${coordinates.x}/${coordinates.y}';
+    // Key format is engine-canonical (AtlasPackDownloader.keyOf): the app
+    // never invents its own tile-key rendering.
+    final key = AtlasPackDownloader.keyOf(
+      AtlasTileCoordinate(
+        z: coordinates.z,
+        x: coordinates.x,
+        y: coordinates.y,
+      ),
+    );
     final bytes = repository.resolveTileBytes(providerId, key);
     if (bytes != null) return MemoryImage(bytes);
     repository.recordNetworkRequest();

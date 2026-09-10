@@ -71,9 +71,9 @@
    ("Provider rate limits are centralized" — 3.4 says it outright).
 2. **Session tile cap (4096).** No builtin declares maxTiles, so the
    planner would enumerate unbounded ranges; the app counts by saturating
-   arithmetic BEFORE planning and refuses above cap (bytes are
-   session-resident RAM — stated in UI, docs, and code; file persistence
-   is the explicit future work, not a silent gap).
+   arithmetic BEFORE planning and refuses above cap (the RAM serve map is
+   bounded by the cap; completed packs persist to the journal — the cap
+   guards enumeration and serve memory, not disk).
 3. **Local bundles blocked honestly** (`NO_LOCATOR`): bundle-backed
    endpoints have no template, so no byte source exists; the app refuses
    at plan time instead of failing mid-download.
@@ -131,16 +131,39 @@ bypass:
    createClient` is now `createHttpClient` (verified in the bundled SDK
    sources). The offline transport block uses the current name.
 
+## Hardening pass (APP-AUDIT-001, all six FIX NOWs, no engine changes)
+
+7. **Deletion authoritative over in-flight futures.** `deletePack`
+   cancels/pauses first AND two post-await ownership checkpoints (after
+   the chunk loop, after persist) discard late-settling results — no
+   resurrection through either window (both windows device-tested at
+   host level with gated fakes).
+8. **LRU eviction consumed, not ignored.** The engine-reported evicted
+   entry unflags exactly the victim record (+ event log); the live gate
+   agrees (victim unserved, survivors served).
+9. **Persistence required for completion.** Journal failure → `failed`
+   with `PERSIST_FAILED` (index entry rolled back, partial dir dropped,
+   bytes kept for resume-retry — which then succeeds once healed).
+10. **Journal untrusted.** Whole-`restore()` catch, non-object entries
+    skipped, resident records win over journal collisions, pack-id mint
+    loops past restored ids (no overwrite, format preserved).
+11. **Wording/duplication/labels.** Cap message states the true
+    rationale; tile keys use engine `AtlasPackDownloader.keyOf`;
+    Diagnostics reports `unfinished` + `downloading` instead of a
+    misleading `active`.
+
 ## Verification totals (see DEVICE-005/006 for device rows)
 
-- `flutter analyze --no-pub`: clean. `flutter test test/`: 41/41 green
-  (21 repository + 6 journal/restore + 5 renderer seam + 7 page + 2
-  pre-existing shell/picker).
-- `flutter test integration_test`: 4/4 green on device (picker + offline
-  acquisition + render A/B; render reproduced byte-identical counters
-  across runs: 4 tiles / 8 serves / 56 network attempts).
+- `flutter analyze --no-pub`: clean. `flutter test test/`: 48/48 green
+  (41 baseline + 7 hardening: delete-during-download,
+  delete-during-persist, LRU eviction, persist-failure+recovery, mixed
+  journal, dead-directory restore, id-collision loop).
+- `flutter test integration_test`: 5/5 green on device (picker + offline
+  acquisition + render A/B + blocked-transport failure proof
+  [`OFFLINE_FAILURE_RESULT: failed` — SocketException detail surfaced,
+  nothing indexed, app usable]).
 - Engine regression `dart tools/atlas_tool.dart all`: 453/413/0/8/32
-  (untouched).
+  (untouched — no engine file modified in this pass).
 - Deps: direct + dev-direct all up-to-date (incl. new path_provider
   2.1.6); hard ceiling unchanged (SDK-pinned
   material_color_utilities/test_api); webdriver stays 3.2.0; engine

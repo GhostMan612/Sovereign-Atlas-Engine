@@ -31,6 +31,20 @@
    provider mismatch (OSM layer, Esri pack) served NOTHING locally —
    provider isolation holding on-device, by the same counters.
 
+## On-device failure terminal (hardening pass, PASS)
+
+- **Method:** `integration_test/offline_failure_test.dart` — real 1-tile
+  Esri download attempt with `BlockedTransport` active from launch.
+- **Result:** `OFFLINE_FAILURE_RESULT: failed` (00:20, green). The card
+  surfaces the engine failure detail (`SocketException ... transport
+  blocked`), Saved Areas reads "Nothing available offline", Storage
+  reads `Pack index: 0/64`, Diagnostics opens over the failed state.
+- **What this closes:** the last unproven terminal on hardware. Success
+  under a dead transport would have been a fabrication bug; the rig
+  asserts `failed` exactly (it fails the test on `complete`).
+- **Scope preserved:** transport-blocked, not radio-off (same boundary
+  as the render proof above).
+
 ## Scope honesty
 
 - The block is TRANSPORT-level, not radio-off: for the map renderer the

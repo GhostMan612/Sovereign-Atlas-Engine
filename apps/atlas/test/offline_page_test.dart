@@ -144,6 +144,11 @@ void main() {
     expect(find.textContaining('Providers registered: 7'), findsOneWidget);
     expect(find.textContaining('Endpoints self-valid: 7/7'), findsOneWidget);
     expect(find.textContaining('Pack index: 0/64'), findsOneWidget);
+    // Label accuracy: inert planned records are "unfinished", never "active".
+    expect(
+      find.textContaining('unfinished: 0 (downloading: 0)'),
+      findsOneWidget,
+    );
     expect(find.textContaining('offline serves'), findsOneWidget);
     expect(find.textContaining('No events yet'), findsOneWidget);
   });

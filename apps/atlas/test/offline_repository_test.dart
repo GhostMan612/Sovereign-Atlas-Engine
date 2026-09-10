@@ -16,6 +16,7 @@ import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_offline/atlas_offline.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'package:atlas_providers/atlas_providers.dart';
+import 'package:atlas_tiles/atlas_tiles.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 OfflineRepository testRepo({
@@ -200,6 +201,9 @@ void main() {
       );
       expect(record.plan, isNull);
       expect(record.appBlock, contains('APP_PACK_TOO_LARGE'));
+      // Wording must describe the true rationale (bounded enumeration +
+      // RAM serve map; completed packs persist) — never "future work".
+      expect(record.appBlock, contains('journal'));
     });
 
     test('engine PACK_TOO_LARGE propagates (custom capped endpoint)', () {
@@ -376,6 +380,172 @@ void main() {
       expect(second.receivedTiles, 2);
     });
 
+    test('delete during download is authoritative (no resurrection)',
+        () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final gate = Completer<void>();
+      var calls = 0;
+      final repo = testRepo(
+        dir: dir,
+        source: (_) async {
+          calls += 1;
+          if (calls == 1) await gate.future;
+          return [9];
+        },
+      );
+      final record = repo.planPack(
+        providerId: 'esri-imagery',
+        zMin: 0,
+        zMax: 0,
+        xMin: 0,
+        xMax: 1,
+        yMin: 0,
+        yMax: 0,
+        bytesPerTile: 100,
+      );
+      final future = repo.startDownload(record.packId);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Delete while the first chunk is still gated.
+      await repo.deletePack(record.packId);
+      expect(repo.lookup(record.packId), isNull);
+      gate.complete();
+      // The orphaned future must settle WITHOUT throwing and WITHOUT
+      // re-registering anything.
+      await future;
+      expect(repo.lookup(record.packId), isNull);
+      expect(repo.packs, isEmpty);
+      expect(repo.store.stats.entryCount, 0);
+      expect(
+        Directory('${dir.path}/offline_packs/${record.packId}').existsSync(),
+        isFalse,
+      );
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
+      expect(repo.events.join('\n'), contains('settled after delete'));
+      // Repository remains usable.
+      final again = planOne(repo);
+      await repo.startDownload(again.packId);
+      expect(again.lifecycle, OfflinePackLifecycle.complete);
+    });
+
+    test('delete during persist window is authoritative', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final persistGate = Completer<void>();
+      final repo = OfflineRepository(
+        registry: AtlasBuiltinProviders.registry(),
+        chunkSourceFactory: (_) => (tile) async => [tile.z],
+        clock: () => 1000,
+        directoryProvider: () async {
+          await persistGate.future;
+          return dir;
+        },
+      );
+      final record = planOne(repo);
+      final download = repo.startDownload(record.packId);
+      // Let the chunk loop finish so the flow parks inside _persistPack.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Delete now: store entry removed synchronously, then both paths
+      // park at the same journal gate.
+      final removal = repo.deletePack(record.packId);
+      expect(repo.lookup(record.packId), isNull);
+      persistGate.complete();
+      await download;
+      await removal;
+      // The post-persist ownership checkpoint must undo the completion's
+      // registrations: no resurrection through the persist window either.
+      expect(repo.lookup(record.packId), isNull);
+      expect(repo.packs, isEmpty);
+      expect(repo.store.stats.entryCount, 0);
+      expect(
+        Directory('${dir.path}/offline_packs/${record.packId}').existsSync(),
+        isFalse,
+      );
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
+      expect(
+        repo.events.join('\n'),
+        contains('discarded: deleted during persist'),
+      );
+    });
+
+    test('LRU eviction unflags the victim (engine-reported)', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final repo = OfflineRepository(
+        registry: AtlasBuiltinProviders.registry(),
+        store: AtlasMemoryStore(capacity: 2),
+        chunkSourceFactory: (_) => (tile) async => [tile.z],
+        clock: () => 1000,
+        directoryProvider: () async => dir,
+      );
+      Future<OfflinePackRecord> completeAt(int x) async {
+        final record = repo.planPack(
+          providerId: 'esri-imagery',
+          zMin: 0,
+          zMax: 0,
+          xMin: x,
+          xMax: x,
+          yMin: 0,
+          yMax: 0,
+          bytesPerTile: 100,
+        );
+        await repo.startDownload(record.packId);
+        expect(record.lifecycle, OfflinePackLifecycle.complete);
+        return record;
+      }
+
+      final first = await completeAt(0);
+      final second = await completeAt(1);
+      expect(repo.store.stats.entryCount, 2);
+      // Third insert evicts the oldest (first) — engine-reported, consumed.
+      final third = await completeAt(2);
+      expect(repo.store.stats.entryCount, 2);
+      expect(first.cacheEntryPresent, isFalse);
+      expect(second.cacheEntryPresent, isTrue);
+      expect(third.cacheEntryPresent, isTrue);
+      // The live gate agrees with the corrected flags.
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
+      expect(repo.resolveTileBytes('esri-imagery', '0/2/0'), [0]);
+      expect(repo.events.join('\n'), contains('evicted from index by LRU'));
+    });
+
+    test('journal-write failure reaches failed, repo stays usable', () async {
+      var failJournal = true;
+      final dir = Directory.systemTemp.createTempSync('atlas_repo_');
+      final repo = OfflineRepository(
+        registry: AtlasBuiltinProviders.registry(),
+        chunkSourceFactory: (_) => (tile) async => [tile.z],
+        clock: () => 1000,
+        directoryProvider: () async {
+          if (failJournal) throw const FileSystemException('disk gone');
+          return dir;
+        },
+      );
+      final record = planOne(repo);
+      await repo.startDownload(record.packId);
+      expect(record.lifecycle, OfflinePackLifecycle.failed);
+      expect(record.failureDetail, contains('PERSIST_FAILED'));
+      expect(record.cacheEntryPresent, isFalse);
+      // No false completion, no false indexing, nothing served.
+      expect(repo.store.stats.entryCount, 0);
+      expect(repo.resolveTileBytes('esri-imagery', '0/0/0'), isNull);
+      // Recovery path: resume retries the persist once the journal heals.
+      failJournal = false;
+      await repo.startDownload(record.packId);
+      expect(record.lifecycle, OfflinePackLifecycle.complete);
+      expect(record.cacheEntryPresent, isTrue);
+      // And unrelated packs work throughout.
+      final other = repo.planPack(
+        providerId: 'esri-imagery',
+        zMin: 1,
+        zMax: 1,
+        xMin: 0,
+        xMax: 0,
+        yMin: 0,
+        yMax: 0,
+        bytesPerTile: 100,
+      );
+      await repo.startDownload(other.packId);
+      expect(other.lifecycle, OfflinePackLifecycle.complete);
+    });
+
     test('delete drops record, bytes, index entry, and disk journal',
         () async {
       final dir = Directory.systemTemp.createTempSync('atlas_repo_');
@@ -546,6 +716,75 @@ void main() {
       await repo.restore();
       expect(repo.packs, isEmpty);
       expect(repo.events.first, contains('unparseable'));
+    });
+
+    test('mixed journal: valid restores, corrupt skips with logs', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final (_, record, _) = await completeIn(dir);
+      final indexFile = File('${dir.path}/offline_packs/$kPackIndexFile');
+      final entries =
+          (jsonDecode(indexFile.readAsStringSync()) as List).toList();
+      entries.add(42); // not an object: must not abort the restore
+      entries.add({'pack_id': 'pack-ghost'}); // missing keys: malformed
+      indexFile.writeAsStringSync(jsonEncode(entries));
+
+      final repo = testRepo(dir: dir);
+      await repo.restore();
+      final restored = repo.lookup(record.packId);
+      expect(restored, isNotNull);
+      expect(restored!.lifecycle, OfflinePackLifecycle.complete);
+      expect(restored.seal, record.seal);
+      // No half-loaded index state: exactly the valid pack is indexed.
+      expect(repo.store.stats.entryCount, 1);
+      expect(repo.lookup('pack-ghost'), isNull);
+      final log = repo.events.join('\n');
+      expect(log, contains('not an object'));
+      expect(log, contains('malformed'));
+      // Repository remains usable after the mixed restore.
+      final next = planOne(repo);
+      await repo.startDownload(next.packId);
+      expect(next.lifecycle, OfflinePackLifecycle.complete);
+      expect(repo.store.stats.entryCount, 2);
+    });
+
+    test('restore with dead directory provider logs and stays usable',
+        () async {
+      final repo = OfflineRepository(
+        registry: AtlasBuiltinProviders.registry(),
+        chunkSourceFactory: (_) => (tile) async => [tile.z],
+        clock: () => 1000,
+        directoryProvider: () async =>
+            throw const FileSystemException('no docs dir'),
+      );
+      await repo.restore(); // must not throw
+      expect(repo.packs, isEmpty);
+      expect(repo.events.first, contains('aborted on unexpected error'));
+    });
+
+    test('pack ids loop past restored collisions (no overwrite)', () async {
+      final dir = Directory.systemTemp.createTempSync('atlas_journal_');
+      final (_, first, _) = await completeIn(dir);
+      expect(first.packId, 'pack-1000-1');
+
+      // Same directory, same fixed clock: naive minting would collide.
+      final repo = testRepo(dir: dir, clock: () => 1000);
+      await repo.restore();
+      expect(repo.lookup('pack-1000-1')!.seal, first.seal);
+
+      final second = planOne(repo);
+      expect(second.packId, 'pack-1000-2');
+      final third = planOne(repo);
+      expect(third.packId, 'pack-1000-3');
+      // Original restored record intact; new records intact and distinct.
+      expect(repo.lookup('pack-1000-1')!.seal, first.seal);
+      expect(repo.lookup('pack-1000-2'), same(second));
+      expect(repo.lookup('pack-1000-3'), same(third));
+      // Repeated collisions keep walking safely.
+      for (var i = 0; i < 3; i++) {
+        planOne(repo);
+      }
+      expect(repo.lookup('pack-1000-1')!.seal, first.seal);
+      expect(repo.packs.length, 1 + 2 + 3);
     });
   });
 }

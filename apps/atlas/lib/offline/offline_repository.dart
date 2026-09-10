@@ -182,7 +182,14 @@ final class OfflineRepository extends ChangeNotifier {
   }) {
     _packSequence += 1;
     final now = _clock();
-    final packId = 'pack-$now-$_packSequence';
+    // Collision loop across the restore boundary: restored ids occupy the
+    // same `pack-<epoch>-<seq>` space, so mint-then-check (never overwrite,
+    // never merge — no last-write-wins).
+    var packId = 'pack-$now-$_packSequence';
+    while (_packs.containsKey(packId)) {
+      _packSequence += 1;
+      packId = 'pack-$now-$_packSequence';
+    }
     final endpoint = _registry.lookup(providerId);
     final record = OfflinePackRecord(
       packId: packId,
@@ -238,9 +245,10 @@ final class OfflineRepository extends ChangeNotifier {
         ) >
         kMaxSessionTiles) {
       record.appBlock =
-          'APP_PACK_TOO_LARGE: ranges exceed the session-memory cap of '
-          '$kMaxSessionTiles tiles (bytes are session-resident; file '
-          'persistence is future work). Narrow the ranges.';
+          'APP_PACK_TOO_LARGE: ranges exceed the session cap of '
+          '$kMaxSessionTiles tiles (enumeration and the RAM serve map are '
+          'bounded by the cap; completed packs persist to the journal). '
+          'Narrow the ranges.';
       _log('plan $packId blocked: exceeds session tile cap');
       notifyListeners();
       return record;
@@ -300,6 +308,14 @@ final class OfflineRepository extends ChangeNotifier {
     notifyListeners();
     try {
       final terminal = await downloader.download(_clock());
+      // Deletion is authoritative: a pack removed while its future was in
+      // flight must never re-register. Cancel alone is insufficient (the
+      // engine observes it cooperatively between chunks, and the future
+      // may already have settled) — verify ownership after the await.
+      if (!_stillOwned(record)) {
+        _log('download $packId settled after delete; result discarded');
+        return;
+      }
       final progress = downloader.progress;
       record.receivedTiles = progress.received;
       record.receivedBytes = progress.bytes;
@@ -373,7 +389,12 @@ final class OfflineRepository extends ChangeNotifier {
     record.manifestJson =
         const JsonEncoder.withIndent('  ').convert(manifest.toJson());
     record.tileKeys = keys.toSet();
-    _store.put(
+    // Lifecycle flips BEFORE persistence: the download DID complete, and
+    // _writeIndex only journals complete+held packs (the index must
+    // contain this pack when _persistPack writes it). Availability flags
+    // (cacheEntryPresent/bytesHeld) still flip only after persist success.
+    record.lifecycle = OfflinePackLifecycle.complete;
+    final evicted = _store.put(
       AtlasCacheEntry(
         key: AtlasCacheKey(
           namespace: AtlasCacheNamespace.resource,
@@ -383,13 +404,82 @@ final class OfflineRepository extends ChangeNotifier {
         payloadId: AtlasId(manifest.seal),
       ),
     );
+    // The engine REPORTS LRU eviction through put's return: consume it so
+    // no record claims indexed availability the live gate cannot serve.
+    if (evicted != null) _noteEvicted(evicted);
+    try {
+      await _persistPack(record);
+    } catch (error) {
+      // Completion REQUIRES persistence: a RAM-complete but unpersisted
+      // pack must not stand as complete or indexed (resume retries the
+      // persist — received bytes are kept for exactly that path). The
+      // journal rewrite below also drops it from index.json (it was
+      // included by the persist attempt's own index write).
+      _store.remove(
+        AtlasCacheKey(
+          namespace: AtlasCacheNamespace.resource,
+          value: record.packId,
+        ),
+      );
+      record.cacheEntryPresent = false;
+      record.bytesHeld = false;
+      record.lifecycle = OfflinePackLifecycle.failed;
+      record.failureDetail = 'PERSIST_FAILED: $error';
+      _rebuildServe();
+      await _dropPackJournalQuietly(record.packId);
+      _log('download ${record.packId} FAILED: journal write ($error)');
+      return;
+    }
+    // Second ownership checkpoint: deletion may have landed inside the
+    // persist window (after the first guard). Undo this completion's
+    // registrations and discard — deletion stays authoritative.
+    if (!_stillOwned(record)) {
+      _store.remove(
+        AtlasCacheKey(
+          namespace: AtlasCacheNamespace.resource,
+          value: record.packId,
+        ),
+      );
+      await _dropPackJournalQuietly(record.packId);
+      _log('complete ${record.packId} discarded: deleted during persist');
+      return;
+    }
     record.cacheEntryPresent = true;
     record.bytesHeld = true;
-    record.lifecycle = OfflinePackLifecycle.complete;
     _rebuildServe();
-    await _persistPack(record);
     _log('download ${record.packId} COMPLETE: ${record.receivedTiles} tiles, '
         '${record.receivedBytes} B, seal ${manifest.seal}');
+  }
+
+  /// Ownership check: the record object the async path holds must still be
+  /// the registered one (identity, not mere id presence — replacement is
+  /// also refused, not just removal).
+  bool _stillOwned(OfflinePackRecord record) =>
+      identical(_packs[record.packId], record);
+
+  /// Flags the record whose index entry the engine just evicted (LRU).
+  /// Only pack index entries ever pass through this store (resource
+  /// namespace, pack-id values, written solely below and in _restoreOne).
+  void _noteEvicted(AtlasCacheEntry evicted) {
+    final victim = _packs[evicted.key.value];
+    if (victim == null || !victim.cacheEntryPresent) return;
+    victim.cacheEntryPresent = false;
+    _log('pack ${victim.packId} evicted from index by LRU (bytes unserved)');
+  }
+
+  /// Best-effort journal cleanup for a failed persist (never throws: the
+  /// failure is already recorded on the record; cleanup must not replace
+  /// it). Removes the partial pack dir AND rewrites the index (the failed
+  /// attempt's own index write already included this pack).
+  Future<void> _dropPackJournalQuietly(String packId) async {
+    try {
+      final journal = await _journalDir();
+      final dir = Directory('${journal.path}/$packId');
+      if (await dir.exists()) await dir.delete(recursive: true);
+      await _writeIndex(journal);
+    } catch (_) {
+      // Best effort only.
+    }
   }
 
   /// Cooperative pause (observed between chunks; resume via [startDownload]).
@@ -406,8 +496,13 @@ final class OfflineRepository extends ChangeNotifier {
   }
 
   /// Clean deletion: drops the store index entry, RAM + disk bytes, the
-  /// journal entry, and the record.
+  /// journal entry, and the record. Cancels first: the in-flight future
+  /// may settle after this returns, and the post-await guard in
+  /// [startDownload] then discards its result (deletion authoritative,
+  /// never resurrection — cancel alone would be racy).
   Future<void> deletePack(String packId) async {
+    _cancellations[packId]?.requestCancel();
+    _downloads[packId]?.pause();
     final record = _packs.remove(packId);
     _receivedBytes.remove(packId);
     _downloads.remove(packId);
@@ -575,7 +670,19 @@ final class OfflineRepository extends ChangeNotifier {
   /// engine store is empty, RAM is empty — the journal rebuilds both).
   /// Corrupt entries (missing files, oversized key lists, unparseable JSON)
   /// are SKIPPED with a log line, never half-loaded (integrity honesty).
+  /// The journal is untrusted input: nothing thrown anywhere in here may
+  /// escape (startup calls this unawaited — a zone error at launch would
+  /// be the failure mode).
   Future<void> restore() async {
+    try {
+      await _restoreUnsafe();
+    } catch (error) {
+      _log('restore: aborted on unexpected error ($error)');
+      notifyListeners();
+    }
+  }
+
+  Future<void> _restoreUnsafe() async {
     final journal = await _journalDir();
     final indexFile = File('${journal.path}/$kPackIndexFile');
     if (!await indexFile.exists()) {
@@ -593,9 +700,16 @@ final class OfflineRepository extends ChangeNotifier {
     }
     var restored = 0;
     for (final raw in entries) {
+      // The per-entry cast lives OUTSIDE _restoreOne's try by construction
+      // (it produces the argument), so non-objects are guarded HERE —
+      // otherwise one malformed entry aborts the whole restore.
+      if (raw is! Map) {
+        _log('restore: entry skipped (not an object)');
+        continue;
+      }
       final restoredRecord = await _restoreOne(
         journal,
-        (raw as Map).cast<String, dynamic>(),
+        raw.cast<String, dynamic>(),
       );
       if (restoredRecord != null) restored += 1;
     }
@@ -610,6 +724,12 @@ final class OfflineRepository extends ChangeNotifier {
   ) async {
     try {
       final packId = json['pack_id'] as String;
+      // Resident state wins over the journal (mirrors the plan-time
+      // collision loop: no overwrite, no merge, no last-write-wins).
+      if (_packs.containsKey(packId)) {
+        _log('restore: $packId skipped (id already resident)');
+        return null;
+      }
       final keys = (json['keys'] as List).cast<String>();
       if (keys.length > kMaxSessionTiles) {
         _log('restore: $packId skipped (key list exceeds session cap)');
@@ -657,7 +777,7 @@ final class OfflineRepository extends ChangeNotifier {
         ..bytesHeld = true;
       _packs[packId] = record;
       _receivedBytes[packId] = held;
-      _store.put(
+      final evicted = _store.put(
         AtlasCacheEntry(
           key: AtlasCacheKey(
             namespace: AtlasCacheNamespace.resource,
@@ -668,6 +788,7 @@ final class OfflineRepository extends ChangeNotifier {
               record.seal == null ? null : AtlasId(record.seal!),
         ),
       );
+      if (evicted != null) _noteEvicted(evicted);
       return record;
     } catch (error) {
       _log('restore: entry skipped (malformed: $error)');

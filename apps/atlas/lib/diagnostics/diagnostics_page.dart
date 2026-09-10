@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../offline/offline_pack.dart';
 import '../offline/offline_repository.dart';
 
 /// Must match apps/atlas/pubspec.yaml version (kept in sync by hand;
@@ -36,8 +37,11 @@ class DiagnosticsPage extends StatelessWidget {
       if (registry.lookup(id)!.validate().isValid) validEndpoints += 1;
     }
     final stats = repository.store.stats;
-    final active = repository.packs
-        .where((p) => !p.isTerminal)
+    // "Unfinished" is the honest scope: planned/refused/blocked records are
+    // inert, not running — only `downloading` is actually in flight.
+    final unfinished = repository.packs.where((p) => !p.isTerminal).length;
+    final downloading = repository.packs
+        .where((p) => p.lifecycle == OfflinePackLifecycle.downloading)
         .length;
     return Scaffold(
       appBar: AppBar(title: const Text('Diagnostics')),
@@ -67,7 +71,8 @@ class DiagnosticsPage extends StatelessWidget {
           ),
           Text(
             'Pack index: ${stats.entryCount}/${stats.capacity} · '
-            'records: ${repository.packs.length} · active: $active',
+            'records: ${repository.packs.length} · '
+            'unfinished: $unfinished (downloading: $downloading)',
           ),
           Text(
             'Renderer: ${repository.offlineTileHits} offline serves · '
