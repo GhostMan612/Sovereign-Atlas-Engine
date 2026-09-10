@@ -1,0 +1,1 @@
+{"expected": {"eligible": ["osm-standard", "esri-imagery", "local-bundle"], "op": "resolve", "provider": "osm-standard", "status": "resolved"}, "id": "BM-013", "inputs": {"preferred": ["osm-standard"], "request": {"kind": "rasterTiles", "latitude": 0.0, "longitude": 0.0, "scheme": "xyz", "zoom": 19.0}}}

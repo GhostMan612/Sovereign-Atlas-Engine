@@ -1,0 +1,1 @@
+{"expected": {"bulk_guard_present": true, "id": "osm-standard", "op": "policy", "prefetch_allowed": false, "requires_key": false}, "id": "BM-007", "inputs": {}}

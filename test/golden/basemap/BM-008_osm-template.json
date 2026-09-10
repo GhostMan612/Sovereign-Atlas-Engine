@@ -1,0 +1,1 @@
+{"expected": {"op": "template", "url": "https://tile.openstreetmap.org/1/0/0.png"}, "id": "BM-008", "inputs": {"endpoint": "osm-standard", "scheme": "xyz", "tile": {"x": 0, "y": 0, "z": 1}}}

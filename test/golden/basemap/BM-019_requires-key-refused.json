@@ -1,0 +1,1 @@
+{"expected": {"acquisition_failure": "policyRejected", "acquisition_state": "failed", "op": "fetch", "state": "succeeded"}, "id": "BM-019", "inputs": {"address": "z=1/x=0/y=0@xyz", "endpoint": "synthetic-keyed", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}

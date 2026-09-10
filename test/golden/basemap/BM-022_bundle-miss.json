@@ -1,0 +1,1 @@
+{"expected": {"acquisition_failure": "unavailable", "acquisition_state": "failed", "op": "bundle", "state": "succeeded"}, "id": "BM-022", "inputs": {"address": "z=1/x=0/y=1@xyz", "ext": "png", "files": {"bundles/test/1/0/0.png": [137, 80]}, "kind": "rasterTiles", "now": 1700000000, "root": "bundles/test"}}

@@ -1,0 +1,1 @@
+{"expected": {"acquisition_failure": "unsupported", "acquisition_state": "failed", "op": "fetch", "state": "succeeded"}, "id": "BM-017", "inputs": {"address": "", "endpoint": "osm-standard", "kind": "geojson", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}

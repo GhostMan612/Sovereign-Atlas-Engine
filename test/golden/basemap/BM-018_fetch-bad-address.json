@@ -1,0 +1,1 @@
+{"expected": {"acquisition_failure": "invalidTarget", "acquisition_state": "failed", "op": "fetch", "state": "succeeded"}, "id": "BM-018", "inputs": {"address": "not-a-tile-address", "endpoint": "osm-standard", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}

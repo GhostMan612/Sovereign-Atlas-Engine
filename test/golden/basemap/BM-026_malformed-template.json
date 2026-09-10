@@ -1,0 +1,1 @@
+{"expected": {"op": "malformed", "rejection": "MALFORMED_TEMPLATE"}, "id": "BM-026", "inputs": {"endpoint": "synthetic-bad", "scheme": "xyz", "tile": {"x": 0, "y": 0, "z": 1}}}

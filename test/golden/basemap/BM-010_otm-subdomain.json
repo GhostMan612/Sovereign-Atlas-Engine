@@ -1,0 +1,1 @@
+{"expected": {"op": "template", "url": "https://a.tile.opentopomap.org/2/1/1.png"}, "id": "BM-010", "inputs": {"endpoint": "opentopomap", "scheme": "xyz", "tile": {"x": 1, "y": 1, "z": 2}}}

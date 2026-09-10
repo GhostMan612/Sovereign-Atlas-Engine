@@ -1,0 +1,1 @@
+{"expected": {"op": "template", "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/2/3/1"}, "id": "BM-009", "inputs": {"endpoint": "esri-imagery", "scheme": "xyz", "tile": {"x": 1, "y": 3, "z": 2}}}

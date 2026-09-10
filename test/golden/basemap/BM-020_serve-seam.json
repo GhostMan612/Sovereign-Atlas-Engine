@@ -1,0 +1,1 @@
+{"expected": {"malfunction": "operationThrown", "op": "serve_seam", "reason_contains": ["UnsupportedError", "Phase-3"], "state": "failed"}, "id": "BM-020", "inputs": {"address": "z=1/x=0/y=0@xyz", "endpoint": "osm-standard", "kind": "rasterTiles", "now": 1700000000}}

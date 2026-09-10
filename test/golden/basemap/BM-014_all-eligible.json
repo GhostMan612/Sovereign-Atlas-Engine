@@ -1,0 +1,1 @@
+{"expected": {"count": 7, "op": "resolve", "status": "ambiguous"}, "id": "BM-014", "inputs": {"request": {"kind": "rasterTiles", "latitude": 0.0, "longitude": 0.0, "scheme": "xyz", "zoom": 5.0}}}

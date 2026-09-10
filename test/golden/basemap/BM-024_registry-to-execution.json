@@ -1,0 +1,1 @@
+{"expected": {"acquisition_state": "succeeded", "echo_payload": "z=2/x=1/y=1@xyz", "op": "fetch_registry", "state": "succeeded"}, "id": "BM-024", "inputs": {"address": "z=2/x=1/y=1@xyz", "endpoint": "esri-imagery", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [9], "mode": "ok"}}}

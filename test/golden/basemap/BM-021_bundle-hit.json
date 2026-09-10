@@ -1,0 +1,1 @@
+{"expected": {"echo_payload": "z=1/x=0/y=0@xyz", "op": "bundle", "path_seen": "bundles/test/1/0/0.png", "state": "succeeded"}, "id": "BM-021", "inputs": {"address": "z=1/x=0/y=0@xyz", "ext": "png", "files": {"bundles/test/1/0/0.png": [137, 80]}, "kind": "rasterTiles", "now": 1700000000, "root": "bundles/test"}}
