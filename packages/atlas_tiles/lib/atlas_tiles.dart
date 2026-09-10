@@ -18,3 +18,5 @@ export 'src/lookup/cache_lookup.dart';
 export 'src/pipeline/pipeline.dart';
 export 'src/pipeline/pipeline_outcome.dart';
 export 'src/pipeline/pipeline_policy.dart';
+export 'src/store/memory_store.dart';
+export 'src/store/store_operation.dart';
