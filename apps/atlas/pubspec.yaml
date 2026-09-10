@@ -24,6 +24,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # On-device interaction proofs (DEVICE-004): semantic locators, no blind
+  # coordinates. SDK-bundled, no version to pin.
+  integration_test:
+    sdk: flutter
 
   flutter_lints: ^6.0.0
 
