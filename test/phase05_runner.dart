@@ -19,6 +19,7 @@ import '../packages/atlas_geo/lib/atlas_geo.dart';
 import '../packages/atlas_layers/lib/atlas_layers.dart';
 import '../packages/atlas_map/lib/atlas_map.dart';
 import '../packages/atlas_provider_api/lib/atlas_provider_api.dart';
+import '../packages/atlas_providers/lib/atlas_providers.dart';
 import '../packages/atlas_tiles/lib/atlas_tiles.dart';
 
 /// Per-fixture verdict.
@@ -1676,7 +1677,7 @@ void _acquisition(Map<String, dynamic> f) {
 // ---------------------------------------------------------------------------
 
 List<AtlasCoordinate> _ring(List<dynamic> pts) => [
-  for (final p in pts.cast<List>())
+  for (final p in pts.cast<List<dynamic>>())
     AtlasCoordinate(latitude: _num(p[1]), longitude: _num(p[0])),
 ];
 
@@ -1746,7 +1747,8 @@ void _geometry(Map<String, dynamic> f) {
     return;
   }
   if (id == 'GEOM-001') {
-    final ring = _ring((f['inputs'] as Map<String, dynamic>)['rings'][0]);
+    final rings = (f['inputs'] as Map<String, dynamic>)['rings'] as List;
+    final ring = _ring((rings[0] as List).cast<dynamic>());
     final v = AtlasRings.validateRing(ring);
     _record(
       id,
@@ -1759,7 +1761,9 @@ void _geometry(Map<String, dynamic> f) {
     final inputs = f['inputs'] as Map<String, dynamic>;
     var ok = true;
     for (final poly in (inputs['polygons'] as List)) {
-      if (!AtlasRings.validateRing(_ring((poly as List)[0])).isValid) {
+      if (!AtlasRings.validateRing(
+        _ring(((poly as List)[0] as List).cast<dynamic>()),
+      ).isValid) {
         ok = false;
       }
     }
@@ -2848,6 +2852,16 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     await _execution(f);
     return;
   }
+  if (id == 'ADV-086' ||
+      id == 'ADV-087' ||
+      id == 'ADV-088' ||
+      id == 'ADV-089' ||
+      id == 'ADV-090' ||
+      id == 'ADV-091' ||
+      id == 'ADV-092') {
+    await _basemap(f);
+    return;
+  }
   if (id == 'ADV-066' ||
       id == 'ADV-068' ||
       id == 'ADV-069' ||
@@ -3427,11 +3441,12 @@ Future<void> _execution(Map<String, dynamic> f) async {
       ? 'serve'
       : 'store';
   final opSpecs = (inputs['operations'] as List)
-      .cast<Map>()
+      .cast<Map<dynamic, dynamic>>()
       .map((op) => op.cast<String, dynamic>())
       .toList();
   for (final spec in opSpecs) {
-    final script = (spec['script'] as Map).cast<String, dynamic>();
+    final script = (spec['script'] as Map<dynamic, dynamic>)
+        .cast<String, dynamic>();
     if (!script.containsKey(serveKey)) {
       throw StateError('fixture $id: script missing $serveKey behavior');
     }
@@ -3442,9 +3457,9 @@ Future<void> _execution(Map<String, dynamic> f) async {
     final binding = <AtlasResourceIdentity, AtlasExecutionOperation>{};
     for (final spec in opSpecs) {
       binding[_acqResource(
-        (spec['identity'] as Map).cast<String, dynamic>(),
+        (spec['identity'] as Map<dynamic, dynamic>).cast<String, dynamic>(),
       )] = _ScriptedOperation(
-        (spec['script'] as Map).cast<String, dynamic>(),
+        (spec['script'] as Map<dynamic, dynamic>).cast<String, dynamic>(),
         cancellation,
         (contextJson['cancel_during'] as bool?) ?? false,
         log,
@@ -3543,6 +3558,473 @@ Future<void> _execution(Map<String, dynamic> f) async {
   );
 }
 
+//---------------------------------------------------------------------------
+// BASEMAP MATRIX (Blueprint Phase 2 engine side: registry + implementations)
+// ---------------------------------------------------------------------------
+
+AtlasProviderRegistry _bmRegistry() => AtlasBuiltinProviders.registry();
+
+AtlasProviderEndpoint _bmEndpoint(String id) {
+  AtlasProviderDescriptor syn(String sid) => AtlasProviderDescriptor(
+    id: AtlasId(sid),
+    kinds: const {AtlasDataKind.rasterTiles},
+  );
+  const policy = AtlasProviderPolicy(
+    onlineAllowed: true,
+    cacheAllowed: true,
+    prefetchAllowed: true,
+  );
+  switch (id) {
+    case 'synthetic-bad':
+      return AtlasProviderEndpoint(
+        descriptor: syn('syn-bad'),
+        policy: policy,
+        urlTemplate: 'https://tiles.example/{z}/{foo}.png',
+      );
+    case 'synthetic-noparams':
+      return AtlasProviderEndpoint(
+        descriptor: syn('syn-noparams'),
+        policy: policy,
+        urlTemplate: 'https://{s}.tiles.example/{z}/{x}/{y}.png',
+      );
+    case 'synthetic-keyed':
+      return AtlasProviderEndpoint(
+        descriptor: syn('syn-keyed'),
+        policy: const AtlasProviderPolicy(
+          onlineAllowed: true,
+          cacheAllowed: true,
+          prefetchAllowed: false,
+          requiresKey: true,
+        ),
+        urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png',
+      );
+    default:
+      return _bmRegistry().lookup(id)!;
+  }
+}
+
+final class _FakeTransport {
+  _FakeTransport(this.mode, this.bytes, this.status);
+
+  final String mode;
+  final List<int> bytes;
+  final int status;
+  final List<Uri> urls = [];
+  final List<Map<String, String>> headersSeen = [];
+
+  Future<List<int>> call(Uri url, Map<String, String> headers) async {
+    urls.add(url);
+    headersSeen.add(headers);
+    if (mode == 'throw') {
+      throw AtlasTransportException('status $status', statusCode: status);
+    }
+    return bytes;
+  }
+}
+
+Future<void> _basemap(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  final registry = _bmRegistry();
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'registry_ids':
+      final want = (expected['ids'] as List).cast<String>();
+      final got = registry.ids;
+      ok =
+          got.length == want.length &&
+          Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
+      detail = 'ids=$got';
+    case 'validate_all':
+      ok =
+          registry.descriptors.every(
+            (d) => AtlasBuiltinProviders.all
+                .firstWhere((e) => e.descriptor == d)
+                .validate()
+                .isValid,
+          ) ==
+          (expected['valid'] as bool);
+      detail = 'all validate';
+    case 'providers_for':
+      final got = registry.providersFor(
+        _resolutionKind(expected['kind'] as String),
+      );
+      ok = got.length == expected['count'];
+      detail = 'count=${got.length}';
+    case 'lookup':
+      ok =
+          (registry.lookup(expected['id'] as String) != null) ==
+          (expected['found'] as bool);
+      detail = 'found=${registry.lookup(expected['id'] as String) != null}';
+    case 'register_duplicate':
+      try {
+        registry.register(AtlasBuiltinProviders.osmStandard);
+        ok = false;
+      } on StateError {
+        ok = (expected['throws_duplicate'] as bool);
+      }
+      detail = 'duplicate refused';
+    case 'policy':
+      final policy = _bmEndpoint(
+        (expected['id'] as String?) ?? inputs['id'] as String,
+      ).policy;
+      if (expected.containsKey('prefetch_allowed')) {
+        ok = ok && policy.prefetchAllowed == expected['prefetch_allowed'];
+      }
+      if (expected.containsKey('bulk_guard_present')) {
+        ok =
+            ok &&
+            (policy.bulkGuard?.isNotEmpty ?? false) ==
+                (expected['bulk_guard_present'] as bool);
+      }
+      if (expected.containsKey('requires_key')) {
+        ok = ok && policy.requiresKey == expected['requires_key'];
+      }
+      detail = 'prefetch=${policy.prefetchAllowed} key=${policy.requiresKey}';
+    case 'template':
+      final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+      AtlasTileIdentity identity;
+      if (inputs.containsKey('address')) {
+        final parsed = parseTileAddress(inputs['address'] as String)!;
+        identity = AtlasTileIdentity(
+          provider: endpoint.descriptor.id,
+          layer: const AtlasId(''),
+          coordinate: parsed.coordinate,
+          scheme: parsed.scheme,
+        );
+      } else {
+        final tile = inputs['tile'] as Map<String, dynamic>;
+        identity = AtlasTileIdentity(
+          provider: endpoint.descriptor.id,
+          layer: const AtlasId(''),
+          coordinate: AtlasTileCoordinate(
+            z: (tile['z'] as num).toInt(),
+            x: (tile['x'] as num).toInt(),
+            y: (tile['y'] as num).toInt(),
+          ),
+          scheme: AtlasTileScheme.values.firstWhere(
+            (v) => v.name == inputs['scheme'],
+          ),
+        );
+      }
+      final url = AtlasTileRequest(
+        identity: identity,
+        params: endpoint.params,
+      ).resolveUrl(endpoint.urlTemplate!);
+      ok = url == expected['url'];
+      detail = 'url=$url';
+    case 'malformed':
+      try {
+        final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+        final tile = inputs['tile'] as Map<String, dynamic>;
+        AtlasTileRequest(
+          identity: AtlasTileIdentity(
+            provider: endpoint.descriptor.id,
+            layer: const AtlasId(''),
+            coordinate: AtlasTileCoordinate(
+              z: (tile['z'] as num).toInt(),
+              x: (tile['x'] as num).toInt(),
+              y: (tile['y'] as num).toInt(),
+            ),
+          ),
+          params: endpoint.params,
+        ).resolveUrl(endpoint.urlTemplate!);
+        ok = false;
+      } on AtlasRejectionException catch (e) {
+        ok = e.rejection.category == expected['rejection'];
+        detail = 'category=${e.rejection.category}';
+      }
+    case 'local_template':
+      ok =
+          (AtlasBuiltinProviders.localBundle.urlTemplate == null) ==
+          (expected['template_null'] as bool);
+      detail = 'local is bundle-backed';
+    case 'resolve':
+      final request = _resRequest((inputs['request'] as Map<String, dynamic>));
+      final result = AtlasResolver.resolve(
+        AtlasResolutionRequest(
+          kind: request.kind,
+          latitude: request.latitude,
+          longitude: request.longitude,
+          zoom: request.zoom,
+          scheme: request.scheme,
+          preferredProviders: [
+            for (final p
+                in ((inputs['preferred'] as List?) ?? const []).cast<String>())
+              AtlasId(p),
+          ],
+        ),
+        registry.descriptors,
+      );
+      ok = result.status.name == expected['status'];
+      if (expected.containsKey('provider')) {
+        ok = ok && result.provider?.value == expected['provider'];
+      }
+      if (expected.containsKey('eligible')) {
+        final want = (expected['eligible'] as List).cast<String>();
+        final got = result.eligible.map((e) => e.value).toList();
+        ok =
+            ok &&
+            got.length == want.length &&
+            Iterable<int>.generate(got.length).every((i) => got[i] == want[i]);
+      }
+      if (expected.containsKey('count')) {
+        ok = ok && result.eligible.length == expected['count'];
+      }
+      detail =
+          'status=${result.status.name} eligible=${result.eligible.map((e) => e.value).toList()}';
+    case 'fetch':
+      final transportJson = inputs['transport'] as Map<String, dynamic>;
+      final rawBytes = transportJson['bytes'];
+      final fake = _FakeTransport(
+        transportJson['mode'] as String,
+        rawBytes == 'large'
+            ? List<int>.filled(100000, 7)
+            : rawBytes == null
+            ? <int>[]
+            : (rawBytes as List).cast<num>().map((n) => n.toInt()).toList(),
+        (transportJson['status'] as num?)?.toInt() ?? 0,
+      );
+      final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+      final operation = AtlasTileFetchOperation(
+        endpoint: endpoint,
+        transport: fake.call,
+      );
+      final resource = AtlasResourceIdentity(
+        provider: endpoint.descriptor.id,
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final request = AtlasAcquisitionRequest(resource: resource);
+      final context = ExecutionContext(
+        nowSeconds: (inputs['now'] as num).toInt(),
+        cancellation: ExecutionCancellation(),
+        binding: AtlasOperationBinding({resource: operation}),
+      );
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(request: request),
+        context: context,
+      );
+      ok = result.state.name == expected['state'];
+      if (expected.containsKey('acquisition_state')) {
+        ok =
+            ok &&
+            result.acquisition?.state.name == expected['acquisition_state'];
+      }
+      if (expected.containsKey('acquisition_failure')) {
+        ok =
+            ok &&
+            result.acquisition?.failure?.name ==
+                expected['acquisition_failure'];
+      }
+      if (expected.containsKey('echo_payload')) {
+        ok =
+            ok &&
+            result.acquisition?.payloadId?.value == expected['echo_payload'];
+      }
+      if (expected.containsKey('url_seen')) {
+        ok = ok && fake.urls.single.toString() == expected['url_seen'];
+        detail = 'url=${fake.urls.single}';
+      }
+      if (expected.containsKey('headers_contain')) {
+        ok =
+            ok &&
+            fake.headersSeen.single.containsKey(expected['headers_contain']);
+      }
+      if (expected.containsKey('header_name')) {
+        final value = fake.headersSeen.single[expected['header_name']] ?? '';
+        ok = ok && value.contains(expected['header_value_contains'] as String);
+        detail = 'ua=$value';
+      }
+      if (expected.containsKey('url_differs_from_identity')) {
+        ok =
+            ok &&
+            (expected['url_differs_from_identity'] as bool) &&
+            fake.urls.single.toString() != (inputs['address'] as String);
+      }
+      if (expected.containsKey('payload_short')) {
+        ok =
+            ok &&
+            (expected['payload_short'] as bool) &&
+            (result.acquisition?.payloadId?.value.length ?? 9999) < 100;
+      }
+      if (expected.containsKey('malfunction')) {
+        ok = ok && result.malfunction?.name == expected['malfunction'];
+      }
+      if (expected.containsKey('reason_contains')) {
+        final wants = (expected['reason_contains'] as List).cast<String>();
+        ok = ok && wants.every((w) => result.reason.contains(w));
+      }
+      detail =
+          '$detail state=${result.state.name} '
+          'acq=${result.acquisition?.state.name}/${result.acquisition?.failure?.name}';
+    case 'fetch_cancel':
+      final transportJson = inputs['transport'] as Map<String, dynamic>;
+      final fake = _FakeTransport(
+        'ok',
+        (transportJson['bytes'] as List)
+            .cast<num>()
+            .map((n) => n.toInt())
+            .toList(),
+        0,
+      );
+      final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+      final resource = AtlasResourceIdentity(
+        provider: endpoint.descriptor.id,
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final cancellation = ExecutionCancellation()..requestCancel();
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: AtlasAcquisitionRequest(resource: resource),
+        ),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: cancellation,
+          binding: AtlasOperationBinding({
+            resource: AtlasTileFetchOperation(
+              endpoint: endpoint,
+              transport: fake.call,
+            ),
+          }),
+        ),
+      );
+      ok =
+          result.state.name == expected['state'] &&
+          fake.urls.isEmpty == !(expected['contacted'] as bool? ?? true);
+      detail = 'cancelled before contact calls=${fake.urls.length}';
+    case 'fetch_registry':
+      final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+      final resource = AtlasResourceIdentity(
+        provider: endpoint.descriptor.id,
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final transportJson = inputs['transport'] as Map<String, dynamic>;
+      final lookedUp = registry.lookup(endpoint.descriptor.id.value)!;
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: AtlasAcquisitionRequest(resource: resource),
+        ),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            resource: AtlasTileFetchOperation(
+              endpoint: lookedUp,
+              transport: (url, headers) async =>
+                  (transportJson['bytes'] as List)
+                      .cast<num>()
+                      .map((n) => n.toInt())
+                      .toList(),
+            ),
+          }),
+        ),
+      );
+      ok =
+          result.state.name == expected['state'] &&
+          result.acquisition?.state.name == expected['acquisition_state'] &&
+          result.acquisition?.payloadId?.value == expected['echo_payload'];
+      detail = 'registry→binding→executor wired';
+    case 'bundle':
+      final files = (inputs['files'] as Map).cast<String, dynamic>();
+      var seen = '';
+      final operation = AtlasLocalBundleOperation(
+        endpoint: AtlasBuiltinProviders.localBundle,
+        root: inputs['root'] as String,
+        ext: inputs['ext'] as String,
+        readFile: (path) async {
+          seen = path;
+          final hit = files[path];
+          if (hit == null) return null;
+          return (hit as List).cast<num>().map((n) => n.toInt()).toList();
+        },
+      );
+      final resource = AtlasResourceIdentity(
+        provider: const AtlasId('local-bundle'),
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: AtlasAcquisitionRequest(resource: resource),
+        ),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({resource: operation}),
+        ),
+      );
+      ok = result.state.name == expected['state'];
+      if (expected.containsKey('acquisition_failure')) {
+        ok =
+            ok &&
+            result.acquisition?.failure?.name ==
+                expected['acquisition_failure'];
+      }
+      if (expected.containsKey('echo_payload')) {
+        ok =
+            ok &&
+            result.acquisition?.payloadId?.value == expected['echo_payload'];
+      }
+      if (expected.containsKey('path_seen')) {
+        ok = ok && seen == expected['path_seen'];
+      }
+      detail = 'path=$seen acq=${result.acquisition?.state.name}';
+    case 'serve_seam':
+      final endpoint = _bmEndpoint(inputs['endpoint'] as String);
+      final resource = AtlasResourceIdentity(
+        provider: endpoint.descriptor.id,
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final entry = AtlasCacheEntry(
+        key: const AtlasCacheKey(
+          namespace: AtlasCacheNamespace.resource,
+          value: 'osm-standard/rasterTiles/z=1/x=0/y=0@xyz',
+        ),
+        resource: resource,
+        storedAt: 0,
+      );
+      final result = await AtlasExecutor.serveEntry(
+        command: ServeEntryCommand(entry: entry),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            resource: AtlasTileFetchOperation(
+              endpoint: endpoint,
+              transport: (url, headers) async => [0],
+            ),
+          }),
+        ),
+      );
+      ok =
+          result.state.name == expected['state'] &&
+          result.malfunction?.name == expected['malfunction'];
+      if (expected.containsKey('reason_contains')) {
+        final wants = (expected['reason_contains'] as List).cast<String>();
+        ok = ok && wants.every((w) => result.reason.contains(w));
+      }
+      detail = 'seam holds: ${result.reason}';
+    case 'attribution':
+      final text = AtlasProviderAttribution.compose(
+        (inputs['providers'] as List).cast<String>(),
+        (String lookedUp) => registry.lookup(lookedUp)?.descriptor.attribution,
+      );
+      ok = text == expected['text'];
+      detail = 'attribution=$text';
+    default:
+      _record(id, Verdict.fail, 'unknown basemap op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -3618,6 +4100,8 @@ void main() async {
             _acquisition(fixture);
           case 'pipeline':
             _pipeline(fixture);
+          case 'basemap':
+            await _basemap(fixture);
           case 'execution':
             await _execution(fixture);
           case 'resolution':
