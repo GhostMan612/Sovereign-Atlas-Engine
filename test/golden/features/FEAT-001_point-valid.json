@@ -1,0 +1,1 @@
+{"expected": {"op": "feature_valid", "valid": true}, "id": "FEAT-001", "inputs": {"coordinates": [13.4, 52.5], "kind": "point", "properties": {"name": "Berlin"}, "source": "test-suite"}}

@@ -1,0 +1,1 @@
+{"expected": {"disarmed": false, "inside": true, "outside": false}, "id": "TAC2-002", "inputs": {"center": [0.0, 0.0], "inside": [0.0, 0.004], "outside": [0.0, 0.02], "radius_m": 1000.0}}

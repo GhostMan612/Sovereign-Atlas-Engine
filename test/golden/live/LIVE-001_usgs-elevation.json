@@ -1,0 +1,1 @@
+{"expected": {"kinds": ["elevation"], "op": "live_endpoint", "template": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/tile/{z}/{y}/{x}", "valid": true}, "id": "LIVE-001", "inputs": {}}

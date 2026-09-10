@@ -1,0 +1,1 @@
+{"expected": {"hit": false, "op": "segments_disjoint"}, "id": "ANAL-002", "inputs": {"a": [0.0, 0.0], "b": [1.0, 0.0], "c": [0.0, 1.0], "d": [1.0, 1.0]}}

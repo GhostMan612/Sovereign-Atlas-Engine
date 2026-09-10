@@ -1,0 +1,1 @@
+{"expected": {"breach": true, "no_breach": false}, "id": "TAC2-003", "inputs": {"breach": [0.5, 0.5], "no_breach": [2.0, 2.0], "ring": [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]}}

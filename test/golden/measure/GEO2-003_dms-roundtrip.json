@@ -1,0 +1,1 @@
+{"expected": {"decimal": -73.9857, "hemisphere": "W", "op": "dms_roundtrip", "tol": 0.000001}, "id": "GEO2-003", "inputs": {"decimal": -73.9857, "lat": false}}

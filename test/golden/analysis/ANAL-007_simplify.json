@@ -1,0 +1,1 @@
+{"expected": {"count": 2, "ends_kept": true, "op": "simplify"}, "id": "ANAL-007", "inputs": {"line": [[0.0, 0.0], [0.25, 0.00001], [0.5, 0.0], [0.75, -0.00001], [1.0, 0.0]], "tolerance_m": 10.0}}

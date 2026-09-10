@@ -1,0 +1,1 @@
+{"expected": {"op": "geojson_fail", "rejection": "MALFORMED_GEOJSON"}, "id": "FEAT-006", "inputs": {"document": {"coordinates": [0.0, 0.0], "type": "Circle"}, "origin": "test-suite"}}

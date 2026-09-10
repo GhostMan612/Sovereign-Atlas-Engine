@@ -1,0 +1,1 @@
+{"expected": {"hit": true, "lat": 1.0, "lon": 1.0, "op": "segments_touch", "t": 1.0}, "id": "ANAL-003", "inputs": {"a": [0.0, 0.0], "b": [1.0, 1.0], "c": [1.0, 1.0], "d": [2.0, 0.0]}}

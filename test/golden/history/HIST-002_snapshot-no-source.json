@@ -1,0 +1,1 @@
+{"expected": {"rejection": "INVALID_SNAPSHOT", "valid": false}, "id": "HIST-002", "inputs": {"at": 1840000000, "id": "snap-x", "source_id": ""}}

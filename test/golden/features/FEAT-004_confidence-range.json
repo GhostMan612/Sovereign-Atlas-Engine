@@ -1,0 +1,1 @@
+{"expected": {"op": "feature_valid", "rejection": "INVALID_FEATURE", "valid": false}, "id": "FEAT-004", "inputs": {"confidence": 1.5, "coordinates": [0.0, 0.0], "kind": "point", "source": "test-suite"}}

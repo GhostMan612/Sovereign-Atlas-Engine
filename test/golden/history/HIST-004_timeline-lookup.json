@@ -1,0 +1,1 @@
+{"expected": {"at_150": "s1", "at_50": null, "provenance": ["a", "b"]}, "id": "HIST-004", "inputs": {"query": [50, 150], "snapshots": [{"at": 200, "id": "s2", "source_id": "b"}, {"at": 100, "id": "s1", "source_id": "a"}]}}

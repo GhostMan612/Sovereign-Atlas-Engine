@@ -1,0 +1,1 @@
+{"expected": {"aspect_deg": 90.0, "op": "aspect", "tol": 0.01}, "id": "TERR-003", "inputs": {"cell": 10.0, "cols": 3, "heights": [0.0, 10.0, 20.0, 0.0, 10.0, 20.0, 0.0, 10.0, 20.0], "origin": [0.0, 0.0], "rows": 3}}

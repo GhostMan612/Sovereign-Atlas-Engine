@@ -1,0 +1,1 @@
+{"expected": {"rejection": "INVALID_PLUGIN", "valid": false}, "id": "PLUG-002", "inputs": {"id": "contours", "min_engine": "9.9.9", "version": "1.0.0"}}

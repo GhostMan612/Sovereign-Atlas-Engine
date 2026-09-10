@@ -1,0 +1,1 @@
+{"expected": {"all_full_range": true, "op": "viewshed_flat", "range_m": 2000.0}, "id": "ANAL-010", "inputs": {"bearings": [0.0, 90.0, 180.0, 270.0], "elev": 0.0, "observer": [0.0, 0.0], "observer_h": 10.0, "range_m": 2000.0, "step_m": 500.0}}

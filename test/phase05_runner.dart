@@ -14,13 +14,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:atlas_analysis/atlas_analysis.dart';
 import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_data/atlas_data.dart';
 import 'package:atlas_geo/atlas_geo.dart';
+import 'package:atlas_history/atlas_history.dart';
 import 'package:atlas_layers/atlas_layers.dart';
+import 'package:atlas_location/atlas_location.dart';
 import 'package:atlas_map/atlas_map.dart';
+import 'package:atlas_plugins/atlas_plugins.dart';
 import 'package:atlas_provider_api/atlas_provider_api.dart';
 import 'package:atlas_providers/atlas_providers.dart';
 import 'package:atlas_offline/atlas_offline.dart';
+import 'package:atlas_tactical/atlas_tactical.dart';
+import 'package:atlas_terrain/atlas_terrain.dart';
 import 'package:atlas_tiles/atlas_tiles.dart';
 
 /// Per-fixture verdict.
@@ -1825,6 +1832,10 @@ void _migration(Map<String, dynamic> f) {
 
 void _tactical(Map<String, dynamic> f) {
   final id = f['id'] as String;
+  if (id.startsWith('TAC2-') || id == 'ADV-110') {
+    _tactical2(f);
+    return;
+  }
   if (id == 'RING-001') {
     final expected = f['expected'] as Map<String, dynamic>;
     final tableOk = AtlasRangeRings.steps.join(',') ==
@@ -2803,6 +2814,10 @@ Future<void> _adversarial(Map<String, dynamic> f) async {
     await _store(f);
     return;
   }
+  if ((id.startsWith('ADV-10') && id != 'ADV-100') || id.startsWith('ADV-11')) {
+    _gisAdv(f);
+    return;
+  }
   if (id == 'ADV-094' ||
       id == 'ADV-095' ||
       id == 'ADV-096' ||
@@ -3507,6 +3522,921 @@ Future<void> _execution(Map<String, dynamic> f) async {
     'state=${result.state.name} malfunction=${result.malfunction?.name} '
     'contacts=$log reason=${result.reason}',
   );
+}
+
+// ---------------------------------------------------------------------------
+// GIS PHASES (blueprint 4–12 engine side)
+// ---------------------------------------------------------------------------
+
+AtlasCoordinate _cr(List<dynamic> pair) => AtlasCoordinate(
+      latitude: (pair[1] as num).toDouble(),
+      longitude: (pair[0] as num).toDouble(),
+    );
+
+List<AtlasCoordinate> _crr(List<dynamic> pairs) => [
+      for (final p in pairs.cast<List<dynamic>>()) _cr(p),
+    ];
+
+bool _near(double got, double want, double tol) => (got - want).abs() <= tol;
+
+void _measure(Map<String, dynamic> f) {
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'dms_parse':
+      final got = AtlasDms.parse(inputs['text'] as String).toDecimal();
+      ok = _near(got, (expected['decimal'] as num).toDouble(),
+          (expected['tol'] as num).toDouble());
+      detail = 'decimal=$got';
+    case 'dms_parse_fail':
+      try {
+        AtlasDms.parse(inputs['text'] as String);
+        ok = false;
+      } on AtlasRejectionException catch (e) {
+        ok = e.rejection.category == expected['rejection'];
+        detail = 'category=${e.rejection.category}';
+      }
+    case 'dms_roundtrip':
+      final dms = AtlasDms.fromDecimal(
+        (inputs['decimal'] as num).toDouble(),
+        isLatitude: inputs['lat'] as bool,
+      );
+      ok = dms.hemisphere == expected['hemisphere'] &&
+          _near(dms.toDecimal(), (expected['decimal'] as num).toDouble(),
+              (expected['tol'] as num).toDouble());
+      detail = 'dms=$dms';
+    case 'units':
+      ok = _near(
+              AtlasLengthUnits.toMiles((inputs['miles_in'] as num).toDouble()),
+              (expected['miles'] as num).toDouble(),
+              1e-9) &&
+          _near(AtlasLengthUnits.toFeet((inputs['feet_in'] as num).toDouble()),
+              (expected['feet'] as num).toDouble(), 1e-6) &&
+          _near(
+              AtlasLengthUnits.toNauticalMiles(
+                  (inputs['nmi_in'] as num).toDouble()),
+              (expected['nmi'] as num).toDouble(),
+              1e-9);
+      detail = 'conversions exact';
+    case 'area':
+      final got = AtlasMeasure.ringAreaSqM(_crr(inputs['ring'] as List));
+      ok = _near(got, (expected['area_sqm'] as num).toDouble(),
+          (expected['tol'] as num).toDouble());
+      detail = 'area=$got';
+    case 'centroid':
+      final got = AtlasMeasure.centroid(
+        AtlasPolygon(exterior: _crr(inputs['ring'] as List)),
+      );
+      ok = _near(got.latitude, (expected['lat'] as num).toDouble(),
+              (expected['tol'] as num).toDouble()) &&
+          _near(got.longitude, (expected['lon'] as num).toDouble(),
+              (expected['tol'] as num).toDouble());
+      detail = 'centroid=$got';
+    case 'pip':
+      final polygon = AtlasPolygon(
+        exterior: _crr(inputs['ring'] as List),
+        holes: inputs.containsKey('hole_ring')
+            ? [_crr(inputs['hole_ring'] as List)]
+            : const [],
+      );
+      ok = AtlasMeasure.containsPoint(
+                  polygon, _cr((inputs['inside'] as List).cast<dynamic>())) ==
+              expected['inside'] &&
+          AtlasMeasure.containsPoint(
+                  polygon, _cr((inputs['outside'] as List).cast<dynamic>())) ==
+              expected['outside'] &&
+          AtlasMeasure.containsPoint(
+                  polygon, _cr((inputs['vertex'] as List).cast<dynamic>())) ==
+              expected['vertex'] &&
+          AtlasMeasure.containsPoint(
+                  polygon, _cr((inputs['edge'] as List).cast<dynamic>())) ==
+              expected['edge'];
+      if (expected.containsKey('hole')) {
+        // Hole center must read outside whenever a hole exists.
+        ok = ok &&
+            AtlasMeasure.containsPoint(
+                  polygon,
+                  const AtlasCoordinate(latitude: 0.5, longitude: 0.5),
+                ) ==
+                (expected['hole'] as bool);
+      }
+      detail = 'pip rules hold';
+    case 'perimeter':
+      final got = AtlasMeasure.perimeterM(_crr(inputs['ring'] as List));
+      ok = _near(got, (expected['perimeter_m'] as num).toDouble(),
+          (expected['tol'] as num).toDouble());
+      detail = 'perimeter=$got';
+    case 'nearest':
+      final got = AtlasMeasure.nearestOnSegment(
+        _cr((inputs['a'] as List).cast<dynamic>()),
+        _cr((inputs['b'] as List).cast<dynamic>()),
+        _cr((inputs['p'] as List).cast<dynamic>()),
+      );
+      ok = _near(got.latitude, (expected['lat'] as num).toDouble(),
+              (expected['tol'] as num).toDouble()) &&
+          _near(got.longitude, (expected['lon'] as num).toDouble(),
+              (expected['tol'] as num).toDouble());
+      detail = 'nearest=$got';
+    case 'graticule':
+      final box = inputs['box'] as Map<String, dynamic>;
+      final grid = AtlasGrids.graticuleFor(
+        AtlasBoundingBox(
+          south: (box['south'] as num).toDouble(),
+          west: (box['west'] as num).toDouble(),
+          north: (box['north'] as num).toDouble(),
+          east: (box['east'] as num).toDouble(),
+        ),
+        (inputs['interval'] as num).toDouble(),
+      );
+      List<double> want(String key) =>
+          (expected[key] as List).cast<num>().map((n) => n.toDouble()).toList();
+      final meridians = want('meridians');
+      final parallels = want('parallels');
+      ok = AtlasGrids.intervalForZoom((inputs['zoom'] as num).toInt()) ==
+              expected['interval'] &&
+          grid.meridians.length == meridians.length &&
+          grid.parallels.length == parallels.length &&
+          Iterable<int>.generate(meridians.length).every(
+            (i) => grid.meridians[i] == meridians[i],
+          ) &&
+          Iterable<int>.generate(parallels.length).every(
+            (i) => grid.parallels[i] == parallels[i],
+          );
+      detail = 'meridians=${grid.meridians}';
+    default:
+      _record(f['id'] as String, Verdict.fail, 'unknown measure op: $op');
+      return;
+  }
+  _record(f['id'] as String, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+AtlasFeature _feat(Map<String, dynamic> m) => AtlasFeature(
+      geometryKind: AtlasGeometryKind.values.firstWhere(
+        (v) => v.name == m['kind'],
+      ),
+      coordinates: (m['coordinates'] as List).cast<dynamic>(),
+      properties:
+          ((m['properties'] as Map?)?.cast<String, dynamic>()) ?? const {},
+      source: (m['source'] as String?) ?? 'test-suite',
+      confidence: (m['confidence'] as num?)?.toDouble(),
+    );
+
+void _features(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'feature_valid':
+      final check = _feat(inputs).validate();
+      ok = check.isValid == (expected['valid'] as bool);
+      if (!check.isValid && expected.containsKey('rejection')) {
+        ok = ok && check.rejection?.category == expected['rejection'];
+      }
+      detail = 'valid=${check.isValid}';
+    case 'confidence_edge':
+      final one = _feat({...inputs, 'confidence': 1.0}).validate().isValid;
+      final over = _feat({
+        ...inputs,
+        'confidence': inputs['over'],
+      }).validate().isValid;
+      ok = one == (expected['one'] as bool) &&
+          over == (expected['over'] as bool);
+      detail = 'boundary 1.0 holds';
+    case 'geojson':
+      final features = AtlasGeoJson.normalize(
+        (inputs['document'] as Map).cast<String, dynamic>(),
+        origin: inputs['origin'] as String,
+      );
+      ok = features.length == expected['count'] &&
+          features.map((e) => e.geometryKind.name).join(',') ==
+              (expected['kinds'] as List).cast<String>().join(',') &&
+          features.every(
+            (e) =>
+                e.source == (expected['sources'] as List).cast<String>().first,
+          ) &&
+          features.every((e) => e.validate().isValid);
+      detail = 'normalized x${features.length}';
+    case 'geojson_fail':
+      try {
+        AtlasGeoJson.normalize(
+          (inputs['document'] as Map).cast<String, dynamic>(),
+          origin: inputs['origin'] as String,
+        );
+        ok = false;
+      } on AtlasRejectionException catch (e) {
+        ok = e.rejection.category == expected['rejection'];
+        detail = 'category=${e.rejection.category}';
+      }
+    case 'dataset_valid':
+      final descriptor = AtlasDatasetDescriptor(
+        id: AtlasId(inputs['id'] as String),
+        title: (inputs['title'] as String?) ?? '',
+        kinds: {
+          for (final k in (inputs['kinds'] as List).cast<String>())
+            AtlasGeometryKind.values.firstWhere((v) => v.name == k),
+        },
+      );
+      ok = descriptor.validate().isValid == (expected['valid'] as bool);
+      detail = 'dataset valid';
+    default:
+      _record(id, Verdict.fail, 'unknown features op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+Future<void> _live(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'live_endpoint':
+      final endpoint = AtlasLiveProviders.usgsElevation;
+      ok = endpoint.validate().isValid == (expected['valid'] as bool) &&
+          endpoint.urlTemplate == expected['template'] &&
+          endpoint.descriptor.kinds.map((k) => k.name).join(',') ==
+              (expected['kinds'] as List).cast<String>().join(',');
+      detail = 'usgs-elevation declared';
+    case 'live_registry':
+      final ids = AtlasLiveProviders.registry().ids;
+      ok = ids.length == (expected['ids'] as List).length &&
+          ids.first == (expected['ids'] as List).cast<String>().first;
+      detail = 'ids=$ids';
+    case 'dataset_source':
+      final source = AtlasDatasetSource(
+        id: AtlasId(inputs['id'] as String),
+        family: AtlasDatasetFamily.values.firstWhere(
+          (v) => v.name == inputs['family'],
+        ),
+        apiRoot: inputs['api_root'] as String,
+      );
+      final check = source.validate();
+      ok = check.isValid == (expected['valid'] as bool);
+      if (check.isValid) {
+        ok = ok &&
+            source.family.name == expected['family'] &&
+            source.apiRoot == expected['root'];
+      } else {
+        ok = ok && check.rejection?.category == expected['rejection'];
+      }
+      detail = 'source valid=${check.isValid}';
+    case 'live_fetch':
+      final transportJson = inputs['transport'] as Map<String, dynamic>;
+      final rawBytes = transportJson['bytes'];
+      final urls = <Uri>[];
+      Future<List<int>> transport(Uri url, Map<String, String> headers) async {
+        urls.add(url);
+        if (transportJson['mode'] == 'throw') {
+          throw AtlasTransportException('status', statusCode: 500);
+        }
+        return (rawBytes as List).cast<num>().map((n) => n.toInt()).toList();
+      }
+
+      final endpoint = AtlasLiveProviders.usgsElevation;
+      final resource = AtlasResourceIdentity(
+        provider: endpoint.descriptor.id,
+        kind: _resolutionKind(inputs['kind'] as String),
+        address: inputs['address'] as String,
+      );
+      final result = await AtlasExecutor.runAcquisition(
+        command: RunAcquisitionCommand(
+          request: AtlasAcquisitionRequest(resource: resource),
+        ),
+        context: ExecutionContext(
+          nowSeconds: (inputs['now'] as num).toInt(),
+          cancellation: ExecutionCancellation(),
+          binding: AtlasOperationBinding({
+            resource: AtlasTileFetchOperation(
+              endpoint: endpoint,
+              transport: transport,
+            ),
+          }),
+        ),
+      );
+      ok = result.state.name == expected['state'];
+      if (expected.containsKey('acquisition_state')) {
+        ok = ok &&
+            result.acquisition?.state.name == expected['acquisition_state'];
+      }
+      if (expected.containsKey('acquisition_failure')) {
+        ok = ok &&
+            result.acquisition?.failure?.name ==
+                expected['acquisition_failure'];
+      }
+      if (expected.containsKey('echo_payload')) {
+        ok = ok &&
+            result.acquisition?.payloadId?.value == expected['echo_payload'];
+      }
+      if (expected.containsKey('url_seen')) {
+        ok = ok && urls.single.toString() == expected['url_seen'];
+      }
+      detail = 'live fetch via executor';
+    default:
+      _record(id, Verdict.fail, 'unknown live op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+AtlasElevationGrid _grid(Map<String, dynamic> inputs) => AtlasElevationGrid(
+      rows: (inputs['rows'] as num).toInt(),
+      cols: (inputs['cols'] as num).toInt(),
+      cellSizeMeters: (inputs['cell'] as num).toDouble(),
+      origin: _cr((inputs['origin'] as List).cast<dynamic>()),
+      heights: [
+        for (final h in (inputs['heights'] as List))
+          h == null ? null : (h as num).toDouble(),
+      ],
+    );
+
+void _terrain(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  var ok = true;
+  var detail = '';
+  switch (op) {
+    case 'grid_invalid':
+      final check = _grid(inputs).validate();
+      ok = !check.isValid && check.rejection?.category == expected['rejection'];
+      detail = 'invalid grid refused';
+    case 'slope':
+      final got = AtlasTerrain.slopeDeg(_grid(inputs), 1, 1);
+      ok = got != null &&
+          _near(
+            got,
+            (expected['slope_deg'] as num).toDouble(),
+            (expected['tol'] as num).toDouble(),
+          );
+      detail = 'slope=$got';
+    case 'aspect':
+      final got = AtlasTerrain.aspectDeg(_grid(inputs), 1, 1);
+      ok = got != null &&
+          _near(
+            got,
+            (expected['aspect_deg'] as num).toDouble(),
+            (expected['tol'] as num).toDouble(),
+          );
+      detail = 'aspect=$got';
+    case 'hillshade':
+      final got = AtlasTerrain.hillshade(
+        _grid(inputs),
+        1,
+        1,
+        (inputs['azimuth'] as num).toDouble(),
+        (inputs['altitude'] as num).toDouble(),
+      );
+      ok = got != null &&
+          _near(
+            got,
+            (expected['hillshade'] as num).toDouble(),
+            (expected['tol'] as num).toDouble(),
+          );
+      detail = 'hillshade=$got';
+    case 'profile':
+      final profile = AtlasTerrain.profile(
+        _grid(inputs),
+        _crr(inputs['path'] as List),
+      );
+      ok = profile.length == (inputs['path'] as List).length &&
+          profile.every((h) => h != null) &&
+          profile[1]! > profile[0]! &&
+          profile[1]! > profile[2]!;
+      detail = 'profile=$profile';
+    case 'slope_void':
+      ok = AtlasTerrain.slopeDeg(_grid(inputs), 1, 1) == null;
+      detail = 'void poisons window';
+    case 'profile_null':
+      final profile = AtlasTerrain.profile(
+        _grid(inputs),
+        _crr(inputs['path'] as List),
+      );
+      ok = profile.any((h) => h == null);
+      detail = 'void propagates: $profile';
+    default:
+      _record(id, Verdict.fail, 'unknown terrain op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+void _analysis(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  final op = expected['op'] as String;
+  var ok = true;
+  var detail = '';
+  AtlasCoordinate point(String key) =>
+      _cr((inputs[key] as List).cast<dynamic>());
+  switch (op) {
+    case 'segments_cross':
+    case 'segments_touch':
+      final hit = AtlasSegments.intersect(
+        point('a'),
+        point('b'),
+        point('c'),
+        point('d'),
+      );
+      ok = hit != null &&
+          _near(hit.at.latitude, (expected['lat'] as num).toDouble(), 1e-9) &&
+          _near(hit.at.longitude, (expected['lon'] as num).toDouble(), 1e-9) &&
+          _near(hit.t, (expected['t'] as num).toDouble(), 1e-9) &&
+          (!expected.containsKey('u') ||
+              _near(hit.u, (expected['u'] as num).toDouble(), 1e-9));
+      detail = 'hit=$hit';
+    case 'segments_disjoint':
+      final disjoint = AtlasSegments.intersect(
+            point('a'),
+            point('b'),
+            point('c'),
+            point('d'),
+          ) ==
+          null;
+      ok = disjoint == !(expected['hit'] as bool);
+      detail = 'disjoint';
+    case 'radial':
+      final zone = AtlasRadialZone(
+        center: point('center'),
+        radiusMeters: (inputs['radius_m'] as num).toDouble(),
+      );
+      ok = zone.contains(point('inside')) == expected['inside'] &&
+          zone.contains(point('outside')) == expected['outside'] &&
+          zone.contains(point('edge')) == expected['edge'];
+      detail = 'radial membership';
+    case 'clip':
+      final box = inputs['box'] as Map<String, dynamic>;
+      final clipped = AtlasSpatial.clipToBox(
+        _crr(inputs['ring'] as List),
+        AtlasBoundingBox(
+          south: (box['south'] as num).toDouble(),
+          west: (box['west'] as num).toDouble(),
+          north: (box['north'] as num).toDouble(),
+          east: (box['east'] as num).toDouble(),
+        ),
+      );
+      ok = clipped.isNotEmpty &&
+          clipped.every(
+            (p) =>
+                p.latitude >= 0.0 &&
+                p.latitude <= 2.0 &&
+                p.longitude >= 0.0 &&
+                p.longitude <= 2.0,
+          );
+      detail = 'clipped x${clipped.length}';
+    case 'densify':
+      final line = _crr(inputs['line'] as List);
+      final dense = AtlasSpatial.densify(
+        line,
+        (inputs['step_m'] as num).toDouble(),
+      );
+      ok = dense.length == expected['count'] &&
+          dense.first == line.first &&
+          dense.last == line.last;
+      detail = 'densified x${dense.length}';
+    case 'simplify':
+      final line = _crr(inputs['line'] as List);
+      final simple = AtlasSpatial.simplify(
+        line,
+        (inputs['tolerance_m'] as num).toDouble(),
+      );
+      ok = simple.first == line.first &&
+          simple.last == line.last &&
+          (!expected.containsKey('count') ||
+              simple.length == expected['count']);
+      detail = 'simplified ${line.length}→${simple.length}';
+    case 'los_clear':
+    case 'los_blocked':
+      final ridge = inputs['ridge'] as Map<String, dynamic>?;
+      double? sampler(AtlasCoordinate p) {
+        if (inputs['voids'] == true) return null;
+        if (ridge != null &&
+            (p.longitude - (ridge['at'] as num).toDouble()).abs() < 0.001) {
+          return (ridge['height'] as num).toDouble();
+        }
+        return (inputs['elev'] as num?)?.toDouble() ?? 0.0;
+      }
+
+      final sight = AtlasVisibility.lineOfSight(
+        from: point('from'),
+        to: point('to'),
+        fromHeightM: (inputs['from_h'] as num).toDouble(),
+        toHeightM: (inputs['to_h'] as num).toDouble(),
+        stepMeters: (inputs['step_m'] as num).toDouble(),
+        elevationAt: sampler,
+      );
+      ok = sight.visible == (expected['visible'] as bool);
+      if (expected.containsKey('obstructed')) {
+        ok = ok && !sight.visible && (sight.obstructionHeight ?? 0) > 0;
+      }
+      detail =
+          'visible=${sight.visible} obstruction=${sight.obstructionHeight}';
+    case 'viewshed_flat':
+      final sight = AtlasVisibility.viewshed(
+        observer: point('observer'),
+        observerHeightM: (inputs['observer_h'] as num).toDouble(),
+        bearings: (inputs['bearings'] as List)
+            .cast<num>()
+            .map((n) => n.toDouble())
+            .toList(),
+        rangeMeters: (inputs['range_m'] as num).toDouble(),
+        stepMeters: (inputs['step_m'] as num).toDouble(),
+        elevationAt: (_) => (inputs['elev'] as num).toDouble(),
+      );
+      ok = sight.length == (inputs['bearings'] as List).length &&
+          sight.values.every(
+            (r) => r == (expected['range_m'] as num).toDouble(),
+          );
+      detail = 'viewshed=$sight';
+    default:
+      _record(id, Verdict.fail, 'unknown analysis op: $op');
+      return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+void _history(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  AtlasHistoricalSnapshot snap(Map<String, dynamic> m) =>
+      AtlasHistoricalSnapshot(
+        id: AtlasId(m['id'] as String),
+        at: (m['at'] as num).toInt(),
+        sourceId: (m['source_id'] as String?) ?? '',
+        sourceEpoch: m['source_epoch'] as String?,
+        retrievedAt: (m['retrieved_at'] as num?)?.toInt(),
+        sourceNote: (m['source_note'] as String?) ?? '',
+        license: m['license'] as String?,
+        features: [
+          for (final feat in ((m['features'] as List?) ?? const [])
+              .cast<Map<String, dynamic>>())
+            _feat({
+              'kind': feat['kind'],
+              'coordinates': feat['coordinates'],
+              'source': m['source_id'],
+            }),
+        ],
+      );
+  AtlasTimeline timeline() => AtlasTimeline([
+        for (final s
+            in (inputs['snapshots'] as List).cast<Map<String, dynamic>>())
+          snap(s),
+      ]);
+  var ok = true;
+  var detail = '';
+  if (id == 'HIST-001') {
+    final snapshot = snap(inputs);
+    ok = snapshot.validate().isValid &&
+        snapshot.featureCount == 2 &&
+        snapshot.sourceId == expected['source'];
+    detail = 'snapshot keeps context';
+  } else if (id == 'HIST-002') {
+    final check = snap(inputs).validate();
+    ok = !check.isValid && check.rejection?.category == expected['rejection'];
+    detail = 'sourceless refused';
+  } else if (id == 'HIST-003') {
+    final order = timeline().snapshots.map((s) => s.id.value).toList();
+    final want = (expected['order'] as List).cast<String>();
+    ok = order.length == want.length &&
+        Iterable<int>.generate(
+          order.length,
+        ).every((i) => order[i] == want[i]);
+    detail = 'order=$order';
+  } else if (id == 'HIST-004' || id == 'ADV-109') {
+    final line = timeline();
+    final queries = id == 'HIST-004'
+        ? (inputs['query'] as List).cast<num>().map((n) => n.toInt()).toList()
+        : [(inputs['query'] as num).toInt()];
+    final hits = [for (final q in queries) line.at(q)?.id.value];
+    if (id == 'HIST-004') {
+      ok = hits[0] == null &&
+          hits[1] == expected['at_150'] &&
+          line.provenance.join(',') ==
+              (expected['provenance'] as List).cast<String>().join(',');
+    } else {
+      ok = hits.single == null && line.provenance.isEmpty;
+    }
+    detail = 'lookup=$hits provenance=${line.provenance}';
+  } else {
+    _record(id, Verdict.fail, 'unknown history fixture: $id');
+    return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+void _tactical2(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  var ok = true;
+  var detail = '';
+  AtlasWaypoint waypoint(Map<String, dynamic> m) => AtlasWaypoint(
+        id: AtlasId(m['id'] as String),
+        position: AtlasCoordinate(
+          latitude: (m['lat'] as num).toDouble(),
+          longitude: (m['lon'] as num).toDouble(),
+        ),
+        createdAt: (m['at'] as num?)?.toInt() ?? 0,
+      );
+  if (id == 'TAC2-001' || id == 'ADV-110') {
+    final track = AtlasTrack(
+      id: AtlasId(inputs['track'] as String),
+      points: [
+        for (final p in (inputs['points'] as List).cast<Map<String, dynamic>>())
+          waypoint(p),
+      ],
+    );
+    ok = track.pointCount == (inputs['points'] as List).length &&
+        _near(
+          track.lengthMeters,
+          (expected['length_m'] as num).toDouble(),
+          (expected['tol'] as num?)?.toDouble() ?? 1e-9,
+        );
+    detail = 'length=${track.lengthMeters}';
+  } else if (id == 'TAC2-002') {
+    AtlasGeofence fence(bool armed) => AtlasGeofence.radial(
+          id: const AtlasId('f1'),
+          center: _cr((inputs['center'] as List).cast<dynamic>()),
+          radiusMeters: (inputs['radius_m'] as num).toDouble(),
+          armed: armed,
+        );
+    ok = fence(true)
+                .breachedBy(_cr((inputs['inside'] as List).cast<dynamic>())) ==
+            expected['inside'] &&
+        fence(true)
+                .breachedBy(_cr((inputs['outside'] as List).cast<dynamic>())) ==
+            expected['outside'] &&
+        fence(false)
+                .breachedBy(_cr((inputs['inside'] as List).cast<dynamic>())) ==
+            expected['disarmed'];
+    detail = 'radial breach logic';
+  } else if (id == 'TAC2-003') {
+    final fence = AtlasGeofence.polygon(
+      id: const AtlasId('f2'),
+      polygon: AtlasPolygon(exterior: _crr(inputs['ring'] as List)),
+    );
+    ok = fence.breachedBy(_cr((inputs['breach'] as List).cast<dynamic>())) ==
+            expected['breach'] &&
+        fence.breachedBy(_cr((inputs['no_breach'] as List).cast<dynamic>())) ==
+            expected['no_breach'];
+    detail = 'polygon breach logic';
+  } else if (id == 'TAC2-004') {
+    final fspl = AtlasRadioLink.freeSpaceLossDb(
+      (inputs['distance_m'] as num).toDouble(),
+      (inputs['frequency_mhz'] as num).toDouble(),
+    );
+    final margin = AtlasRadioLink.linkMarginDb(
+      distanceMeters: (inputs['distance_m'] as num).toDouble(),
+      frequencyMHz: (inputs['frequency_mhz'] as num).toDouble(),
+      txPowerDbm: (inputs['tx'] as num).toDouble(),
+      rxSensitivityDbm: (inputs['sensitivity'] as num).toDouble(),
+      antennaGainDbi: (inputs['gain'] as num).toDouble(),
+      extraLossDb: (inputs['extra_loss'] as num).toDouble(),
+    );
+    ok = _near(
+          fspl,
+          (expected['fspl_db'] as num).toDouble(),
+          (expected['tol'] as num).toDouble(),
+        ) &&
+        _near(
+          margin,
+          (expected['margin_db'] as num).toDouble(),
+          (expected['tol'] as num).toDouble(),
+        );
+    detail = 'fspl=$fspl margin=$margin';
+  } else if (id == 'TAC2-005') {
+    final grants = <AtlasSensitivityTier, Set<String>>{};
+    for (final kv
+        in ((inputs['grants'] as Map).cast<String, dynamic>()).entries) {
+      grants[AtlasSensitivityTier.values.firstWhere(
+        (v) => v.name == kv.key,
+      )] = (kv.value as List).cast<String>().toSet();
+    }
+    final policy = AtlasSharingPolicy(
+      id: const AtlasId('share-1'),
+      grants: grants,
+    );
+    final query = inputs['query'] as Map<String, dynamic>;
+    ok = policy.mayShare(AtlasSensitivityTier.restricted, 'team-alpha') ==
+            expected['grant_restricted'] &&
+        policy.mayShare(AtlasSensitivityTier.open, 'team-alpha') ==
+            expected['grant_open'] &&
+        policy.mayShare(
+              AtlasSensitivityTier.values.firstWhere(
+                (v) => v.name == query['deny_tier'],
+              ),
+              query['deny_group'] as String,
+            ) ==
+            expected['deny'];
+    detail = 'sharing inheritance';
+  } else if (id == 'TAC2-006') {
+    final zone = AtlasMgrsZone.of(
+      AtlasCoordinate(
+        latitude: (inputs['lat'] as num).toDouble(),
+        longitude: (inputs['lon'] as num).toDouble(),
+      ),
+    );
+    ok = zone.zone == expected['zone'] &&
+        zone.band == expected['band'] &&
+        zone.toString() == expected['designator'];
+    detail = 'zone=$zone';
+  } else if (id == 'TAC2-007') {
+    final check = waypoint(inputs).validate();
+    ok = !check.isValid && check.rejection?.category == expected['rejection'];
+    detail = 'invalid waypoint refused';
+  } else {
+    _record(id, Verdict.fail, 'unknown tactical fixture: $id');
+    return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+void _position(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  var ok = true;
+  var detail = '';
+  if (id == 'POS-001') {
+    final fix = AtlasLocationFix(
+      position: AtlasCoordinate(
+        latitude: (inputs['lat'] as num).toDouble(),
+        longitude: (inputs['lon'] as num).toDouble(),
+      ),
+      at: (inputs['at'] as num).toInt(),
+    );
+    final check = fix.validate();
+    ok = !check.isValid && check.rejection?.category == expected['rejection'];
+    detail = 'invalid fix refused';
+  } else if (id == 'POS-002') {
+    final heading = AtlasHeading(
+      degrees: (inputs['degrees'] as num).toDouble(),
+    );
+    ok = heading.normalized == (expected['normalized'] as num).toDouble();
+    detail = 'normalized=${heading.normalized}';
+  } else if (id == 'POS-003') {
+    final log = AtlasTrackLog();
+    for (final fixMap
+        in (inputs['fixes'] as List).cast<Map<String, dynamic>>()) {
+      log.append(
+        AtlasLocationFix(
+          position: AtlasCoordinate(
+            latitude: (fixMap['lat'] as num).toDouble(),
+            longitude: (fixMap['lon'] as num).toDouble(),
+          ),
+          at: (fixMap['at'] as num).toInt(),
+        ),
+      );
+    }
+    ok = log.fixCount == expected['count'] &&
+        log.latest?.at == expected['latest'];
+    detail = 'log x${log.fixCount}';
+  } else {
+    _record(id, Verdict.fail, 'unknown position fixture: $id');
+    return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+void _plugins(Map<String, dynamic> f) {
+  final id = f['id'] as String;
+  final expected = f['expected'] as Map<String, dynamic>;
+  final inputs = f['inputs'] as Map<String, dynamic>;
+  AtlasPluginManifest manifest() => AtlasPluginManifest(
+        id: AtlasId(inputs['id'] as String),
+        version: inputs['version'] as String,
+        minEngineVersion: inputs['min_engine'] as String?,
+        permissions: {
+          for (final p
+              in ((inputs['permissions'] as List?) ?? const []).cast<String>())
+            AtlasPluginPermission.values.firstWhere((v) => v.name == p),
+        },
+      );
+  var ok = true;
+  var detail = '';
+  if (id == 'PLUG-001' || id == 'PLUG-002') {
+    final check = manifest().validate();
+    ok = check.isValid == (expected['valid'] as bool);
+    if (!check.isValid) {
+      ok = ok && check.rejection?.category == expected['rejection'];
+    }
+    detail = 'manifest valid=${check.isValid}';
+  } else if (id == 'PLUG-003') {
+    final registry = AtlasPluginRegistry();
+    registry.register(manifest());
+    var duplicate = false;
+    try {
+      registry.register(manifest());
+    } on StateError {
+      duplicate = true;
+    }
+    registry.enable(inputs['enable'] as String);
+    final query = inputs['grants_query'] as Map<String, dynamic>;
+    final noGrant = inputs['no_grant_query'] as Map<String, dynamic>;
+    AtlasPluginPermission permission(Map<String, dynamic> q) =>
+        AtlasPluginPermission.values.firstWhere(
+          (v) => v.name == q['permission'],
+        );
+    ok = duplicate == (expected['duplicate_throws'] as bool) &&
+        registry.stateOf(inputs['enable'] as String) ==
+            AtlasPluginState.enabled &&
+        registry.grants(query['id'] as String, permission(query)) ==
+            (expected['grants'] as bool) &&
+        registry.grants(noGrant['id'] as String, permission(noGrant)) ==
+            (expected['no_grant'] as bool);
+    detail = 'registry lifecycle + grants';
+  } else {
+    _record(id, Verdict.fail, 'unknown plugins fixture: $id');
+    return;
+  }
+  _record(id, ok ? Verdict.pass : Verdict.fail, detail);
+}
+
+Future<void> _gisAdv(Map<String, dynamic> f) async {
+  final id = f['id'] as String;
+  Map<String, dynamic> withOp(String op) => {
+        'id': id,
+        'inputs': f['inputs'],
+        'expected': {...f['expected'] as Map<String, dynamic>, 'op': op},
+      };
+  switch (id) {
+    case 'ADV-101':
+      _measure(withOp('dms_parse_fail'));
+    case 'ADV-102':
+      _measure(withOp('area'));
+    case 'ADV-103':
+      _features(withOp('geojson_fail'));
+    case 'ADV-104':
+      _features({
+        'id': id,
+        'inputs': {
+          'kind': 'point',
+          'coordinates': [0.0, 0.0],
+          'source': (f['inputs'] as Map<String, dynamic>)['source'],
+          'over': (f['inputs'] as Map<String, dynamic>)['over'],
+        },
+        'expected': {
+          ...f['expected'] as Map<String, dynamic>,
+          'op': 'confidence_edge'
+        },
+      });
+    case 'ADV-105':
+      await _live({
+        'id': id,
+        'inputs': {
+          ...(f['inputs'] as Map<String, dynamic>),
+          'transport': {'mode': 'throw', 'status': 500},
+        },
+        'expected': {
+          ...f['expected'] as Map<String, dynamic>,
+          'op': 'live_fetch'
+        },
+      });
+    case 'ADV-106':
+      _terrain({
+        'id': id,
+        'inputs': f['inputs'],
+        'expected': {'op': 'profile_null'},
+      });
+    case 'ADV-107':
+      _analysis({
+        'id': id,
+        'inputs': f['inputs'],
+        'expected': {
+          ...f['expected'] as Map<String, dynamic>,
+          'op': 'simplify'
+        },
+      });
+    case 'ADV-108':
+      _analysis({
+        'id': id,
+        'inputs': {
+          ...(f['inputs'] as Map<String, dynamic>),
+          'voids': true,
+        },
+        'expected': {
+          ...f['expected'] as Map<String, dynamic>,
+          'op': 'los_clear'
+        },
+      });
+    case 'ADV-109':
+      _history({'id': id, 'inputs': f['inputs'], 'expected': f['expected']});
+    case 'ADV-110':
+      _tactical2(f);
+    default:
+      _record(id, Verdict.fail, 'unknown GIS adversarial: $id');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -4467,6 +5397,22 @@ void main() async {
             await _store(fixture);
           case 'packs':
             await _packs(fixture);
+          case 'measure':
+            _measure(fixture);
+          case 'features':
+            _features(fixture);
+          case 'live':
+            await _live(fixture);
+          case 'terrain':
+            _terrain(fixture);
+          case 'analysis':
+            _analysis(fixture);
+          case 'history':
+            _history(fixture);
+          case 'position':
+            _position(fixture);
+          case 'plugins':
+            _plugins(fixture);
           case 'execution':
             await _execution(fixture);
           case 'resolution':

@@ -1,0 +1,1 @@
+{"expected": {"op": "slope_void", "slope_null": true}, "id": "TERR-006", "inputs": {"cell": 10.0, "cols": 3, "heights": [0.0, 0.0, 0.0, 0.0, null, 0.0, 0.0, 0.0, 0.0], "origin": [0.0, 0.0], "rows": 3}}

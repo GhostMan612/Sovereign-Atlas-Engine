@@ -1,0 +1,1 @@
+{"expected": {"edge": true, "inside": true, "op": "radial", "outside": false}, "id": "ANAL-004", "inputs": {"center": [0.0, 0.0], "edge": [0.0, 0.008], "inside": [0.0, 0.004], "outside": [0.0, 0.02], "radius_m": 1000.0}}

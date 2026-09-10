@@ -1,0 +1,1 @@
+{"expected": {"fspl_db": 100.2, "margin_db": 9.8, "tol": 0.05}, "id": "TAC2-004", "inputs": {"distance_m": 1000.0, "extra_loss": 0.0, "frequency_mhz": 2442.0, "gain": 0.0, "sensitivity": -90.0, "tx": 20.0}}

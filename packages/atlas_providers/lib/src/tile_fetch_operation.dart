@@ -107,12 +107,20 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
         failure: AtlasAcquisitionFailure.invalidTarget,
       );
     }
-    if (resource.kind != AtlasDataKind.rasterTiles &&
-        resource.kind != AtlasDataKind.vectorTiles) {
+    // Tile fetchers serve tile-FORM addresses of any kind (elevation tiles
+    // included). Kind honesty applies to non-tile addresses: tile kinds
+    // with malformed addresses are invalid targets; other kinds are
+    // unsupported here (never coerced).
+    final parsed = parseTileAddress(resource.address);
+    if (parsed == null) {
+      final tileKind = resource.kind == AtlasDataKind.rasterTiles ||
+          resource.kind == AtlasDataKind.vectorTiles;
       return AtlasAcquisitionResult(
         request: request,
         state: AtlasAcquisitionState.failed,
-        failure: AtlasAcquisitionFailure.unsupported,
+        failure: tileKind
+            ? AtlasAcquisitionFailure.invalidTarget
+            : AtlasAcquisitionFailure.unsupported,
       );
     }
     if (endpoint.policy.requiresKey) {
@@ -121,14 +129,6 @@ final class AtlasTileFetchOperation implements AtlasExecutionOperation {
         request: request,
         state: AtlasAcquisitionState.failed,
         failure: AtlasAcquisitionFailure.policyRejected,
-      );
-    }
-    final parsed = parseTileAddress(resource.address);
-    if (parsed == null) {
-      return AtlasAcquisitionResult(
-        request: request,
-        state: AtlasAcquisitionState.failed,
-        failure: AtlasAcquisitionFailure.invalidTarget,
       );
     }
     if (context.cancellation.isCancelled) {
@@ -220,20 +220,17 @@ final class AtlasLocalBundleOperation implements AtlasExecutionOperation {
         failure: AtlasAcquisitionFailure.invalidTarget,
       );
     }
-    if (resource.kind != AtlasDataKind.rasterTiles &&
-        resource.kind != AtlasDataKind.vectorTiles) {
-      return AtlasAcquisitionResult(
-        request: request,
-        state: AtlasAcquisitionState.failed,
-        failure: AtlasAcquisitionFailure.unsupported,
-      );
-    }
+    // Tile-FORM addresses of any kind (same honesty rule as fetch ops).
     final parsed = parseTileAddress(resource.address);
     if (parsed == null) {
+      final tileKind = resource.kind == AtlasDataKind.rasterTiles ||
+          resource.kind == AtlasDataKind.vectorTiles;
       return AtlasAcquisitionResult(
         request: request,
         state: AtlasAcquisitionState.failed,
-        failure: AtlasAcquisitionFailure.invalidTarget,
+        failure: tileKind
+            ? AtlasAcquisitionFailure.invalidTarget
+            : AtlasAcquisitionFailure.unsupported,
       );
     }
     if (context.cancellation.isCancelled) {

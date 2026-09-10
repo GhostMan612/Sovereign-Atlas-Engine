@@ -1,0 +1,1 @@
+{"expected": {"count": 2, "latest": 200}, "id": "POS-003", "inputs": {"fixes": [{"at": 100, "lat": 0.0, "lon": 0.0}, {"at": 200, "lat": 0.0, "lon": 1.0}]}}

@@ -1,0 +1,1 @@
+{"expected": {"deny": false, "grant_open": true, "grant_restricted": true}, "id": "TAC2-005", "inputs": {"grants": {"restricted": ["team-alpha"]}, "query": {"deny_group": "outsider", "deny_tier": "open", "tier": "internal"}}}

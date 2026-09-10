@@ -1,0 +1,1 @@
+{"expected": {"acquisition_state": "succeeded", "echo_payload": "z=5/x=8/y=12@xyz", "op": "live_fetch", "state": "succeeded", "url_seen": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/tile/5/12/8"}, "id": "LIVE-002", "inputs": {"address": "z=5/x=8/y=12@xyz", "kind": "elevation", "now": 1700000000, "transport": {"bytes": [4, 5], "mode": "ok"}}}

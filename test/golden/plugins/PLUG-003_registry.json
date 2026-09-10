@@ -1,0 +1,1 @@
+{"expected": {"duplicate_throws": true, "enabled": true, "grants": true, "no_grant": false}, "id": "PLUG-003", "inputs": {"duplicate": "contours", "enable": "contours", "grants_query": {"id": "contours", "permission": "readTiles"}, "id": "contours", "no_grant_query": {"id": "contours", "permission": "useNetwork"}, "permissions": ["readTiles"], "version": "1.0.0"}}

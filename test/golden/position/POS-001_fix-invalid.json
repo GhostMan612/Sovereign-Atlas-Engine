@@ -1,0 +1,1 @@
+{"expected": {"rejection": "OUT_OF_RANGE", "valid": false}, "id": "POS-001", "inputs": {"at": 1700000000, "lat": 95.0, "lon": 0.0}}

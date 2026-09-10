@@ -1,0 +1,1 @@
+{"expected": {"op": "dms_parse_fail", "rejection": "MALFORMED_DMS"}, "id": "GEO2-002", "inputs": {"text": "north by northwest"}}

@@ -1,0 +1,1 @@
+{"expected": {"all_inside": true, "op": "clip"}, "id": "ANAL-005", "inputs": {"box": {"east": 2.0, "north": 2.0, "south": 0.0, "west": 0.0}, "ring": [[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0], [-1.0, -1.0]]}}

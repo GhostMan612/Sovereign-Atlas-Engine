@@ -1,0 +1,1 @@
+{"expected": {"op": "feature_valid", "rejection": "INVALID_FEATURE", "valid": false}, "id": "FEAT-002", "inputs": {"coordinates": [[0.0, 0.0]], "kind": "lineString", "source": "test-suite"}}

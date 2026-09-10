@@ -1,0 +1,1 @@
+{"expected": {"decimal": 51.507222, "op": "dms_parse", "tol": 0.000001}, "id": "GEO2-001", "inputs": {"text": "51°30'26\"N"}}

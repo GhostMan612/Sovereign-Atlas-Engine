@@ -1,0 +1,1 @@
+{"expected": {"valid": true}, "id": "PLUG-001", "inputs": {"id": "contours", "permissions": ["readTiles", "readFeatures"], "version": "1.2.0"}}
