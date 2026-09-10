@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["HttpClient", "Socket", "dart:io", "package:http", "Isolate", "Timer(", "DateTime.now", "Random("], "status": "clean"}, "id": "ADV-099", "inputs": {"scan": "packages/atlas_offline/lib/src/"}}

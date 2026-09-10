@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": [".remove(", ".clear(", ".put(", "File(", "dart:io"], "status": "clean"}, "id": "ADV-100", "inputs": {"scan": "packages/atlas_tiles/lib/src/cache,packages/atlas_tiles/lib/src/lookup,packages/atlas_tiles/lib/src/entries,packages/atlas_tiles/lib/src/keys,packages/atlas_tiles/lib/src/pipeline,packages/atlas_tiles/lib/src/execution"}}

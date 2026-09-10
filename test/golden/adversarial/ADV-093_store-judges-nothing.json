@@ -1,0 +1,1 @@
+{"expected": {"revoked_echo": true}, "id": "ADV-093", "inputs": {"capacity": 4, "entry": {"key": {"namespace": "resource", "value": "k/v/a"}, "stored_at": 1}}}
