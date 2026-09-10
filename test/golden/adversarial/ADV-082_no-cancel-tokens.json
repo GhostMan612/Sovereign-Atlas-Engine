@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["CancelToken", "CancellationToken", "cancelToken", "cancelRegistry", "CancellationRegistry"], "status": "clean"}, "id": "ADV-082", "inputs": {"scan": "packages/atlas_tiles/lib/src/execution/"}}

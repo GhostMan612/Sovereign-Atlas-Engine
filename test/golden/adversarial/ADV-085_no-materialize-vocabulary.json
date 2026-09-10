@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["AtlasMaterialization", "Materializer", "materialize(", "materialized("], "status": "clean"}, "id": "ADV-085", "inputs": {"scan": "packages/atlas_tiles/lib/src/execution/"}}

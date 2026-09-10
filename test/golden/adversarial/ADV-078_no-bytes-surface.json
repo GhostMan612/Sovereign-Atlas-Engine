@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["Uint8List", "List<int>", "ByteData", "ByteBuffer", "decode(", "Decode(", "serialize", "Serialize", "jsonDecode", "utf8.decode"], "status": "clean"}, "id": "ADV-078", "inputs": {"scan": "packages/atlas_tiles/lib/src/execution/"}}

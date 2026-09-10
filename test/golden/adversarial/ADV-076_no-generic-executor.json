@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["executeResource", "ExecutorService", "WorkerQueue", "ThreadPool", "IsolatePool", "RetryScheduler", "AsyncJobManager"], "status": "clean"}, "id": "ADV-076", "inputs": {"scan": "packages/atlas_tiles/lib/src/execution/"}}

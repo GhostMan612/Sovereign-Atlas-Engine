@@ -1,0 +1,1 @@
+{"expected": {"forbidden_tokens": ["allowRetry", "retryCount", "maxAttempts", "backoff", "Backoff", "attempt++", "shouldRetry"], "status": "clean"}, "id": "ADV-084", "inputs": {"scan": "packages/atlas_tiles/lib/src/execution/"}}
