@@ -1,0 +1,1 @@
+{"expected": {"acquisition_failure": "invalidTarget", "acquisition_state": "failed", "op": "fetch", "state": "succeeded"}, "id": "ADV-092", "inputs": {"address": "z=1/x=../y=0@xyz", "endpoint": "osm-standard", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}

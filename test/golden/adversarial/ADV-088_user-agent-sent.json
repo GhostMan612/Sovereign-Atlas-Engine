@@ -1,0 +1,1 @@
+{"expected": {"header_name": "User-Agent", "header_value_contains": "SovereignAtlasEngine", "op": "fetch", "state": "succeeded"}, "id": "ADV-088", "inputs": {"address": "z=1/x=0/y=0@xyz", "endpoint": "osm-standard", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}

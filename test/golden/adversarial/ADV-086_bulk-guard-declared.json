@@ -1,0 +1,1 @@
+{"expected": {"bulk_guard_present": true, "op": "policy", "prefetch_allowed": false}, "id": "ADV-086", "inputs": {"id": "osm-standard"}}

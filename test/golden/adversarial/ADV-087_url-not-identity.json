@@ -1,0 +1,1 @@
+{"expected": {"acquisition_state": "succeeded", "op": "fetch", "state": "succeeded", "url_differs_from_identity": true}, "id": "ADV-087", "inputs": {"address": "z=1/x=0/y=0@xyz", "endpoint": "osm-standard", "kind": "rasterTiles", "now": 1700000000, "transport": {"bytes": [1], "mode": "ok"}}}
