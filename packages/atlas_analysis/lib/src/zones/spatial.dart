@@ -104,7 +104,7 @@ abstract final class AtlasSpatial {
     final bx = math.cos(lat(b)) * math.cos(lon(b));
     final by = math.cos(lat(b)) * math.sin(lon(b));
     final bz = math.sin(lat(b));
-    var dot = (ax * bx + ay * by + az * bz).clamp(-1.0, 1.0);
+    final dot = (ax * bx + ay * by + az * bz).clamp(-1.0, 1.0);
     final omega = math.acos(dot);
     if (omega < 1e-12) return a;
     final so = math.sin(omega);

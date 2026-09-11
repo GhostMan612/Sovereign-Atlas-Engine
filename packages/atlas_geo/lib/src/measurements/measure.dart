@@ -90,7 +90,7 @@ abstract final class AtlasMeasure {
   }
 
   static bool _onSegment(
-      AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate p) {
+      AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate p,) {
     const eps = 1e-9;
     final dx = b.longitude - a.longitude;
     final dy = b.latitude - a.latitude;

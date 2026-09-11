@@ -31,7 +31,7 @@ abstract final class AtlasSegments {
   static const double _eps = 1e-12;
 
   static double _orient(
-          AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate c) =>
+          AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate c,) =>
       (b.longitude - a.longitude) * (c.latitude - a.latitude) -
       (b.latitude - a.latitude) * (c.longitude - a.longitude);
 
@@ -97,7 +97,7 @@ abstract final class AtlasSegments {
   }
 
   static double _fraction(
-      AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate p) {
+      AtlasCoordinate a, AtlasCoordinate b, AtlasCoordinate p,) {
     final dx = b.longitude - a.longitude;
     final dy = b.latitude - a.latitude;
     final denom = dx * dx + dy * dy;

@@ -9,6 +9,12 @@
 - **Baseline:** `e8d6211` (Slice 1) clean pre-flight. Slices 2+3 combined
   (heading acquisition + orientation) IMPLEMENTED locally in one commit
   (hash below), unpushed. NO PUSH performed (operator decision).
+- **Analyzer hygiene (local, unpushed):** removed 2 dead rule entries
+  (`unused_import`, `unnecessary_null_comparison`) from root
+  `analysis_options.yaml` + satisfied `require_trailing_commas` /
+  `prefer_final_locals` across 4 files (formatting-only; engine suite
+  identical 453/413/0/8/32). Root `dart analyze` now reports
+  "No issues found!".
 - **Slices 2+3 (DEC-022, local commit):** `TYPE_ROTATION_VECTOR` via new
   host-only `HeadingChannel` (no new deps; magnetic proven from android-36
   platform sources; true = magnetic + `GeomagneticField` declination at

@@ -540,7 +540,7 @@ void _layers(Map<String, dynamic> f) {
             .cast<String>();
     final orderedIds = <String>[
       'offline-graticule',
-      for (final t in toggles) mapping[t]!
+      for (final t in toggles) mapping[t]!,
     ]..sort(
         (a, b) => AtlasBaselineRanks.rankOf(a)!
             .compareTo(AtlasBaselineRanks.rankOf(b)!),
@@ -693,7 +693,7 @@ void _providers(Map<String, dynamic> f) {
   final bannedField = RegExp(
     r'(final|late|var)\s+[\w<>,\? ]*\b(url|endpoint|credential|apiKey|secret)\w*\s*[;=]',
   );
-  var violations = <String>[];
+  final violations = <String>[];
   final lib = Directory('packages/atlas_provider_api/lib');
   for (final file in lib
       .listSync(recursive: true)
@@ -1691,7 +1691,7 @@ void _geometry(Map<String, dynamic> f) {
       good,
       bad,
       good,
-    ], (m) => AtlasRings.validateRing(m).isValid);
+    ], (m) => AtlasRings.validateRing(m).isValid,);
     final ok =
         result.kept.length == 2 && result.skippedIndices.join(',') == '1';
     _record(
@@ -3339,7 +3339,7 @@ Future<void> _execution(Map<String, dynamic> f) async {
   }
 
   final log = <String>[];
-  var context = buildContext(log);
+  final context = buildContext(log);
   if ((contextJson['cancel_before'] as bool?) ?? false) {
     context.cancellation.requestCancel();
   }
@@ -3441,7 +3441,7 @@ void _measure(Map<String, dynamic> f) {
     case 'dms_parse':
       final got = AtlasDms.parse(inputs['text'] as String).toDecimal();
       ok = _near(got, (expected['decimal'] as num).toDouble(),
-          (expected['tol'] as num).toDouble());
+          (expected['tol'] as num).toDouble(),);
       detail = 'decimal=$got';
     case 'dms_parse_fail':
       try {
@@ -3458,34 +3458,34 @@ void _measure(Map<String, dynamic> f) {
       );
       ok = dms.hemisphere == expected['hemisphere'] &&
           _near(dms.toDecimal(), (expected['decimal'] as num).toDouble(),
-              (expected['tol'] as num).toDouble());
+              (expected['tol'] as num).toDouble(),);
       detail = 'dms=$dms';
     case 'units':
       ok = _near(
               AtlasLengthUnits.toMiles((inputs['miles_in'] as num).toDouble()),
               (expected['miles'] as num).toDouble(),
-              1e-9) &&
+              1e-9,) &&
           _near(AtlasLengthUnits.toFeet((inputs['feet_in'] as num).toDouble()),
-              (expected['feet'] as num).toDouble(), 1e-6) &&
+              (expected['feet'] as num).toDouble(), 1e-6,) &&
           _near(
               AtlasLengthUnits.toNauticalMiles(
-                  (inputs['nmi_in'] as num).toDouble()),
+                  (inputs['nmi_in'] as num).toDouble(),),
               (expected['nmi'] as num).toDouble(),
-              1e-9);
+              1e-9,);
       detail = 'conversions exact';
     case 'area':
       final got = AtlasMeasure.ringAreaSqM(_crr(inputs['ring'] as List));
       ok = _near(got, (expected['area_sqm'] as num).toDouble(),
-          (expected['tol'] as num).toDouble());
+          (expected['tol'] as num).toDouble(),);
       detail = 'area=$got';
     case 'centroid':
       final got = AtlasMeasure.centroid(
         AtlasPolygon(exterior: _crr(inputs['ring'] as List)),
       );
       ok = _near(got.latitude, (expected['lat'] as num).toDouble(),
-              (expected['tol'] as num).toDouble()) &&
+              (expected['tol'] as num).toDouble(),) &&
           _near(got.longitude, (expected['lon'] as num).toDouble(),
-              (expected['tol'] as num).toDouble());
+              (expected['tol'] as num).toDouble(),);
       detail = 'centroid=$got';
     case 'pip':
       final polygon = AtlasPolygon(
@@ -3495,16 +3495,16 @@ void _measure(Map<String, dynamic> f) {
             : const [],
       );
       ok = AtlasMeasure.containsPoint(
-                  polygon, _cr((inputs['inside'] as List).cast<dynamic>())) ==
+                  polygon, _cr((inputs['inside'] as List).cast<dynamic>()),) ==
               expected['inside'] &&
           AtlasMeasure.containsPoint(
-                  polygon, _cr((inputs['outside'] as List).cast<dynamic>())) ==
+                  polygon, _cr((inputs['outside'] as List).cast<dynamic>()),) ==
               expected['outside'] &&
           AtlasMeasure.containsPoint(
-                  polygon, _cr((inputs['vertex'] as List).cast<dynamic>())) ==
+                  polygon, _cr((inputs['vertex'] as List).cast<dynamic>()),) ==
               expected['vertex'] &&
           AtlasMeasure.containsPoint(
-                  polygon, _cr((inputs['edge'] as List).cast<dynamic>())) ==
+                  polygon, _cr((inputs['edge'] as List).cast<dynamic>()),) ==
               expected['edge'];
       if (expected.containsKey('hole')) {
 
@@ -3519,7 +3519,7 @@ void _measure(Map<String, dynamic> f) {
     case 'perimeter':
       final got = AtlasMeasure.perimeterM(_crr(inputs['ring'] as List));
       ok = _near(got, (expected['perimeter_m'] as num).toDouble(),
-          (expected['tol'] as num).toDouble());
+          (expected['tol'] as num).toDouble(),);
       detail = 'perimeter=$got';
     case 'nearest':
       final got = AtlasMeasure.nearestOnSegment(
@@ -3528,9 +3528,9 @@ void _measure(Map<String, dynamic> f) {
         _cr((inputs['p'] as List).cast<dynamic>()),
       );
       ok = _near(got.latitude, (expected['lat'] as num).toDouble(),
-              (expected['tol'] as num).toDouble()) &&
+              (expected['tol'] as num).toDouble(),) &&
           _near(got.longitude, (expected['lon'] as num).toDouble(),
-              (expected['tol'] as num).toDouble());
+              (expected['tol'] as num).toDouble(),);
       detail = 'nearest=$got';
     case 'graticule':
       final box = inputs['box'] as Map<String, dynamic>;
@@ -4280,7 +4280,7 @@ Future<void> _gisAdv(Map<String, dynamic> f) async {
         },
         'expected': {
           ...f['expected'] as Map<String, dynamic>,
-          'op': 'confidence_edge'
+          'op': 'confidence_edge',
         },
       });
     case 'ADV-105':
@@ -4292,7 +4292,7 @@ Future<void> _gisAdv(Map<String, dynamic> f) async {
         },
         'expected': {
           ...f['expected'] as Map<String, dynamic>,
-          'op': 'live_fetch'
+          'op': 'live_fetch',
         },
       });
     case 'ADV-106':
@@ -4307,7 +4307,7 @@ Future<void> _gisAdv(Map<String, dynamic> f) async {
         'inputs': f['inputs'],
         'expected': {
           ...f['expected'] as Map<String, dynamic>,
-          'op': 'simplify'
+          'op': 'simplify',
         },
       });
     case 'ADV-108':
@@ -4319,7 +4319,7 @@ Future<void> _gisAdv(Map<String, dynamic> f) async {
         },
         'expected': {
           ...f['expected'] as Map<String, dynamic>,
-          'op': 'los_clear'
+          'op': 'los_clear',
         },
       });
     case 'ADV-109':

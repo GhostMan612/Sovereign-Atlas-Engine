@@ -8,8 +8,6 @@ analyzer:
     unused_import: warning
 linter:
   rules:
-    - unused_import
-    - unnecessary_null_comparison
     - prefer_final_fields
     - prefer_final_locals
     - avoid_print
