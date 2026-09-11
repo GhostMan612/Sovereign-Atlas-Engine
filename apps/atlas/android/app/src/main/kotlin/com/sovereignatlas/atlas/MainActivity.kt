@@ -5,12 +5,16 @@ import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
     private var locationChannel: LocationChannel? = null
+    private var headingChannel: HeadingChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        val channel = LocationChannel(this)
-        channel.attach(flutterEngine.dartExecutor)
-        locationChannel = channel
+        val location = LocationChannel(this)
+        location.attach(flutterEngine.dartExecutor)
+        locationChannel = location
+        val heading = HeadingChannel(this)
+        heading.attach(flutterEngine.dartExecutor)
+        headingChannel = heading
     }
 
     override fun onRequestPermissionsResult(
@@ -25,6 +29,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         locationChannel?.detach()
         locationChannel = null
+        headingChannel?.detach()
+        headingChannel = null
         super.onDestroy()
     }
 }

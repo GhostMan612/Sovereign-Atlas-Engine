@@ -6,20 +6,21 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `1f36043` clean, `origin/main == 1f36043` verified pre-flight.
-  Phase B Slice 1 (foreground location) IMPLEMENTED locally, unpushed —
-  commit hash recorded below. NO PUSH performed (operator decision).
-- **Slice 1 — foreground location (DEC-021, local commit):** platform
-  channel on framework `LocationManager` (no new pub/Gradle deps) +
-  host adapter `apps/atlas/lib/location/location_service.dart` consuming
-  `AtlasLocationFix` unmodified + position marker / accuracy circle /
-  recenter on existing `MapController` + MAP/DEVICE readout + north-up
-  (`initialRotation 0.0`, `rotate` never called). Manifest gains
-  FINE+COARSE only. Stale bound 30 s (DEC-021 §2.G; DEC-012 stays open).
-- **Track status:** Offline Areas + offline rendering + hardening +
-  chunk-source timeout (DEC-020) all landed and verified. The map is now
-  a located instrument foundation (foreground fixes); heading/follow/
-  tactical/terrain remain later slices.
+- **Baseline:** `e8d6211` (Slice 1) clean pre-flight. Slices 2+3 combined
+  (heading acquisition + orientation) IMPLEMENTED locally in one commit
+  (hash below), unpushed. NO PUSH performed (operator decision).
+- **Slices 2+3 (DEC-022, local commit):** `TYPE_ROTATION_VECTOR` via new
+  host-only `HeadingChannel` (no new deps; magnetic proven from android-36
+  platform sources; true = magnetic + `GeomagneticField` declination at
+  last-known, altitude 0 documented) + `HeadingService` (injectable
+  source; TRUE-preferred display; accuracy dimming; no engine changes) +
+  compass dial overlay (tap = Face North) + heading-up toggle driving
+  `rotate(-true)` in place + MAP readout carries orient token
+  (BottomAppBar `height: 96.0` per SDK-read M3 chrome math). Follow mode
+  explicitly excluded (deferred per graph).
+- **Track status:** Offline Areas + DEC-020 + Slice 1 + Slices 2+3 landed
+  and verified. Remaining: follow policy, tactical UI, terrain/LOS UI,
+  CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -47,16 +48,16 @@
 
 ## Verification posture
 
-- Host: 79/79 app tests (52 baseline + 17 location-service unit + 10
-  location widget, all fake-sourced) + engine 453/413/0/8/32 unchanged +
-  analyze clean. Engine source untouched (zero `packages/*/lib` changes).
+- Host: 101/101 app tests (79 Slice-1 baseline + 12 heading-service unit
+  + 10 orientation widget, all fake-sourced) + engine 453/413/0/8/32
+  unchanged + analyze clean. Engine source untouched (zero
+  `packages/*/lib` changes across both slices).
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.
-- Slice 1 device status: NOT RUN — no DEVICE-00X claimed. Manual smoke
-  matrix specified in DEC-021 §5 for the human's Android Studio run
-  (permission grant/deny/forever, services off, recenter, no-rotate,
-  stale, UNKNOWN, no-fake-coordinate).
+- Slices 1–3 device status: NOT RUN — no DEVICE-00X claimed. Manual
+  smoke matrices in DEC-021 §5 (location) and DEC-022 §5 (heading/
+  orientation) for the human's Android Studio run.
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -65,8 +66,10 @@
 
 ## Next actions
 
-1. Push authorization for the Slice 1 commit (operator decision).
-2. Human smoke per DEC-021 §5 in Android Studio (operator-injected fixes).
-3. Slice 2 planning (heading acquisition + compass + Face North) when
-   authorized — needs its sensor/frame decision first.
-4. CARTO provider contract (keys stay out of repo).
+1. Push authorization for local commits (operator decision).
+2. Human smoke per DEC-021 §5 + DEC-022 §5 in Android Studio.
+3. Follow-policy decision + implementation when authorized (camera-center
+   policy; explicitly excluded from this slice).
+4. Slice 4 planning (measure → waypoint → go-to → recording) when
+   authorized.
+5. CARTO provider contract (keys stay out of repo).
