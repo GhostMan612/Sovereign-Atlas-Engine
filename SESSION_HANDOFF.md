@@ -6,9 +6,19 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `176e382` pushed; `origin/main == 176e382`, tree clean.
-  Slices 1–3 are CLOSED on physical-device evidence (closure section
-  below). NO PUSH pending.
+- **Baseline:** `eb2586b` (Slices 1–3 closure) clean pre-flight; Slice 4A
+  IMPLEMENTED locally (commit hash below), unpushed. NO PUSH performed
+  (operator decision).
+- **Slice 4A — measurement (local commit):** host-only `MeasureState`
+  (`apps/atlas/lib/measure/measure_state.dart`: ephemeral A/B/unit,
+  engine haversine/bearing, coincident→undefined bearing) + persistent
+  bottom sheet (Scaffold key; modal would swallow map taps) + `onTap` B
+  capture + amber polyline + green/orange endpoint dots + GPS/map-center
+  labeled A + units/DMS readouts + dismiss/restart clears. No engine
+  changes (0-line `packages/` diff), no new deps, no Kotlin/permissions.
+  Test note: flutter_map holds single taps ~300 ms for double-tap
+  detection — widget tests pump 500 ms after `tapAt`; taps must land on
+  open map above the sheet.
 - **Analyzer hygiene (pushed in `176e382`):** removed 2 dead rule entries
   (`unused_import`, `unnecessary_null_comparison`) from root
   `analysis_options.yaml` + satisfied `require_trailing_commas` /
@@ -24,9 +34,10 @@
   `rotate(-true)` in place + MAP readout carries orient token
   (BottomAppBar `height: 96.0` per SDK-read M3 chrome math). Follow mode
   explicitly excluded (deferred per graph).
-- **Track status:** Offline Areas + DEC-020 + Slice 1 + Slices 2+3 landed
-  and verified. Remaining: follow policy, tactical UI, terrain/LOS UI,
-  CARTO, full MGRS.
+- **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
+  Slice 4A (implemented, NOT device-smoked — no closure claimed).
+  Remaining: Slice 4B waypoint/journal, 4C go-to, 4D track, 4E GPX
+  export, follow policy, tactical UI, terrain/LOS UI, CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -94,10 +105,10 @@
 
 ## Verification posture
 
-- Host: 101/101 app tests (79 Slice-1 baseline + 12 heading-service unit
-  + 10 orientation widget, all fake-sourced) + engine 453/413/0/8/32
-  unchanged + analyze clean. Engine source untouched (zero
-  `packages/*/lib` changes across both slices).
+- Host: 128/128 app tests (101 Slice 1–3 baseline + 12 measure-state
+  unit + 15 measure widget, all fake/ephemeral-state sourced) + engine
+  453/413/0/8/32 untouched + analyze clean. Engine source untouched
+  (zero `packages/` diff for Slice 4A).
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.
@@ -112,8 +123,10 @@
 
 ## Next actions
 
-1. Slice 4 forensic/decision pass (measure → waypoint → go-to →
-   recording) when authorized — planning only, no implementation creep.
+1. Physical-device smoke for Slice 4A in Android Studio (tap measure,
+   GPS/center A, tap-B polyline, units, dismiss) when the operator runs it.
+2. Slice 4B forensic/implementation gate (waypoint + journal) when
+   authorized — planning only until then, no implementation creep.
 2. Follow-policy decision when authorized (camera-center policy).
 3. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.

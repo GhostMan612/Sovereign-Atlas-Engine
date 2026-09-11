@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import 'diagnostics/diagnostics_page.dart';
 import 'location/heading_service.dart';
 import 'location/location_service.dart';
+import 'measure/measure_state.dart';
 import 'offline/offline_page.dart';
 import 'offline/offline_repository.dart';
 import 'offline/offline_tile_provider.dart';
@@ -109,6 +110,7 @@ class AtlasMapPage extends StatefulWidget {
 
 class _AtlasMapPageState extends State<AtlasMapPage> {
   final MapController _controller = MapController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final AtlasProviderRegistry _registry = AtlasBuiltinProviders.registry();
   LatLng _center = const LatLng(0.0, 0.0);
   double _zoom = 2.0;
@@ -116,19 +118,31 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   bool _pendingRecenter = false;
   _OrientationMode _orientation = _OrientationMode.northUp;
   bool _pendingHeadingUp = false;
+  final MeasureState _measure = MeasureState();
+  PersistentBottomSheetController? _measureSheet;
 
   @override
   void initState() {
     super.initState();
     widget.locationService.addListener(_onLocationChanged);
     widget.headingService.addListener(_onHeadingChanged);
+    _measure.addListener(_onMeasureChanged);
   }
 
   @override
   void dispose() {
     widget.locationService.removeListener(_onLocationChanged);
     widget.headingService.removeListener(_onHeadingChanged);
+    _measure.removeListener(_onMeasureChanged);
+    _measureSheet?.close();
+    _measureSheet = null;
+    _measure.dispose();
     super.dispose();
+  }
+
+  void _onMeasureChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _onLocationChanged() {
@@ -295,6 +309,147 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     );
   }
 
+  Future<void> _enterMeasure() async {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold == null) return;
+    _measureSheet?.close();
+    _measureSheet = null;
+    final location = widget.locationService;
+    final fix = location.status == AtlasLocationStatus.valid
+        ? location.latestFix
+        : null;
+    _measure.begin(
+      fixA: fix?.position,
+      center: AtlasCoordinate(
+        latitude: _center.latitude,
+        longitude: _center.longitude,
+      ),
+    );
+    final controller = scaffold.showBottomSheet(
+      (_) => ListenableBuilder(
+        listenable: _measure,
+        builder: (context, _) => _measureSheetBody(context),
+      ),
+    );
+    _measureSheet = controller;
+    await controller.closed;
+    if (!mounted) return;
+    _measureSheet = null;
+    _measure.clear();
+  }
+
+  void _closeMeasure() {
+    _measureSheet?.close();
+    _measureSheet = null;
+    _measure.clear();
+  }
+
+  String _formatMeasure(double value, MeasureUnit unit) {
+    return switch (unit) {
+      MeasureUnit.meters => '${value.toStringAsFixed(1)} m',
+      MeasureUnit.kilometers => '${value.toStringAsFixed(2)} km',
+      MeasureUnit.miles => '${value.toStringAsFixed(2)} mi',
+      MeasureUnit.feet => '${value.toStringAsFixed(1)} ft',
+      MeasureUnit.nauticalMiles => '${value.toStringAsFixed(2)} nmi',
+    };
+  }
+
+  String _decimalOf(AtlasCoordinate point) {
+    return '${point.latitude.toStringAsFixed(4)}, '
+        '${point.longitude.toStringAsFixed(4)}';
+  }
+
+  String _dmsOf(AtlasCoordinate point) {
+    final latitude =
+        AtlasDms.fromDecimal(point.latitude, isLatitude: true).toString();
+    final longitude =
+        AtlasDms.fromDecimal(point.longitude, isLatitude: false).toString();
+    return '$latitude $longitude';
+  }
+
+  Widget _measureSheetBody(BuildContext context) {
+    const small = TextStyle(color: Colors.black54, fontSize: 12.0);
+    final a = _measure.pointA;
+    final b = _measure.pointB;
+    final distance = _measure.displayDistance;
+    final bearing = _measure.bearingDeg;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Measure',
+                  style: TextStyle(
+                    fontSize: 18.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  key: const ValueKey<String>('measure-close'),
+                  onPressed: _closeMeasure,
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+            Text(
+              a == null
+                  ? 'A: waiting'
+                  : 'A (${_measure.pointASource == MeasurePointSource.fix ? 'GPS' : 'map center'}): ${_decimalOf(a)}',
+            ),
+            if (a != null) Text('A DMS: ${_dmsOf(a)}', style: small),
+            Text(
+              b == null
+                  ? 'B: tap the map to set point B'
+                  : 'B: ${_decimalOf(b)}',
+            ),
+            if (b != null) Text('B DMS: ${_dmsOf(b)}', style: small),
+            const SizedBox(height: 8.0),
+            Row(
+              children: [
+                Text(
+                  distance == null
+                      ? 'Distance: —'
+                      : 'Distance: ${_formatMeasure(distance, _measure.unit)}',
+                ),
+                const Spacer(),
+                DropdownButton<MeasureUnit>(
+                  value: _measure.unit,
+                  items: [
+                    for (final unit in MeasureUnit.values)
+                      DropdownMenuItem<MeasureUnit>(
+                        value: unit,
+                        child: Text(MeasureState.labelOf(unit)),
+                      ),
+                  ],
+                  onChanged: (unit) {
+                    if (unit != null) _measure.setUnit(unit);
+                  },
+                ),
+              ],
+            ),
+            Text(
+              bearing == null
+                  ? 'Bearing: undefined'
+                  : 'Bearing: ${AtlasGeoMath.formatBearing(bearing)}',
+            ),
+            const SizedBox(height: 8.0),
+            ElevatedButton(
+              key: const ValueKey<String>('measure-clear'),
+              onPressed: _closeMeasure,
+              child: const Text('Clear measurement'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _locate() async {
     await widget.locationService.ensureActive();
     if (!mounted) return;
@@ -404,9 +559,15 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   Widget build(BuildContext context) {
     final attribution = _endpoint.descriptor.attribution ?? '';
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Sovereign Atlas'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.straighten),
+            tooltip: 'measure',
+            onPressed: _enterMeasure,
+          ),
           IconButton(
             icon: const Icon(Icons.my_location),
             tooltip: 'my-location',
@@ -461,6 +622,15 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                     _zoom = position.zoom;
                   });
                 },
+                onTap: (_, point) {
+                  if (!_measure.isActive) return;
+                  _measure.setB(
+                    AtlasCoordinate(
+                      latitude: point.latitude,
+                      longitude: point.longitude,
+                    ),
+                  );
+                },
               ),
               children: [
                 TileLayer(
@@ -499,11 +669,70 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                           ),
                         ),
                       ),
+                    if (_measure.pointA != null)
+                      Marker(
+                        key: const ValueKey<String>('measure-a'),
+                        point: LatLng(
+                          _measure.pointA!.latitude,
+                          _measure.pointA!.longitude,
+                        ),
+                        child: Container(
+                          width: 14.0,
+                          height: 14.0,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_measure.pointB != null)
+                      Marker(
+                        key: const ValueKey<String>('measure-b'),
+                        point: LatLng(
+                          _measure.pointB!.latitude,
+                          _measure.pointB!.longitude,
+                        ),
+                        child: Container(
+                          width: 14.0,
+                          height: 14.0,
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2.0,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 if (_accuracyCircle != null)
                   CircleLayer(
                     circles: [_accuracyCircle!],
+                  ),
+                if (_measure.isComplete)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: [
+                          LatLng(
+                            _measure.pointA!.latitude,
+                            _measure.pointA!.longitude,
+                          ),
+                          LatLng(
+                            _measure.pointB!.latitude,
+                            _measure.pointB!.longitude,
+                          ),
+                        ],
+                        color: Colors.amber,
+                        strokeWidth: 4.0,
+                      ),
+                    ],
                   ),
               ],
             ),
