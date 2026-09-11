@@ -4,13 +4,22 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
-## Where we are (2026-09-10)
+## Where we are (2026-09-11)
 
-- **Baseline:** `d0881ff` local, clean, one ahead of `origin/main`
-  (`96f81b7` pushed). Awaiting push authorization for `d0881ff`.
+- **Baseline:** `1f36043` clean, `origin/main == 1f36043` verified pre-flight.
+  Phase B Slice 1 (foreground location) IMPLEMENTED locally, unpushed —
+  commit hash recorded below. NO PUSH performed (operator decision).
+- **Slice 1 — foreground location (DEC-021, local commit):** platform
+  channel on framework `LocationManager` (no new pub/Gradle deps) +
+  host adapter `apps/atlas/lib/location/location_service.dart` consuming
+  `AtlasLocationFix` unmodified + position marker / accuracy circle /
+  recenter on existing `MapController` + MAP/DEVICE readout + north-up
+  (`initialRotation 0.0`, `rotate` never called). Manifest gains
+  FINE+COARSE only. Stale bound 30 s (DEC-021 §2.G; DEC-012 stays open).
 - **Track status:** Offline Areas + offline rendering + hardening +
-  chunk-source timeout (DEC-020) all landed and verified. The map is a
-  proven foundation; it is not yet an instrument.
+  chunk-source timeout (DEC-020) all landed and verified. The map is now
+  a located instrument foundation (foreground fixes); heading/follow/
+  tactical/terrain remain later slices.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -38,10 +47,16 @@
 
 ## Verification posture
 
-- Host: 52/52 app tests + engine 453/413/0/8/32 + analyze clean.
+- Host: 79/79 app tests (52 baseline + 17 location-service unit + 10
+  location widget, all fake-sourced) + engine 453/413/0/8/32 unchanged +
+  analyze clean. Engine source untouched (zero `packages/*/lib` changes).
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.
+- Slice 1 device status: NOT RUN — no DEVICE-00X claimed. Manual smoke
+  matrix specified in DEC-021 §5 for the human's Android Studio run
+  (permission grant/deny/forever, services off, recenter, no-rotate,
+  stale, UNKNOWN, no-fake-coordinate).
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -50,6 +65,8 @@
 
 ## Next actions
 
-1. Push authorization for `d0881ff` (operator decision).
-2. Phase B forensic/integration planning pass (planning only).
-3. CARTO provider contract (keys stay out of repo).
+1. Push authorization for the Slice 1 commit (operator decision).
+2. Human smoke per DEC-021 §5 in Android Studio (operator-injected fixes).
+3. Slice 2 planning (heading acquisition + compass + Face North) when
+   authorized — needs its sensor/frame decision first.
+4. CARTO provider contract (keys stay out of repo).

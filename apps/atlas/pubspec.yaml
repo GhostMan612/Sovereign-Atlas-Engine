@@ -34,6 +34,14 @@ dependencies:
     path: ../../packages/atlas_offline
   atlas_providers:
     path: ../../packages/atlas_providers
+  # Location values only (DEC-021 Slice 1: AtlasLocationFix consumed by the
+  # host-side adapter; no engine behavior is drawn from it).
+  atlas_location:
+    path: ../../packages/atlas_location
+  # Coordinate value for fix construction (same slice, same justification:
+  # AtlasLocationFix carries an AtlasCoordinate; no geo math is drawn in).
+  atlas_geo:
+    path: ../../packages/atlas_geo
 
 dev_dependencies:
   flutter_test:

@@ -32,6 +32,20 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  atlas_geo:
+    dependency: "direct main"
+    description:
+      path: "../../packages/atlas_geo"
+      relative: true
+    source: path
+    version: "0.1.0"
+  atlas_location:
+    dependency: "direct main"
+    description:
+      path: "../../packages/atlas_location"
+      relative: true
+    source: path
+    version: "0.1.0"
   atlas_offline:
     dependency: "direct main"
     description:
