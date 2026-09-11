@@ -83,8 +83,14 @@ class _AtlasAppState extends State<AtlasApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Sovereign Atlas',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: const ColorScheme.dark(
+          surface: Color(0xFF262626),
+        ),
+        useMaterial3: true,
+      ),
       home: AtlasMapPage(
           repository: _repository,
           locationService: _location,
@@ -368,7 +374,10 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   }
 
   Widget _measureSheetBody(BuildContext context) {
-    const small = TextStyle(color: Colors.black54, fontSize: 12.0);
+    final small = TextStyle(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      fontSize: 12.0,
+    );
     final a = _measure.pointA;
     final b = _measure.pointB;
     final distance = _measure.displayDistance;
