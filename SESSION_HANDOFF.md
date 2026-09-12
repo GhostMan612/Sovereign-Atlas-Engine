@@ -6,18 +6,18 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `f2e6125` (Slice 4B) verified pre-flight; dependency
-  correction committed locally (hash in final report), unpushed. NO PUSH
-  performed (operator decision).
+- **Baseline:** `57ec374` verified pre-flight; Slice 4B closure
+  committed locally (hash in final report), unpushed. NO PUSH performed
+  (operator decision).
 - **Slice 4B dependency correction (local commit):** forensic proved the
   `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
   uncalled, `toWaypoint` test-only, no other tactical reference in the
   app. Removed dep + lock entry + both conversion methods; conversion
   test replaced by a dependency-free schema-pin test. Journal schema,
   IDs, provenance, UI, and behavior unchanged. Zero new dependencies
-  restored; engine untouched; analyze clean; 152/152 intact. Slice 4B
-  remains AUTOMATED-VERIFIED, smoke PENDING. Tactical returns naturally
-  in 4D (track materialization) with its own justification.
+  restored; engine untouched; analyze clean; 152/152 intact. Zero new
+  dependencies restored (tactical returns naturally in 4D with its own
+  justification). Slice 4B fully CLOSED on Moto G 2025 smoke below.
 - **Slice 4A — measurement (local commit):** host-only `MeasureState`
   (`apps/atlas/lib/measure/measure_state.dart`: ephemeral A/B/unit,
   engine haversine/bearing, coincident→undefined bearing) + persistent
@@ -36,8 +36,10 @@
   safe restore with per-record skip + dup-first-wins, no silent
   overwrite) + long-press creation sheet + purple place markers +
   `WaypointsPage` list/detail/edit/delete (selection never moves map) +
-  restore-on-launch. `AtlasWaypoint` consumed unmodified. Forensic found
-  no blocker (long-press SDK-verified; tap semantics orthogonal).
+  restore-on-launch. Journal record is field-identical to `AtlasWaypoint`
+  (tactical dep added then removed as unnecessary — see correction
+  entry; no tactical reference remains). Forensic found no blocker
+  (long-press SDK-verified; tap semantics orthogonal).
   Test lessons: real dart:io setup in widget tests needs
   `tester.runAsync`; `MarkerLayer` finders need `skipOffstage: false`
   (two layers now); old `positionMarker` helper widened (test-only).
@@ -57,10 +59,10 @@
   (BottomAppBar `height: 96.0` per SDK-read M3 chrome math). Follow mode
   explicitly excluded (deferred per graph).
 - **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
-  Slice 4A (closed) + dark charcoal polish + Slice 4B (IMPLEMENTED,
-  automated-verified, DEVICE SMOKE PENDING). Remaining: Slice 4C go-to,
-  4D track, 4E GPX export, follow policy, tactical UI, terrain/LOS UI,
-  CARTO, full MGRS.
+  Slice 4A (closed) + dark charcoal polish + Slice 4B (CLOSED on Moto G
+  2025 smoke, see closure section). Remaining: Slice 4C go-to (NOT
+  STARTED — needs explicit authorization), 4D track, 4E GPX export,
+  follow policy, tactical UI, terrain/LOS UI, CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -137,7 +139,31 @@
   (`apps/atlas/lib/main.dart`, +11/−2); no engine diff; no dep changes;
   analyze clean; 128/128 intact. The polish has NOT been physically
   smoked — automated verification only.
-- **Status: Slice 4A CLOSED.** Slice 4B NOT STARTED.
+- **Status: Slice 4A CLOSED.** Slice 4B NOT STARTED (at that time).
+
+## Slice 4B closure — Moto G 2025 physical smoke (2026-09-11)
+
+- **Device:** Moto G 2025 physical hardware. Implementation baseline
+  `f2e6125` (+ `57ec374` dependency correction: tactical dep removed,
+  zero new dependencies, behavior unchanged).
+- **Results — 21/21 PASS:** long-press opens creation (PASS); sheet shows
+  coordinates (PASS); label entry (PASS); note entry (PASS); save
+  (PASS); second waypoint (PASS); management list (PASS); details
+  (PASS); edit label (PASS); edit note (PASS); persistence (PASS);
+  delete (PASS); deleted disappears (PASS); restart (PASS); undeleted
+  survives restart (PASS); deleted does not resurrect (PASS); measure
+  intact (PASS); location marker intact (PASS); compass/heading-up
+  intact (PASS); selection moves/rotates nothing (PASS); no 0,0
+  fallback (PASS).
+- **Architectural checks intact:** tactical correction in place; zero new
+  dependencies; no engine modifications; host-side persistence;
+  deterministic IDs; explicit provenance; no resurrection; restart
+  survival; corruption safety covered by automated tests; measure/
+  location/heading unaffected; no camera motion from waypoint
+  interaction; no fabricated coordinates; no go-to/track/GPX/share/
+  geofence/terrain/MGRS/CARTO/background scope leaked.
+- **Status: Slice 4B CLOSED** — implementation, automated verification,
+  and physical-device verification complete.
 
 ## Standing environment facts
 
@@ -170,10 +196,10 @@
 - Slice 4A device status: CLOSED on Moto G 2025 physical smoke (GPS
   path; fallback automated-only). Post-smoke dark-UI polish:
   automated-gates only, user device smoke PENDING.
-- Slice 4B device status: NOT SMOKED — implementation verified by
-  automated gates only (152/152 + analyze). Manual physical smoke
-  required: long-press create, save/cancel, list/detail/edit/delete,
-  restart persistence, measure coexistence, no 0,0, camera immobility.
+- Slice 4B device status: CLOSED on Moto G 2025 physical smoke —
+  21/21 PASS (creation, editing, persistence, restart survival,
+  no-resurrection, measure/location/compass intact, camera immobile,
+  no 0,0). See closure section.
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020..022.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -182,10 +208,11 @@
 
 ## Next actions
 
-1. User device smoke for Slice 4B + dark-charcoal polish in Android
-   Studio (functional 4B unproven on hardware; polish visual-only).
-2. Slice 4C forensic/implementation gate (go-to) when authorized —
-   planning only until then, no implementation creep.
+1. Slice 4C (go-to) ONLY on explicit operator authorization — do not
+   start merely because 4B passed. Preserve forensic → decision →
+   implementation → automated verification → physical smoke → closure.
+2. User device smoke for the dark-charcoal polish + banner removal
+   (visual only; functional slices already smoked).
 2. Follow-policy decision when authorized (camera-center policy).
 3. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.
