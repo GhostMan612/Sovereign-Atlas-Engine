@@ -6,9 +6,18 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `c6b4a88` verified pre-flight; Slice 4B implemented
-  locally (commit hash in final report), unpushed. NO PUSH performed
-  (operator decision).
+- **Baseline:** `f2e6125` (Slice 4B) verified pre-flight; dependency
+  correction committed locally (hash in final report), unpushed. NO PUSH
+  performed (operator decision).
+- **Slice 4B dependency correction (local commit):** forensic proved the
+  `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
+  uncalled, `toWaypoint` test-only, no other tactical reference in the
+  app. Removed dep + lock entry + both conversion methods; conversion
+  test replaced by a dependency-free schema-pin test. Journal schema,
+  IDs, provenance, UI, and behavior unchanged. Zero new dependencies
+  restored; engine untouched; analyze clean; 152/152 intact. Slice 4B
+  remains AUTOMATED-VERIFIED, smoke PENDING. Tactical returns naturally
+  in 4D (track materialization) with its own justification.
 - **Slice 4A — measurement (local commit):** host-only `MeasureState`
   (`apps/atlas/lib/measure/measure_state.dart`: ephemeral A/B/unit,
   engine haversine/bearing, coincident→undefined bearing) + persistent
@@ -149,7 +158,9 @@
 - Host: 152/152 app tests (128 Slice-4A baseline + 16 field-journal
   unit + 8 waypoint widget, fake/temp-dir sourced) + engine 453/413/0/8/32
   untouched + analyze clean. Engine source untouched (zero `packages/`
-  diff for Slice 4B).
+  diff for Slice 4B). No hosted/platform dependencies added in any slice
+  (path-only manifest wiring: location/geo in Slice 1; tactical added
+  then removed in 4B correction).
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.

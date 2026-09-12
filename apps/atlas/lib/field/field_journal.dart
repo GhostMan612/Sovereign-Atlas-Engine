@@ -9,7 +9,6 @@ import 'dart:io';
 
 import 'package:atlas_core/atlas_core.dart';
 import 'package:atlas_geo/atlas_geo.dart';
-import 'package:atlas_tactical/atlas_tactical.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -40,21 +39,6 @@ final class StoredWaypoint {
     required this.source,
   });
 
-  factory StoredWaypoint.fromWaypoint(
-    AtlasWaypoint waypoint,
-    WaypointSource source,
-  ) {
-    return StoredWaypoint(
-      id: waypoint.id.value,
-      latitude: waypoint.position.latitude,
-      longitude: waypoint.position.longitude,
-      createdAt: waypoint.createdAt,
-      label: waypoint.label,
-      note: waypoint.note,
-      source: source,
-    );
-  }
-
   final String id;
   final double latitude;
   final double longitude;
@@ -62,16 +46,6 @@ final class StoredWaypoint {
   final String label;
   final String note;
   final WaypointSource source;
-
-  AtlasWaypoint toWaypoint() {
-    return AtlasWaypoint(
-      id: AtlasId(id),
-      position: AtlasCoordinate(latitude: latitude, longitude: longitude),
-      createdAt: createdAt,
-      label: label,
-      note: note,
-    );
-  }
 
   Map<String, Object?> toJson() {
     return {

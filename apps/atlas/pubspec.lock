@@ -67,13 +67,6 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
-  atlas_tactical:
-    dependency: "direct main"
-    description:
-      path: "../../packages/atlas_tactical"
-      relative: true
-    source: path
-    version: "0.1.0"
   atlas_tiles:
     dependency: "direct main"
     description:

@@ -300,7 +300,7 @@ void main() {
     expect(restored.waypoints.length, 1);
   });
 
-  test('stored waypoint converts to the engine model exactly', () {
+  test('journal record schema shape is pinned', () {
     const record = StoredWaypoint(
       id: 'wp-000007',
       latitude: 45.5,
@@ -310,13 +310,26 @@ void main() {
       note: 'N',
       source: WaypointSource.mapSelected,
     );
-    final waypoint = record.toWaypoint();
-    expect(waypoint.id.value, 'wp-000007');
-    expect(waypoint.position.latitude, 45.5);
-    expect(waypoint.position.longitude, -93.5);
-    expect(waypoint.createdAt, 9);
-    expect(waypoint.label, 'L');
-    expect(waypoint.note, 'N');
-    expect(waypoint.validate().isValid, isTrue);
+    expect(
+      record.toJson().keys.toSet(),
+      {
+        'id',
+        'latitude',
+        'longitude',
+        'created_at',
+        'label',
+        'note',
+        'source',
+      },
+    );
+    expect(record.toJson()['source'], 'map_selected');
+    final roundTripped = StoredWaypoint.tryParse(record.toJson());
+    expect(roundTripped?.id, 'wp-000007');
+    expect(roundTripped?.latitude, 45.5);
+    expect(roundTripped?.longitude, -93.5);
+    expect(roundTripped?.createdAt, 9);
+    expect(roundTripped?.label, 'L');
+    expect(roundTripped?.note, 'N');
+    expect(roundTripped?.source, WaypointSource.mapSelected);
   });
 }
