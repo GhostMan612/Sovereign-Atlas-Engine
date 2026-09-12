@@ -6,8 +6,8 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `b5ece9c` verified pre-flight; Slice 4C implemented
-  locally (commit hash in final report), unpushed. NO PUSH performed
+- **Baseline:** `506137f` verified pre-flight; Slice 4C closure
+  committed locally (hash in final report), unpushed. NO PUSH performed
   (operator decision).
 - **Slice 4B dependency correction (local commit):** forensic proved the
   `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
@@ -73,7 +73,7 @@
   change. No engine diff, no new deps. 9 unit + 10 widget tests.
 - **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
   Slice 4A (closed) + dark charcoal polish + Slice 4B (closed) +
-  Slice 4C (IMPLEMENTED, automated-verified, DEVICE SMOKE PENDING).
+  Slice 4C (CLOSED on Moto G 2025 smoke, see closure section).
   Remaining: Slice 4D track, 4E GPX export, follow policy, tactical UI,
   terrain/LOS UI, CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
@@ -178,6 +178,29 @@
 - **Status: Slice 4B CLOSED** — implementation, automated verification,
   and physical-device verification complete.
 
+## Slice 4C closure — Moto G 2025 physical smoke (2026-09-11)
+
+- **Device:** Moto G 2025 physical hardware. Implementation baseline
+  `506137f` (ephemeral `GoToState`, detail-sheet activation, camera
+  jump with zoom preserved, nav card, valid-only nav; 0-line engine
+  diff; zero new deps; 171/171 + analyze clean).
+- **Results — 20/20 PASS** (operator-reported, recorded verbatim scope):
+  activation, target indication, camera move to target, zoom unchanged,
+  no rotation, live distance, live bearing, nav updates on location
+  change, pan independence (no forced recenter), compass intact,
+  heading-up intact, clear, presentation removal, waypoint persisted,
+  restart survival, post-restart inactivity, measure intact, location
+  marker intact, no 0,0, no unintended rotation, no waypoint deletion.
+- **Status: Slice 4C CLOSED** — implementation, automated verification,
+  and physical-device verification complete. No code changed by this
+  closure.
+- **Deferred, explicitly NOT implemented:** My Location zoom-to-15
+  refinement. Current Slice 1 behavior (center + preserve zoom) stands;
+  DEC-021 explicitly rejected a forced recenter zoom, so this needs its
+  own dedicated camera/UX polish slice with regression tests (center on
+  fix, zoom exactly 15.0, go-to/measure/heading unchanged, no 0,0) —
+  never a drive-by edit to a closed slice.
+
 ## Standing environment facts
 
 - **No builds here unless explicitly asked** (RULES.md §1.6). Gates are
@@ -213,11 +236,10 @@
   21/21 PASS (creation, editing, persistence, restart survival,
   no-resurrection, measure/location/compass intact, camera immobile,
   no 0,0). See closure section.
-- Slice 4C device status: NOT SMOKED — implementation verified by
-  automated gates only (171/171 + analyze). Manual physical smoke
-  required per the 4C execution prompt matrix (25 items: activation,
-  camera, live nav, pan independence, clear, restart, coexistence,
-  no-0,0, no rotation, no deletion).
+- Slice 4C device status: CLOSED on Moto G 2025 physical smoke —
+  20/20 PASS (activation, camera jump with zoom preserved, live nav,
+  pan independence, clear, restart inactivity, coexistence, no 0,0,
+  no rotation, no deletion). See closure section.
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020..022.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -226,10 +248,12 @@
 
 ## Next actions
 
-1. User device smoke for Slice 4C in Android Studio (25-item matrix in
-   the 4C execution prompt; functional 4C unproven on hardware).
-2. Slice 4D forensic/implementation gate (track recording) ONLY on
-   explicit operator authorization.
+1. Slice 4D forensic/implementation gate (track recording) ONLY on
+   explicit operator authorization — do not start merely because 4C
+   passed.
+2. My-Location-zoom-15 camera/UX polish slice when authorized (dedicated
+   slice with regression tests; must address DEC-021's recenter-zoom
+   rejection; never a closed-slice edit).
 2. Follow-policy decision when authorized (camera-center policy).
 3. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.
