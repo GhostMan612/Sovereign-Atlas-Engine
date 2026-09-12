@@ -6,8 +6,8 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `9d65666` (Slice 4A) verified pre-flight; UI polish +
-  closure committed locally (hash below), unpushed. NO PUSH performed
+- **Baseline:** `c6b4a88` verified pre-flight; Slice 4B implemented
+  locally (commit hash in final report), unpushed. NO PUSH performed
   (operator decision).
 - **Slice 4A — measurement (local commit):** host-only `MeasureState`
   (`apps/atlas/lib/measure/measure_state.dart`: ephemeral A/B/unit,
@@ -17,8 +17,21 @@
   labeled A + units/DMS readouts + dismiss/restart clears. No engine
   changes (0-line `packages/` diff), no new deps, no Kotlin/permissions.
   Test note: flutter_map holds single taps ~300 ms for double-tap
-  detection — widget tests pump 500 ms after `tapAt`; taps must land on
-  open map above the sheet.
+   detection — widget tests pump 500 ms after `tapAt`; taps must land on
+   open map above the sheet.
+- **Slice 4B — waypoints + journal (local commit):** host-only
+  `FieldJournal` (`apps/atlas/lib/field/field_journal.dart`: typed
+  `StoredWaypoint` codec, monotonic `wp-000001` IDs restored from max
+  suffix, `map_selected`-only provenance, versioned `{version:1,
+  waypoints[]}` JSON, flushed direct write mirroring OfflineRepository,
+  safe restore with per-record skip + dup-first-wins, no silent
+  overwrite) + long-press creation sheet + purple place markers +
+  `WaypointsPage` list/detail/edit/delete (selection never moves map) +
+  restore-on-launch. `AtlasWaypoint` consumed unmodified. Forensic found
+  no blocker (long-press SDK-verified; tap semantics orthogonal).
+  Test lessons: real dart:io setup in widget tests needs
+  `tester.runAsync`; `MarkerLayer` finders need `skipOffstage: false`
+  (two layers now); old `positionMarker` helper widened (test-only).
 - **Analyzer hygiene (pushed in `176e382`):** removed 2 dead rule entries
   (`unused_import`, `unnecessary_null_comparison`) from root
   `analysis_options.yaml` + satisfied `require_trailing_commas` /
@@ -35,11 +48,10 @@
   (BottomAppBar `height: 96.0` per SDK-read M3 chrome math). Follow mode
   explicitly excluded (deferred per graph).
 - **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
-  Slice 4A (CLOSED on Moto G 2025 smoke, see closure section) + dark
-  charcoal host polish, DEBUG banner removed (device verification of the
-  polish PENDING user smoke). Remaining: Slice 4B waypoint/journal, 4C
-  go-to, 4D track, 4E GPX export, follow policy, tactical UI,
-  terrain/LOS UI, CARTO, full MGRS.
+  Slice 4A (closed) + dark charcoal polish + Slice 4B (IMPLEMENTED,
+  automated-verified, DEVICE SMOKE PENDING). Remaining: Slice 4C go-to,
+  4D track, 4E GPX export, follow policy, tactical UI, terrain/LOS UI,
+  CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -134,10 +146,10 @@
 
 ## Verification posture
 
-- Host: 128/128 app tests (101 Slice 1–3 baseline + 12 measure-state
-  unit + 15 measure widget, all fake/ephemeral-state sourced) + engine
-  453/413/0/8/32 untouched + analyze clean. Engine source untouched
-  (zero `packages/` diff for Slice 4A).
+- Host: 152/152 app tests (128 Slice-4A baseline + 16 field-journal
+  unit + 8 waypoint widget, fake/temp-dir sourced) + engine 453/413/0/8/32
+  untouched + analyze clean. Engine source untouched (zero `packages/`
+  diff for Slice 4B).
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.
@@ -147,6 +159,10 @@
 - Slice 4A device status: CLOSED on Moto G 2025 physical smoke (GPS
   path; fallback automated-only). Post-smoke dark-UI polish:
   automated-gates only, user device smoke PENDING.
+- Slice 4B device status: NOT SMOKED — implementation verified by
+  automated gates only (152/152 + analyze). Manual physical smoke
+  required: long-press create, save/cancel, list/detail/edit/delete,
+  restart persistence, measure coexistence, no 0,0, camera immobility.
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020..022.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -155,10 +171,10 @@
 
 ## Next actions
 
-1. User device smoke for the dark-charcoal polish + banner removal
-   (visual only; functional Slice 4A already smoked).
-2. Slice 4B forensic/implementation gate (waypoint + journal) when
-   authorized — planning only until then, no implementation creep.
+1. User device smoke for Slice 4B + dark-charcoal polish in Android
+   Studio (functional 4B unproven on hardware; polish visual-only).
+2. Slice 4C forensic/implementation gate (go-to) when authorized —
+   planning only until then, no implementation creep.
 2. Follow-policy decision when authorized (camera-center policy).
 3. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.

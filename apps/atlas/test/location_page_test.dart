@@ -52,11 +52,13 @@ double mapRotation(WidgetTester tester) {
 }
 
 Marker? positionMarker(WidgetTester tester) {
-  final markers =
-      tester.widget<MarkerLayer>(find.byType(MarkerLayer)).markers;
-  for (final marker in markers) {
-    if (marker.key == const ValueKey<String>('position-marker')) {
-      return marker;
+  const key = ValueKey<String>('position-marker');
+  final layers = tester.widgetList<MarkerLayer>(
+    find.byType(MarkerLayer, skipOffstage: false),
+  );
+  for (final layer in layers) {
+    for (final marker in layer.markers) {
+      if (marker.key == key) return marker;
     }
   }
   return null;

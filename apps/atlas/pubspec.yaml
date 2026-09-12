@@ -42,6 +42,10 @@ dependencies:
   # AtlasLocationFix carries an AtlasCoordinate; no geo math is drawn in).
   atlas_geo:
     path: ../../packages/atlas_geo
+  # Waypoint values only (Slice 4B: AtlasWaypoint consumed by the host-side
+  # field-data journal; no tactical behavior is drawn from it).
+  atlas_tactical:
+    path: ../../packages/atlas_tactical
 
 dev_dependencies:
   flutter_test:

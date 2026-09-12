@@ -12,6 +12,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'diagnostics/diagnostics_page.dart';
+import 'field/field_journal.dart';
+import 'field/waypoints_page.dart';
 import 'location/heading_service.dart';
 import 'location/location_service.dart';
 import 'measure/measure_state.dart';
@@ -39,14 +41,17 @@ class AtlasApp extends StatefulWidget {
       {super.key,
       OfflineRepository? repository,
       LocationService? locationService,
-      HeadingService? headingService})
+      HeadingService? headingService,
+      FieldJournal? fieldJournal})
       : _repositoryOverride = repository,
         _locationOverride = locationService,
-        _headingOverride = headingService;
+        _headingOverride = headingService,
+        _fieldOverride = fieldJournal;
 
   final OfflineRepository? _repositoryOverride;
   final LocationService? _locationOverride;
   final HeadingService? _headingOverride;
+  final FieldJournal? _fieldOverride;
 
   @override
   State<AtlasApp> createState() => _AtlasAppState();
@@ -56,6 +61,7 @@ class _AtlasAppState extends State<AtlasApp> {
   late final OfflineRepository _repository;
   late final LocationService _location;
   late final HeadingService _heading;
+  late final FieldJournal _field;
 
   @override
   void initState() {
@@ -66,9 +72,13 @@ class _AtlasAppState extends State<AtlasApp> {
         LocationService(locationSource: ChannelLocationSource());
     _heading = widget._headingOverride ??
         HeadingService(source: ChannelHeadingSource());
+    _field = widget._fieldOverride ?? FieldJournal();
 
     if (widget._repositoryOverride == null) {
       _repository.restore();
+    }
+    if (widget._fieldOverride == null) {
+      _field.restore();
     }
   }
 
@@ -77,6 +87,7 @@ class _AtlasAppState extends State<AtlasApp> {
     if (widget._repositoryOverride == null) _repository.dispose();
     if (widget._locationOverride == null) _location.dispose();
     if (widget._headingOverride == null) _heading.dispose();
+    if (widget._fieldOverride == null) _field.dispose();
     super.dispose();
   }
 
@@ -94,7 +105,8 @@ class _AtlasAppState extends State<AtlasApp> {
       home: AtlasMapPage(
           repository: _repository,
           locationService: _location,
-          headingService: _heading),
+          headingService: _heading,
+          fieldJournal: _field),
     );
   }
 }
@@ -104,11 +116,13 @@ class AtlasMapPage extends StatefulWidget {
       {super.key,
       required this.repository,
       required this.locationService,
-      required this.headingService});
+      required this.headingService,
+      required this.fieldJournal});
 
   final OfflineRepository repository;
   final LocationService locationService;
   final HeadingService headingService;
+  final FieldJournal fieldJournal;
 
   @override
   State<AtlasMapPage> createState() => _AtlasMapPageState();
@@ -132,6 +146,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     super.initState();
     widget.locationService.addListener(_onLocationChanged);
     widget.headingService.addListener(_onHeadingChanged);
+    widget.fieldJournal.addListener(_onFieldChanged);
     _measure.addListener(_onMeasureChanged);
   }
 
@@ -139,6 +154,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   void dispose() {
     widget.locationService.removeListener(_onLocationChanged);
     widget.headingService.removeListener(_onHeadingChanged);
+    widget.fieldJournal.removeListener(_onFieldChanged);
     _measure.removeListener(_onMeasureChanged);
     _measureSheet?.close();
     _measureSheet = null;
@@ -149,6 +165,15 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   void _onMeasureChanged() {
     if (!mounted) return;
     setState(() {});
+  }
+
+  void _onFieldChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _openWaypointSheet(LatLng point) {
+    showWaypointCreateSheet(context, widget.fieldJournal, point);
   }
 
   void _onLocationChanged() {
@@ -578,6 +603,15 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
             onPressed: _enterMeasure,
           ),
           IconButton(
+            icon: const Icon(Icons.place),
+            tooltip: 'waypoints',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WaypointsPage(journal: widget.fieldJournal),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.my_location),
             tooltip: 'my-location',
             onPressed: _locate,
@@ -640,6 +674,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                     ),
                   );
                 },
+                onLongPress: (_, point) => _openWaypointSheet(point),
               ),
               children: [
                 TileLayer(
@@ -743,6 +778,19 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                       ),
                     ],
                   ),
+                MarkerLayer(
+                  markers: [
+                    for (final record in widget.fieldJournal.waypoints)
+                      Marker(
+                        key: ValueKey<String>('waypoint-${record.id}'),
+                        point: LatLng(record.latitude, record.longitude),
+                        child: const Icon(
+                          Icons.place,
+                          color: Colors.purple,
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
             if (widget.headingService.displayDeg != null)
