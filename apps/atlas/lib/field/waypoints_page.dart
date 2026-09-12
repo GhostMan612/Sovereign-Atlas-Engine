@@ -19,14 +19,14 @@ Future<void> showWaypointCreateSheet(
   );
 }
 
-Future<void> showWaypointDetailSheet(
+Future<String?> showWaypointDetailSheet(
   BuildContext context,
   FieldJournal journal,
   String id,
 ) {
   final record = journal.lookup(id);
-  if (record == null) return Future<void>.value();
-  return showModalBottomSheet<void>(
+  if (record == null) return Future<String?>.value();
+  return showModalBottomSheet<String>(
     context: context,
     builder: (_) => _WaypointDetailSheet(journal: journal, id: id),
   );
@@ -108,9 +108,10 @@ class _WaypointCreateSheetState extends State<_WaypointCreateSheet> {
 }
 
 final class WaypointsPage extends StatelessWidget {
-  const WaypointsPage({super.key, required this.journal});
+  const WaypointsPage({super.key, required this.journal, this.onSelect});
 
   final FieldJournal journal;
+  final void Function(String id)? onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -146,11 +147,14 @@ final class WaypointsPage extends StatelessWidget {
                           '${record.latitude.toStringAsFixed(4)}, '
                           '${record.longitude.toStringAsFixed(4)}',
                         ),
-                        onTap: () => showWaypointDetailSheet(
-                          context,
-                          journal,
-                          record.id,
-                        ),
+                        onTap: () async {
+                          final selected = await showWaypointDetailSheet(
+                            context,
+                            journal,
+                            record.id,
+                          );
+                          if (selected != null) onSelect?.call(selected);
+                        },
                       ),
                   ],
                 ),
@@ -238,6 +242,16 @@ class _WaypointDetailSheetState extends State<_WaypointDetailSheet> {
                     if (context.mounted) Navigator.of(context).pop();
                   },
                   child: const Text('Delete'),
+                ),
+                const SizedBox(width: 12.0),
+                ElevatedButton(
+                  key: const ValueKey<String>('waypoint-go-to'),
+                  onPressed: () {
+                    if (context.mounted) {
+                      Navigator.of(context).pop(widget.id);
+                    }
+                  },
+                  child: const Text('Go-To'),
                 ),
               ],
             ),

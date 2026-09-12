@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import 'diagnostics/diagnostics_page.dart';
 import 'field/field_journal.dart';
 import 'field/waypoints_page.dart';
+import 'go_to/go_to_state.dart';
 import 'location/heading_service.dart';
 import 'location/location_service.dart';
 import 'measure/measure_state.dart';
@@ -139,6 +140,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   _OrientationMode _orientation = _OrientationMode.northUp;
   bool _pendingHeadingUp = false;
   final MeasureState _measure = MeasureState();
+  final GoToState _goTo = GoToState();
   PersistentBottomSheetController? _measureSheet;
 
   @override
@@ -159,6 +161,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     _measureSheet?.close();
     _measureSheet = null;
     _measure.dispose();
+    _goTo.dispose();
     super.dispose();
   }
 
@@ -174,6 +177,94 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
 
   void _openWaypointSheet(LatLng point) {
     showWaypointCreateSheet(context, widget.fieldJournal, point);
+  }
+
+  AtlasCoordinate? _usableFix() {
+    final location = widget.locationService;
+    if (location.status != AtlasLocationStatus.valid) return null;
+    final fix = location.latestFix;
+    if (fix == null) return null;
+    return fix.position;
+  }
+
+  Future<void> _activateGoTo(String id) async {
+    final record = widget.fieldJournal.lookup(id);
+    if (record == null || !mounted) return;
+    _goTo.activate(
+      id: record.id,
+      latitude: record.latitude,
+      longitude: record.longitude,
+      label: record.label.isEmpty ? record.id : record.label,
+    );
+    _controller.move(
+      LatLng(record.latitude, record.longitude),
+      _zoom,
+    );
+    setState(() {});
+  }
+
+  Future<void> _goToFromPage(String id) async {
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    await _activateGoTo(id);
+  }
+
+  Widget _goToCard() {
+    final target = _goTo.target!;
+    final distanceKm = _goTo.distanceKmTo(_usableFix());
+    final bearingDeg = _goTo.bearingDegTo(_usableFix());
+    return Positioned(
+      top: 12.0,
+      left: 12.0,
+      child: Container(
+        key: const ValueKey<String>('go-to-card'),
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(8.0),
+          border: Border.all(color: Colors.white70, width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'GO-TO ${target.label}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              '${target.latitude.toStringAsFixed(4)}, '
+              '${target.longitude.toStringAsFixed(4)}',
+              style: const TextStyle(color: Colors.white70, fontSize: 12.0),
+            ),
+            Text(
+              distanceKm == null
+                  ? 'Distance: unavailable'
+                  : 'Distance: ${AtlasGeoMath.formatDistance(distanceKm)}',
+              style: const TextStyle(color: Colors.white, fontSize: 12.0),
+            ),
+            Text(
+              bearingDeg == null
+                  ? 'Bearing: unavailable'
+                  : AtlasGeoMath.formatBearing(bearingDeg),
+              style: const TextStyle(color: Colors.white, fontSize: 12.0),
+            ),
+            const SizedBox(height: 8.0),
+            ElevatedButton(
+              key: const ValueKey<String>('go-to-clear'),
+              onPressed: () {
+                _goTo.clear();
+                setState(() {});
+              },
+              child: const Text('Clear'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onLocationChanged() {
@@ -607,7 +698,10 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
             tooltip: 'waypoints',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => WaypointsPage(journal: widget.fieldJournal),
+                builder: (_) => WaypointsPage(
+                  journal: widget.fieldJournal,
+                  onSelect: _goToFromPage,
+                ),
               ),
             ),
           ),
@@ -803,6 +897,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                   widget.headingService.frameLabel,
                 ),
               ),
+            if (_goTo.isActive) _goToCard(),
           ],
         ),
       ),

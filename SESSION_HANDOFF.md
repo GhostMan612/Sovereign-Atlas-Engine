@@ -6,8 +6,8 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `57ec374` verified pre-flight; Slice 4B closure
-  committed locally (hash in final report), unpushed. NO PUSH performed
+- **Baseline:** `b5ece9c` verified pre-flight; Slice 4C implemented
+  locally (commit hash in final report), unpushed. NO PUSH performed
   (operator decision).
 - **Slice 4B dependency correction (local commit):** forensic proved the
   `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
@@ -43,6 +43,10 @@
   Test lessons: real dart:io setup in widget tests needs
   `tester.runAsync`; `MarkerLayer` finders need `skipOffstage: false`
   (two layers now); old `positionMarker` helper widened (test-only).
+  Widget-test file IO: never interleave unawaited and awaited persists
+  across zones — seed files directly + restore, or quiesce, or FakeAsync
+  strands writers (proven by 4C bytes-test diagnosis; production
+  unaffected, user-paced mutations).
 - **Analyzer hygiene (pushed in `176e382`):** removed 2 dead rule entries
   (`unused_import`, `unnecessary_null_comparison`) from root
   `analysis_options.yaml` + satisfied `require_trailing_commas` /
@@ -58,11 +62,20 @@
   `rotate(-true)` in place + MAP readout carries orient token
   (BottomAppBar `height: 96.0` per SDK-read M3 chrome math). Follow mode
   explicitly excluded (deferred per graph).
+- **Slice 4C — go-to (local commit):** ephemeral `GoToState`
+  (`apps/atlas/lib/go_to/go_to_state.dart`: typed target snapshot,
+  pure distance/bearing over explicit fix, coincident→null bearing) +
+  detail-sheet Go-To button (pops id, no nav logic in page) + camera
+  jump via existing `move(target, currentZoom)` + top-left nav card
+  (label/coords/distance/bearing-or-unavailable/Clear) reusing the
+  waypoint purple marker. Valid-fix-only nav (stale→unavailable); no
+  persistence (journal bytes proven unchanged); no rotation/zoom/follow
+  change. No engine diff, no new deps. 9 unit + 10 widget tests.
 - **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
-  Slice 4A (closed) + dark charcoal polish + Slice 4B (CLOSED on Moto G
-  2025 smoke, see closure section). Remaining: Slice 4C go-to (NOT
-  STARTED — needs explicit authorization), 4D track, 4E GPX export,
-  follow policy, tactical UI, terrain/LOS UI, CARTO, full MGRS.
+  Slice 4A (closed) + dark charcoal polish + Slice 4B (closed) +
+  Slice 4C (IMPLEMENTED, automated-verified, DEVICE SMOKE PENDING).
+  Remaining: Slice 4D track, 4E GPX export, follow policy, tactical UI,
+  terrain/LOS UI, CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -181,10 +194,10 @@
 
 ## Verification posture
 
-- Host: 152/152 app tests (128 Slice-4A baseline + 16 field-journal
-  unit + 8 waypoint widget, fake/temp-dir sourced) + engine 453/413/0/8/32
+- Host: 171/171 app tests (152 Slice-4B baseline + 9 go-to-state unit
+  + 10 go-to widget, fake/temp-dir sourced) + engine 453/413/0/8/32
   untouched + analyze clean. Engine source untouched (zero `packages/`
-  diff for Slice 4B). No hosted/platform dependencies added in any slice
+  diff for Slice 4C). No hosted/platform dependencies added in any slice
   (path-only manifest wiring: location/geo in Slice 1; tactical added
   then removed in 4B correction).
 - Device (emulator, prior sessions): picker, acquisition, render
@@ -200,6 +213,11 @@
   21/21 PASS (creation, editing, persistence, restart survival,
   no-resurrection, measure/location/compass intact, camera immobile,
   no 0,0). See closure section.
+- Slice 4C device status: NOT SMOKED — implementation verified by
+  automated gates only (171/171 + analyze). Manual physical smoke
+  required per the 4C execution prompt matrix (25 items: activation,
+  camera, live nav, pan independence, clear, restart, coexistence,
+  no-0,0, no rotation, no deletion).
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020..022.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -208,11 +226,10 @@
 
 ## Next actions
 
-1. Slice 4C (go-to) ONLY on explicit operator authorization — do not
-   start merely because 4B passed. Preserve forensic → decision →
-   implementation → automated verification → physical smoke → closure.
-2. User device smoke for the dark-charcoal polish + banner removal
-   (visual only; functional slices already smoked).
+1. User device smoke for Slice 4C in Android Studio (25-item matrix in
+   the 4C execution prompt; functional 4C unproven on hardware).
+2. Slice 4D forensic/implementation gate (track recording) ONLY on
+   explicit operator authorization.
 2. Follow-policy decision when authorized (camera-center policy).
 3. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.
