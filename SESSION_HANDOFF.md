@@ -6,8 +6,8 @@
 
 ## Where we are (2026-09-11)
 
-- **Baseline:** `b47791d` verified pre-flight; Slice 4D implemented
-  locally (commit hash in final report), unpushed. NO PUSH performed
+- **Baseline:** `80ab42f` verified pre-flight; Slice 4D closure
+  committed locally (hash in final report), unpushed. NO PUSH performed
   (operator decision).
 - **Slice 4B dependency correction (local commit):** forensic proved the
   `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
@@ -87,9 +87,9 @@
   unawaited and awaited same-file writes across zones.
 - **Track status:** Offline Areas + DEC-020 + Slices 1–3 (closed) +
   Slice 4A (closed) + dark charcoal polish + Slice 4B (closed) +
-  Slice 4C (closed) + Slice 4D (IMPLEMENTED, automated-verified,
-  DEVICE SMOKE PENDING). Remaining: Slice 4E GPX export, follow policy,
-  tactical UI, terrain/LOS UI, CARTO, full MGRS.
+  Slice 4C (closed) + Slice 4D (closed). Remaining: camera/layers
+  sprint spec (pending architect review), Slice 4E GPX export, follow
+  policy, tactical UI, terrain/LOS UI, CARTO, full MGRS.
 - **Rule set:** `RULES.md` canonical (Sovereign Directives ABSOLUTE —
   all 117 `.dart` files stripped to genesis-header-only, gates identical
   before/after), `AGENTS.md` trimmed to ramp, slash commands in
@@ -215,6 +215,40 @@
   fix, zoom exactly 15.0, go-to/measure/heading unchanged, no 0,0) —
   never a drive-by edit to a closed slice.
 
+## Slice 4D closure — Moto G 2025 physical smoke (2026-09-11)
+
+- **Device:** Moto G 2025 physical hardware. Implementation baseline
+  `80ab42f` (foreground-only event-driven recorder, journal `StoredTrack`
+  codec, TracksPage, cyan polyline + REC badge; 0-line engine diff;
+  tactical path dep with justification; 208/208 + analyze clean).
+- **Results — smoke accepted, no defect demonstrated.** Stationary drift
+  observed (expected under the raw-event contract — distinct valid fixes
+  append; NOT a defect, and no filtering/smoothing/decimation authorized
+  on that observation alone). Resume transient observed: count advanced
+  by exactly 2 with no duration-proportional background accumulation.
+- **+2 characterization (tightened per review — non-defect, provenance
+  unverified):** the +2 is contract-compliant, and the source contains a
+  credible structural explanation for exactly two events — one
+  `LocationListener` receives callbacks from two registered providers
+  (GPS + NETWORK, `LocationChannel.kt:150-166`), with no filtering, no
+  cross-provider dedup, no resume hook, no reseeding, and no UI counter
+  anywhere in the path. However, the exact runtime provenance of those
+  two points (e.g. one-per-provider vs. other two-event combinations)
+  is NOT observable from repository source and is therefore recorded as
+  UNVERIFIED, not as a proven mechanism. Words like "proves" are
+  avoided: the absence of duration-proportional growth STRONGLY
+  INDICATES (does not prove) that no events flow while backgrounded.
+- **Explicitly rejected:** any "discard N points after resume" workaround
+  (would invent behavior to erase an unexplained observation and could
+  silently drop legitimate fixes).
+- **Optional future instrumentation (NOT a blocker, NOT authorized):**
+  if exact provenance is ever wanted, capture each point's Android
+  `fix.at` and provider immediately before backgrounding and immediately
+  after resuming.
+- **Status: Slice 4D CLOSED** — implementation, automated verification,
+  and physical-device verification complete. No code changed by this
+  closure.
+
 ## Standing environment facts
 
 - **No builds here unless explicitly asked** (RULES.md §1.6). Gates are
@@ -255,12 +289,10 @@
   20/20 PASS (activation, camera jump with zoom preserved, live nav,
   pan independence, clear, restart inactivity, coexistence, no 0,0,
   no rotation, no deletion). See closure section.
-- Slice 4D device status: NOT SMOKED — implementation verified by
-  automated gates only (208/208 + analyze). Manual physical smoke
-  required per the 4D execution prompt matrix (30 items: start/stop,
-  live line, distance/count, go-to/measure/compass coexistence, camera
-  stillness, restart persistence, delete non-resurrection, no 0,0,
-  no background behavior).
+- Slice 4D device status: CLOSED on Moto G 2025 physical smoke —
+  drift accepted as contract-expected; resume +2 recorded as known
+  physical observation / non-defect with unverified exact provenance
+  (see closure section). No workaround authorized.
 - Full MGRS blocked (MGRS-001). DEC-001..019 + MGRS-001 live outside
   this tree; in-repo decisions: ADR-001..005, DEC-020..022.
 - Open threads: timeout engine-side scope (out — DEC-020 is app-only by
@@ -269,8 +301,10 @@
 
 ## Next actions
 
-1. User device smoke for Slice 4D in Android Studio (30-item matrix in
-   the 4D execution prompt; functional 4D unproven on hardware).
+1. Camera/layers sprint spec (`blueprints/camera-layers-sprint.md`,
+   pending architect review) — layers control, deeper zoom, local
+   default view, center-button zoom policy. No implementation until the
+   architect dispositions it.
 2. Slice 4E forensic/implementation gate (GPX export) ONLY on explicit
    operator authorization.
 2. Follow-policy decision when authorized (camera-center policy).
