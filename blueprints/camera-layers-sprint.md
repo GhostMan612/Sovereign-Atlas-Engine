@@ -1,6 +1,8 @@
 # Camera + Layers Sprint — Proposal for Architect Review
 
-- **Status:** PROPOSED. Not approved, not scheduled, no code changed.
+- **Status:** IMPLEMENTED per the architect-issued execution order
+  (all 8 open decisions applied). See `docs/architecture/DEC-023-*`
+  and `SESSION_HANDOFF.md`. Device smoke PENDING.
 - **Audience:** project architect — disposition each open decision
   (approve / change / reject) before any implementation prompt is written.
 - **Frozen blueprint:** untouched. This document proposes; it does not amend

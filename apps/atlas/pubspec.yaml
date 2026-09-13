@@ -47,6 +47,16 @@ dependencies:
   # behavior reused, none modified. No hosted dependency involved).
   atlas_tactical:
     path: ../../packages/atlas_tactical
+  # Camera intents only (Camera+Layers sprint: host validates camera moves
+  # against AtlasCameraState before driving the renderer; no engine
+  # behavior drawn in, no renderer types escape to engine).
+  atlas_map:
+    path: ../../packages/atlas_map
+  # Layer composition only (Camera+Layers sprint: host builds
+  # AtlasLayerStack/AtlasLayerState values and derives attribution via
+  # AtlasAttribution.forVisible; renderer mapping stays host-side).
+  atlas_layers:
+    path: ../../packages/atlas_layers
 
 dev_dependencies:
   flutter_test:

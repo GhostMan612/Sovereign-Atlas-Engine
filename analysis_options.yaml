@@ -6,6 +6,14 @@ analyzer:
     strict-raw-types: true
   errors:
     unused_import: warning
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 linter:
   rules:
     - prefer_final_fields

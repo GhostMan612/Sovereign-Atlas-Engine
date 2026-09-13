@@ -6,6 +6,7 @@
 import 'dart:math' as math;
 
 import 'package:atlas_geo/atlas_geo.dart';
+import 'package:atlas_layers/atlas_layers.dart';
 import 'package:atlas_providers/atlas_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -17,6 +18,8 @@ import 'field/waypoints_page.dart';
 import 'go_to/go_to_state.dart';
 import 'location/heading_service.dart';
 import 'location/location_service.dart';
+import 'map/camera_policy.dart';
+import 'map/layer_stack.dart';
 import 'measure/measure_state.dart';
 import 'offline/offline_page.dart';
 import 'offline/offline_repository.dart';
@@ -36,6 +39,8 @@ const Map<String, String> _casualBasemaps = {
 };
 
 enum _OrientationMode { northUp, headingUp }
+
+const int _kRingStepIndex = 3;
 
 const TextStyle _readoutStyle = TextStyle(fontSize: 12.0);
 
@@ -141,6 +146,13 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   bool _pendingRecenter = false;
   _OrientationMode _orientation = _OrientationMode.northUp;
   bool _pendingHeadingUp = false;
+  bool _startupCameraDone = false;
+  bool _userInteracted = false;
+  bool _showGraticule = false;
+  bool _showRings = false;
+  bool _showWaypoints = true;
+  bool _showTrack = true;
+  bool _showMeasure = true;
   final MeasureState _measure = MeasureState();
   final GoToState _goTo = GoToState();
   late final TrackRecorder _recorder;
@@ -155,6 +167,9 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     _measure.addListener(_onMeasureChanged);
     _recorder = TrackRecorder(locationService: widget.locationService);
     _recorder.addListener(_onTrackChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyStartupCamera();
+    });
   }
 
   @override
@@ -282,10 +297,18 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   void _onLocationChanged() {
     if (!mounted) return;
     if (_pendingRecenter) {
-      final target = widget.locationService.recenterTarget;
-      if (target != null) {
+      final location = widget.locationService;
+      final intent = myLocationIntent(
+        status: location.status,
+        fix: location.latestFix,
+        bearing: _controller.camera.rotation,
+      );
+      if (intent != null) {
         _pendingRecenter = false;
-        _controller.move(target, _zoom);
+        _controller.move(
+          LatLng(intent.center.latitude, intent.center.longitude),
+          intent.zoom,
+        );
       }
     }
     setState(() {});
@@ -587,17 +610,43 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     );
   }
 
+  Future<void> _applyStartupCamera() async {
+    if (!mounted || _startupCameraDone) return;
+    await widget.locationService.start();
+    if (!mounted || _startupCameraDone || _userInteracted) return;
+    final location = widget.locationService;
+    final intent = startupIntent(
+      status: location.status,
+      fix: location.latestFix,
+    );
+    if (intent == null) return;
+    _startupCameraDone = true;
+    _controller.move(
+      LatLng(intent.center.latitude, intent.center.longitude),
+      intent.zoom,
+    );
+  }
+
   Future<void> _locate() async {
     await widget.locationService.ensureActive();
     if (!mounted) return;
-    final target = widget.locationService.recenterTarget;
-    if (target != null) {
-      _pendingRecenter = false;
-      _controller.move(target, _zoom);
-    } else if (widget.locationService.status ==
-        AtlasLocationStatus.acquiring) {
-      _pendingRecenter = true;
+    final location = widget.locationService;
+    final intent = myLocationIntent(
+      status: location.status,
+      fix: location.latestFix,
+      bearing: _controller.camera.rotation,
+    );
+    if (intent == null) {
+      if (location.status == AtlasLocationStatus.acquiring) {
+        _pendingRecenter = true;
+      }
+      return;
     }
+    _pendingRecenter = false;
+    _controller.move(
+      LatLng(intent.center.latitude, intent.center.longitude),
+      intent.zoom,
+    );
   }
 
   LatLng? get _fixPoint {
@@ -665,24 +714,144 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
       _endpoint.urlTemplate ??
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+  AtlasLayerStack get _layerStack => buildLayerStack(
+        endpoint: _endpoint,
+        graticuleVisible: _showGraticule,
+        ringsVisible: _showRings,
+        waypointsVisible: _showWaypoints,
+        trackVisible: _showTrack,
+        measureVisible: _showMeasure,
+      );
+
+  String get _layerAttribution => attributionFor(_layerStack);
+
+  List<Polyline> _graticuleLines() {
+    if (!_showGraticule) return const [];
+    final bounds = _controller.camera.visibleBounds;
+    final box = AtlasBoundingBox(
+      south: bounds.south,
+      west: bounds.west,
+      north: bounds.north,
+      east: bounds.east,
+    );
+    if (!box.validate().isValid) return const [];
+    final grid = AtlasGrids.graticuleFor(
+      box,
+      AtlasGrids.intervalForZoom(_zoom.round()),
+    );
+    if (grid.meridians.length + grid.parallels.length > 240) {
+      return const [];
+    }
+    return [
+      for (final meridian in grid.meridians)
+        Polyline(
+          points: [
+            LatLng(box.south, meridian),
+            LatLng(box.north, meridian),
+          ],
+          color: Colors.white70,
+          strokeWidth: 1.0,
+        ),
+      for (final parallel in grid.parallels)
+        Polyline(
+          points: [
+            LatLng(parallel, box.west),
+            LatLng(parallel, box.east),
+          ],
+          color: Colors.white70,
+          strokeWidth: 1.0,
+        ),
+    ];
+  }
+
+  List<Polyline> _ringLines() {
+    if (!_showRings) return const [];
+    final set = AtlasRangeRings.generate(_usableFix(), _kRingStepIndex);
+    if (set.isEmpty) return const [];
+    return [
+      for (final ring in [...set.rings, ...set.spokes])
+        Polyline(
+          points: [
+            for (final point in ring)
+              LatLng(point.latitude, point.longitude),
+          ],
+          color: Colors.white70,
+          strokeWidth: 1.5,
+        ),
+    ];
+  }
+
   Future<void> _openPicker() async {
     final selected = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => RadioGroup<String>(
-        groupValue: _providerId,
-        onChanged: (value) => Navigator.of(context).pop(value),
-        child: ListView(
+      builder: (context) => StatefulBuilder(
+        builder: (context, updateSheet) => ListView(
           shrinkWrap: true,
           children: [
-            for (final entry in _casualBasemaps.entries)
-              RadioListTile<String>(
-                title: Text(entry.key),
-                subtitle: Text(
-                  _registry.lookup(entry.value)?.descriptor.title ??
-                      entry.value,
-                ),
-                value: entry.value,
+            RadioGroup<String>(
+              groupValue: _providerId,
+              onChanged: (value) => Navigator.of(context).pop(value),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final entry in _casualBasemaps.entries)
+                    RadioListTile<String>(
+                      title: Text(entry.key),
+                      subtitle: Text(
+                        _registry.lookup(entry.value)?.descriptor.title ??
+                            entry.value,
+                      ),
+                      value: entry.value,
+                    ),
+                ],
               ),
+            ),
+            const Divider(),
+            CheckboxListTile(
+              key: const ValueKey<String>('layer-graticule'),
+              title: const Text('Graticule'),
+              value: _showGraticule,
+              onChanged: (value) => setState(() {
+                _showGraticule = value ?? false;
+                updateSheet(() {});
+              }),
+            ),
+            CheckboxListTile(
+              key: const ValueKey<String>('layer-rings'),
+              title: const Text('Range rings'),
+              value: _showRings,
+              onChanged: (value) => setState(() {
+                _showRings = value ?? false;
+                updateSheet(() {});
+              }),
+            ),
+            CheckboxListTile(
+              key: const ValueKey<String>('layer-waypoints'),
+              title: const Text('Waypoints'),
+              value: _showWaypoints,
+              onChanged: (value) => setState(() {
+                _showWaypoints = value ?? true;
+                updateSheet(() {});
+              }),
+            ),
+            CheckboxListTile(
+              key: const ValueKey<String>('layer-track'),
+              title: const Text('Track'),
+              value: _showTrack,
+              onChanged: (value) => setState(() {
+                _showTrack = value ?? true;
+                updateSheet(() {});
+              }),
+            ),
+            CheckboxListTile(
+              key: const ValueKey<String>('layer-measure'),
+              title: const Text('Measurement'),
+              value: _showMeasure,
+              onChanged: (value) => setState(() {
+                _showMeasure = value ?? true;
+                updateSheet(() {});
+              }),
+            ),
           ],
         ),
       ),
@@ -694,7 +863,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
 
   @override
   Widget build(BuildContext context) {
-    final attribution = _endpoint.descriptor.attribution ?? '';
+    final attribution = _layerAttribution;
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
@@ -777,7 +946,8 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                 initialCenter: _center,
                 initialZoom: _zoom,
                 initialRotation: 0.0,
-                onPositionChanged: (position, _) {
+                onPositionChanged: (position, hasGesture) {
+                  if (hasGesture) _userInteracted = true;
                   setState(() {
                     _center = position.center;
                     _zoom = position.zoom;
@@ -799,6 +969,10 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                   key: ValueKey<String>(_providerId),
                   urlTemplate: _template,
                   userAgentPackageName: 'com.sovereignatlas.atlas',
+                  minNativeZoom:
+                      _endpoint.descriptor.nativeMinZoom ?? 0,
+                  maxNativeZoom:
+                      _endpoint.descriptor.nativeMaxZoom ?? 19,
 
                   tileProvider: AtlasOfflineTileProvider(
                     repository: widget.repository,
@@ -831,7 +1005,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                           ),
                         ),
                       ),
-                    if (_measure.pointA != null)
+                    if (_showMeasure && _measure.pointA != null)
                       Marker(
                         key: const ValueKey<String>('measure-a'),
                         point: LatLng(
@@ -851,7 +1025,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                           ),
                         ),
                       ),
-                    if (_measure.pointB != null)
+                    if (_showMeasure && _measure.pointB != null)
                       Marker(
                         key: const ValueKey<String>('measure-b'),
                         point: LatLng(
@@ -877,7 +1051,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                   CircleLayer(
                     circles: [_accuracyCircle!],
                   ),
-                if (_measure.isComplete)
+                if (_showMeasure && _measure.isComplete)
                   PolylineLayer(
                     polylines: [
                       Polyline(
@@ -896,9 +1070,10 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                       ),
                     ],
                   ),
-                MarkerLayer(
-                  markers: [
-                    for (final record in widget.fieldJournal.waypoints)
+                if (_showWaypoints)
+                  MarkerLayer(
+                    markers: [
+                      for (final record in widget.fieldJournal.waypoints)
                       Marker(
                         key: ValueKey<String>('waypoint-${record.id}'),
                         point: LatLng(record.latitude, record.longitude),
@@ -909,7 +1084,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                       ),
                   ],
                 ),
-                if (_recorder.pointCount > 0)
+                if (_showTrack && _recorder.pointCount > 0)
                   PolylineLayer(
                     key: const ValueKey<String>('track-line'),
                     polylines: [
@@ -925,6 +1100,16 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                         strokeWidth: 4.0,
                       ),
                     ],
+                  ),
+                if (_graticuleLines().isNotEmpty)
+                  PolylineLayer(
+                    key: const ValueKey<String>('graticule-layer'),
+                    polylines: _graticuleLines(),
+                  ),
+                if (_ringLines().isNotEmpty)
+                  PolylineLayer(
+                    key: const ValueKey<String>('rings-layer'),
+                    polylines: _ringLines(),
                   ),
               ],
             ),

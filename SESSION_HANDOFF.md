@@ -9,6 +9,23 @@
 - **Baseline:** `80ab42f` verified pre-flight; Slice 4D closure
   committed locally (hash in final report), unpushed. NO PUSH performed
   (operator decision).
+- **Camera + Layers sprint (local commit, device smoke PENDING):**
+  architect-issued order executed end-to-end from `785ec4a` with all 8
+  open decisions applied as directed. Host-only adapter
+  (`apps/atlas/lib/map/`: `camera_policy.dart` startup/My-Location
+  intents validated against `AtlasCameraState`; `layer_stack.dart`
+  engine-stack builder + `AtlasAttribution.forVisible` derivation) +
+  `main.dart` wiring (one-shot startup cascade fix→last-known→world
+  overview at z13; My Location valid-fix + zoom 15 bearing-preserving,
+  stale/no-fix no-jump; Go-To zoom preservation unchanged; base+overlay
+  picker toggles for graticule/rings/waypoints/track/measure;
+  `TileLayer` native ceilings from endpoint descriptors; attribution
+  bar follows visible stack). Record: `docs/architecture/DEC-023-*`
+  (supersedes DEC-021 ONLY for explicit My Location zoom; DEC-021
+  unedited). Zero engine diff (suite-identical 453/413/0/8/32); two
+  in-repo path deps justified in DEC-023 (`atlas_map`,
+  `atlas_layers`); analyze clean; 240/240 app tests (208 baseline +
+  32 sprint). Physical smoke PENDING — no device run here.
 - **Slice 4B dependency correction (local commit):** forensic proved the
   `atlas_tactical` path dep was load-bearing nowhere — `fromWaypoint`
   uncalled, `toWaypoint` test-only, no other tactical reference in the
@@ -265,13 +282,13 @@
 
 ## Verification posture
 
-- Host: 208/208 app tests (171 Slice-4C baseline + 12 recorder unit
-  + 12 journal-track + 13 track widget, fake/temp-dir sourced) + engine
-  453/413/0/8/32 untouched + analyze clean. Engine source untouched
-  (zero `packages/` diff for Slice 4D). No hosted/platform dependencies
-  added in any slice (path-only manifest wiring: location/geo in
-  Slice 1; tactical removed in 4B correction, restored in 4D with
-  load-bearing justification).
+- Host: 240/240 app tests (208 Slice-4D baseline + 10 camera-policy
+  unit + 8 layer-stack unit + 14 camera/layers widget, fake/temp-dir
+  sourced) + engine 453/413/0/8/32 untouched + analyze clean. Engine
+  source untouched (zero `packages/` diff for the camera/layers
+  sprint). Two in-repo path deps added with DEC-023 justification
+  (`atlas_map`, `atlas_layers`); no hosted/platform dependency in any
+  slice.
 - Device (emulator, prior sessions): picker, acquisition, render
   (4 tiles / 8 serves / 56 attempts), blocked-transport failure,
   forced-timeout mapping — all green when run.
@@ -301,10 +318,10 @@
 
 ## Next actions
 
-1. Camera/layers sprint spec (`blueprints/camera-layers-sprint.md`,
-   pending architect review) — layers control, deeper zoom, local
-   default view, center-button zoom policy. No implementation until the
-   architect dispositions it.
+1. Camera/layers sprint IMPLEMENTED locally (DEC-023 + adapter +
+   32 tests, smoke PENDING) — was: spec (`blueprints/camera-layers-
+   sprint.md`) pending architect review. Next: human Android Studio
+   build + 40-item Moto G physical smoke; no push until told.
 2. Slice 4E forensic/implementation gate (GPX export) ONLY on explicit
    operator authorization.
 2. Follow-policy decision when authorized (camera-center policy).
