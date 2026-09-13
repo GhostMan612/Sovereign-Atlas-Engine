@@ -7,6 +7,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:atlas_core/atlas_core.dart';
+import 'package:atlas_geo/atlas_geo.dart';
+import 'package:atlas_location/atlas_location.dart';
+import 'package:atlas_tactical/atlas_tactical.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:atlas/field/field_journal.dart';
@@ -331,5 +334,270 @@ void main() {
     expect(roundTripped?.label, 'L');
     expect(roundTripped?.note, 'N');
     expect(roundTripped?.source, WaypointSource.mapSelected);
+  });
+
+  List<AtlasLocationFix> trackFixes() {
+    return [
+      AtlasLocationFix(
+        position: AtlasCoordinate(latitude: 0.0, longitude: 0.0),
+        at: 1000,
+        source: 'gps',
+      ),
+      AtlasLocationFix(
+        position: AtlasCoordinate(latitude: 0.0, longitude: 1.0),
+        at: 2000,
+        source: 'gps',
+      ),
+    ];
+  }
+
+  test('saveTrack stores fields with deterministic first id', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    final record = service.saveTrack(fixes: trackFixes())!;
+    expect(record.id, 'trk-000001');
+    expect(record.createdAt, 1000);
+    expect(record.pointCount, 2);
+    expect(record.source, WaypointSource.gpsRecorded);
+    expect(record.points[0].id, 'trk-000001-p0001');
+    expect(record.points[1].id, 'trk-000001-p0002');
+    expect(record.points[0].createdAt, 1000);
+    expect(record.points[1].createdAt, 2000);
+    expect(record.points[0].source, WaypointSource.gpsRecorded);
+    expect(service.tracks.length, 1);
+  });
+
+  test('saveTrack with no fixes persists nothing', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    expect(service.saveTrack(fixes: const []), isNull);
+    expect(service.tracks, isEmpty);
+    await service.persist();
+    expect(await _readRaw(dir), contains('"tracks":[]'));
+  });
+
+  test('tracks persist and restore with waypoints intact', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    service.create(latitude: 45.0, longitude: -93.0, label: 'Base');
+    await service.persist();
+    service.saveTrack(fixes: trackFixes());
+    await service.persist();
+    final restored = _journal(dir);
+    await restored.restore();
+    expect(restored.lastError, isNull);
+    expect(restored.waypoints.length, 1);
+    expect(restored.waypoints.single.id, 'wp-000001');
+    expect(restored.tracks.length, 1);
+    final record = restored.tracks.single;
+    expect(record.id, 'trk-000001');
+    expect(record.createdAt, 1000);
+    expect(record.pointCount, 2);
+    expect(record.points[0].latitude, 0.0);
+    expect(record.points[1].longitude, 1.0);
+    expect(record.points[1].createdAt, 2000);
+    expect(record.source, WaypointSource.gpsRecorded);
+  });
+
+  test('track ids continue past restored tracks', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    service.saveTrack(fixes: trackFixes());
+    await service.persist();
+    final restored = _journal(dir);
+    await restored.restore();
+    final next = restored.saveTrack(fixes: trackFixes())!;
+    expect(next.id, 'trk-000002');
+  });
+
+  test('removeTrack removes only that track', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    service.create(latitude: 45.0, longitude: -93.0);
+    service.saveTrack(fixes: trackFixes());
+    expect(service.removeTrack('trk-000001'), isTrue);
+    expect(service.removeTrack('trk-000001'), isFalse);
+    expect(service.tracks, isEmpty);
+    expect(service.waypoints.length, 1);
+  });
+
+  test('deleted tracks do not resurrect after restart', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    service.saveTrack(fixes: trackFixes());
+    await service.persist();
+    expect(service.removeTrack('trk-000001'), isTrue);
+    await service.persist();
+    final restored = _journal(dir);
+    await restored.restore();
+    expect(restored.tracks, isEmpty);
+  });
+
+  test('invalid tracks are skipped, valid tracks kept', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    Map<String, Object?> trackEntry(String id, double lon) {
+      return {
+        'id': id,
+        'created_at': 1,
+        'source': 'gps_recorded',
+        'points': [
+          {
+            'id': '$id-p0001',
+            'latitude': 45.0,
+            'longitude': lon,
+            'created_at': 1,
+            'label': '',
+            'note': '',
+            'source': 'gps_recorded',
+          },
+        ],
+      };
+    }
+
+    await _writeRaw(
+      dir,
+      jsonEncode({
+        'version': 1,
+        'waypoints': [],
+        'tracks': [trackEntry('trk-000001', -93.0), trackEntry('trk-000002', 190.0)],
+      }),
+    );
+    final service = _journal(dir);
+    await service.restore();
+    expect(service.lastError, isNull);
+    expect(service.tracks.length, 1);
+    expect(service.tracks.single.id, 'trk-000001');
+    expect(service.skippedCount, 1);
+  });
+
+  test('duplicate track ids keep the first record', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    Map<String, Object?> trackEntry(int createdAt) {
+      return {
+        'id': 'trk-000001',
+        'created_at': createdAt,
+        'source': 'gps_recorded',
+        'points': [],
+      };
+    }
+
+    await _writeRaw(
+      dir,
+      jsonEncode({
+        'version': 1,
+        'waypoints': [],
+        'tracks': [trackEntry(1), trackEntry(2)],
+      }),
+    );
+    final service = _journal(dir);
+    await service.restore();
+    expect(service.tracks.length, 1);
+    expect(service.tracks.single.createdAt, 1);
+    expect(service.skippedCount, 1);
+  });
+
+  test('journal without tracks key loads waypoints cleanly', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    await _writeRaw(
+      dir,
+      jsonEncode({
+        'version': 1,
+        'waypoints': [
+          {
+            'id': 'wp-000001',
+            'latitude': 45.0,
+            'longitude': -93.0,
+            'created_at': 1,
+            'label': '',
+            'note': '',
+            'source': 'map_selected',
+          },
+        ],
+      }),
+    );
+    final service = _journal(dir);
+    await service.restore();
+    expect(service.lastError, isNull);
+    expect(service.waypoints.length, 1);
+    expect(service.tracks, isEmpty);
+  });
+
+  test('tracks present but malformed fails safe with memory kept', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    await _writeRaw(
+      dir,
+      jsonEncode({
+        'version': 1,
+        'waypoints': [
+          {
+            'id': 'wp-000001',
+            'latitude': 45.0,
+            'longitude': -93.0,
+            'created_at': 1,
+            'label': '',
+            'note': '',
+            'source': 'map_selected',
+          },
+        ],
+        'tracks': [],
+      }),
+    );
+    final service = _journal(dir);
+    await service.restore();
+    expect(service.lastError, isNull);
+    expect(service.waypoints.length, 1);
+    await _writeRaw(
+      dir,
+      jsonEncode({
+        'version': 1,
+        'waypoints': [],
+        'tracks': {'id': 'trk-000001'},
+      }),
+    );
+    await service.restore();
+    expect(service.lastError, isNotNull);
+    expect(service.waypoints.length, 1);
+    expect(service.tracks, isEmpty);
+  });
+
+  test('materialized track length matches the golden vector', () async {
+    final dir = await _tempDir();
+    addTearDown(() => dir.delete(recursive: true));
+    final service = _journal(dir);
+    final record = service.saveTrack(fixes: trackFixes())!;
+    final AtlasTrack track = record.toTrack();
+    expect(track.id.value, 'trk-000001');
+    expect(track.pointCount, 2);
+    expect(track.lengthMeters, closeTo(111195.08, 0.01));
+    expect(track.createdAt, 1000);
+  });
+
+  test('track record schema shape is pinned', () {
+    const record = StoredTrack(
+      id: 'trk-000007',
+      createdAt: 9,
+      source: WaypointSource.gpsRecorded,
+    );
+    expect(
+      record.toJson().keys.toSet(),
+      {'id', 'created_at', 'source', 'points'},
+    );
+    expect(record.toJson()['source'], 'gps_recorded');
+    expect(record.pointCount, 0);
+    final roundTripped = StoredTrack.tryParse(record.toJson());
+    expect(roundTripped?.id, 'trk-000007');
+    expect(roundTripped?.createdAt, 9);
+    expect(roundTripped?.source, WaypointSource.gpsRecorded);
+    expect(roundTripped?.points, isEmpty);
   });
 }

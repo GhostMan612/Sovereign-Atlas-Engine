@@ -42,6 +42,11 @@ dependencies:
   # AtlasLocationFix carries an AtlasCoordinate; no geo math is drawn in).
   atlas_geo:
     path: ../../packages/atlas_geo
+  # Track materialization only (Slice 4D: host persists completed tracks as
+  # immutable AtlasTrack values built from AtlasWaypoint points; engine
+  # behavior reused, none modified. No hosted dependency involved).
+  atlas_tactical:
+    path: ../../packages/atlas_tactical
 
 dev_dependencies:
   flutter_test:

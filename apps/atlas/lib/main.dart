@@ -21,6 +21,8 @@ import 'measure/measure_state.dart';
 import 'offline/offline_page.dart';
 import 'offline/offline_repository.dart';
 import 'offline/offline_tile_provider.dart';
+import 'track/track_recorder.dart';
+import 'track/tracks_page.dart';
 
 void main() {
   runApp(const AtlasApp());
@@ -141,6 +143,7 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   bool _pendingHeadingUp = false;
   final MeasureState _measure = MeasureState();
   final GoToState _goTo = GoToState();
+  late final TrackRecorder _recorder;
   PersistentBottomSheetController? _measureSheet;
 
   @override
@@ -150,6 +153,8 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     widget.headingService.addListener(_onHeadingChanged);
     widget.fieldJournal.addListener(_onFieldChanged);
     _measure.addListener(_onMeasureChanged);
+    _recorder = TrackRecorder(locationService: widget.locationService);
+    _recorder.addListener(_onTrackChanged);
   }
 
   @override
@@ -158,6 +163,8 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
     widget.headingService.removeListener(_onHeadingChanged);
     widget.fieldJournal.removeListener(_onFieldChanged);
     _measure.removeListener(_onMeasureChanged);
+    _recorder.removeListener(_onTrackChanged);
+    _recorder.dispose();
     _measureSheet?.close();
     _measureSheet = null;
     _measure.dispose();
@@ -171,6 +178,11 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
   }
 
   void _onFieldChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _onTrackChanged() {
     if (!mounted) return;
     setState(() {});
   }
@@ -706,6 +718,18 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.timeline),
+            tooltip: 'tracks',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => TracksPage(
+                  journal: widget.fieldJournal,
+                  recorder: _recorder,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.my_location),
             tooltip: 'my-location',
             onPressed: _locate,
@@ -885,6 +909,23 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                       ),
                   ],
                 ),
+                if (_recorder.pointCount > 0)
+                  PolylineLayer(
+                    key: const ValueKey<String>('track-line'),
+                    polylines: [
+                      Polyline(
+                        points: [
+                          for (final fix in _recorder.points)
+                            LatLng(
+                              fix.position.latitude,
+                              fix.position.longitude,
+                            ),
+                        ],
+                        color: Colors.cyan,
+                        strokeWidth: 4.0,
+                      ),
+                    ],
+                  ),
               ],
             ),
             if (widget.headingService.displayDeg != null)
@@ -898,6 +939,33 @@ class _AtlasMapPageState extends State<AtlasMapPage> {
                 ),
               ),
             if (_goTo.isActive) _goToCard(),
+            if (_recorder.isRecording)
+              Positioned(
+                top: 12.0,
+                left: 0.0,
+                right: 0.0,
+                child: Center(
+                  child: Container(
+                    key: const ValueKey<String>('track-rec-badge'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12.0,
+                      vertical: 6.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(color: Colors.redAccent, width: 1.5),
+                    ),
+                    child: Text(
+                      'REC • ${_recorder.pointCount} pts',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
