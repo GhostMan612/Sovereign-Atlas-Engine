@@ -19,25 +19,31 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.track.TrackRecorder
+import com.sovereignatlas.atlas.track.exportAllGpx
 import com.sovereignatlas.atlas.track.formatTrackDistance
 import com.sovereignatlas.atlas.track.formatTrackDuration
 import com.sovereignatlas.atlas.track.formatTrackStart
 import com.sovereignatlas.atlas.track.trackLengthMeters
+import java.io.File
 
 @Composable
 fun TracksDialog(
     journal: FieldJournal,
     recorder: TrackRecorder,
+    exportDir: File,
     onOpenDetail: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     val error = journal.lastErrorOrNull()
     val records = journal.tracks()
+    val message = remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Tracks") },
@@ -100,6 +106,28 @@ fun TracksDialog(
                                     .testTag("track-${record.id}"),
                             )
                         }
+                    }
+                }
+                if (message.value.isNotEmpty()) Text(message.value)
+                Row {
+                    Button(
+                        onClick = {
+                            message.value = try {
+                                val name =
+                                    "atlas-export-${System.currentTimeMillis()}.gpx"
+                                File(exportDir, name).writeText(
+                                    exportAllGpx(
+                                        journal.waypoints(),
+                                        journal.tracks(),
+                                    ),
+                                )
+                                "Exported $name"
+                            } catch (error: Throwable) {
+                                "Export failed: ${error.message}"
+                            }
+                        },
+                    ) {
+                        Text("Export GPX")
                     }
                 }
             }

@@ -78,6 +78,7 @@ fun AtlasMapScreen(services: AtlasServices) {
     val headingUp = remember { mutableStateOf(false) }
     val pendingHeadingUp = remember { mutableStateOf(false) }
     val headingTick = remember { mutableStateOf(0) }
+    val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val showGraticule = remember { mutableStateOf(false) }
@@ -101,6 +102,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         services.behavior.markUserInteracted()
+                        following.value = false
                     }
                 }
                 map.addOnMapClickListener { point ->
@@ -169,6 +171,20 @@ fun AtlasMapScreen(services: AtlasServices) {
             if (map != null && style != null) {
                 pushPosition(style, services)
                 if (showRings.value) pushRings(style, services)
+                if (following.value) {
+                    val fix = usableFixOf(services)
+                    if (fix != null) {
+                        val followed = AtlasCameraState(
+                            center = fix,
+                            zoom = map.cameraPosition.zoom,
+                            bearing = map.cameraPosition.bearing,
+                            pitch = 0.0,
+                        )
+                        if (followed.validate().isValid) {
+                            applyCameraIntent(map, followed)
+                        }
+                    }
+                }
                 services.behavior.onLocationUpdate(
                     map.cameraPosition.zoom,
                     map.cameraPosition.bearing,
@@ -243,6 +259,13 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showTracks.value = true },
             ) {
                 Text("Tracks")
+            }
+            Button(
+                onClick = {
+                    following.value = !following.value
+                },
+            ) {
+                Text(if (following.value) "Unfollow" else "Follow")
             }
             Button(
                 onClick = { showOffline.value = true },
@@ -422,6 +445,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                     TracksDialog(
                         journal = services.journal,
                         recorder = services.recorder,
+                        exportDir = context.filesDir,
                         onOpenDetail = { id -> trackDetailId.value = id },
                         onClose = { showTracks.value = false },
                     )
