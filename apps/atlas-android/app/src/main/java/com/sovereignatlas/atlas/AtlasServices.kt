@@ -10,6 +10,7 @@ import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
+import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.track.TrackRecorder
 
 class AtlasServices(
@@ -19,4 +20,5 @@ class AtlasServices(
     val goTo: GoToState,
     val measure: MeasureState,
     val behavior: MapBehavior,
+    val offline: OfflineStore,
 )

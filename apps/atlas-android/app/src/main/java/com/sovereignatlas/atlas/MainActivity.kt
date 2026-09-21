@@ -17,6 +17,7 @@ import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.AtlasMapScreen
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
+import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.track.TrackRecorder
 import org.maplibre.android.MapLibre
 
@@ -30,6 +31,9 @@ final class MainActivity : ComponentActivity() {
     private val goTo by lazy { GoToState() }
     private val measure by lazy { MeasureState() }
     private val behavior by lazy { MapBehavior(locationService) }
+    private val offline by lazy {
+        OfflineStore(directoryProvider = { filesDir })
+    }
 
     private val services by lazy {
         AtlasServices(
@@ -39,6 +43,7 @@ final class MainActivity : ComponentActivity() {
             goTo = goTo,
             measure = measure,
             behavior = behavior,
+            offline = offline,
         )
     }
 
@@ -46,6 +51,7 @@ final class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         journal.restore()
+        offline.restore()
         setContent {
             MaterialTheme {
                 AtlasMapScreen(services)

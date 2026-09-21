@@ -54,6 +54,73 @@ class OfflinePackRecord(
             lifecycle == OfflinePackLifecycle.cancelled
 
     fun ageSeconds(nowEpoch: Long): Long = nowEpoch - createdAtEpoch
+
+    fun toMap(): Map<String, Any?> {
+        return mapOf(
+            "pack_id" to packId,
+            "provider_id" to providerId,
+            "provider_title" to providerTitle,
+            "z_min" to zMin,
+            "z_max" to zMax,
+            "x_min" to xMin,
+            "x_max" to xMax,
+            "y_min" to yMin,
+            "y_max" to yMax,
+            "bytes_per_tile" to bytesPerTile,
+            "approved_bulk" to approvedBulk,
+            "is_prefetch" to isPrefetch,
+            "created_at" to createdAtEpoch,
+            "lifecycle" to lifecycle.name,
+            "received_tiles" to receivedTiles,
+            "received_bytes" to receivedBytes,
+            "failure_detail" to failureDetail,
+            "persisted_tiles" to persistedTileCount,
+            "persisted_bytes" to persistedEstimatedBytes,
+        )
+    }
+
+    companion object {
+        fun tryParse(raw: Any?): OfflinePackRecord? {
+            if (raw !is Map<*, *>) return null
+            val packId = raw["pack_id"] as? String ?: return null
+            val providerId = raw["provider_id"] as? String ?: return null
+            val providerTitle = raw["provider_title"] as? String ?: return null
+            val zMin = (raw["z_min"] as? Number)?.toInt() ?: return null
+            val zMax = (raw["z_max"] as? Number)?.toInt() ?: return null
+            val xMin = (raw["x_min"] as? Number)?.toInt() ?: return null
+            val xMax = (raw["x_max"] as? Number)?.toInt() ?: return null
+            val yMin = (raw["y_min"] as? Number)?.toInt() ?: return null
+            val yMax = (raw["y_max"] as? Number)?.toInt() ?: return null
+            val lifecycle = try {
+                OfflinePackLifecycle.valueOf(raw["lifecycle"] as? String ?: return null)
+            } catch (error: IllegalArgumentException) {
+                return null
+            }
+            val record = OfflinePackRecord(
+                packId = packId,
+                providerId = providerId,
+                providerTitle = providerTitle,
+                zMin = zMin,
+                zMax = zMax,
+                xMin = xMin,
+                xMax = xMax,
+                yMin = yMin,
+                yMax = yMax,
+                bytesPerTile = (raw["bytes_per_tile"] as? Number)?.toInt() ?: 0,
+                approvedBulk = raw["approved_bulk"] as? Boolean ?: false,
+                isPrefetch = raw["is_prefetch"] as? Boolean ?: false,
+                createdAtEpoch = (raw["created_at"] as? Number)?.toLong() ?: return null,
+            )
+            record.lifecycle = lifecycle
+            record.receivedTiles = (raw["received_tiles"] as? Number)?.toInt() ?: 0
+            record.receivedBytes = (raw["received_bytes"] as? Number)?.toLong() ?: 0L
+            record.failureDetail = raw["failure_detail"] as? String ?: ""
+            record.persistedTileCount = (raw["persisted_tiles"] as? Number)?.toInt() ?: 0
+            record.persistedEstimatedBytes =
+                (raw["persisted_bytes"] as? Number)?.toLong() ?: 0L
+            return record
+        }
+    }
 }
 
 fun countTiles(

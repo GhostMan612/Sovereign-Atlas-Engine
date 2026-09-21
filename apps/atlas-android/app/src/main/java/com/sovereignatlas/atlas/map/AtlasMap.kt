@@ -34,6 +34,7 @@ import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.MeasurePanel
+import com.sovereignatlas.atlas.ui.OfflineDialog
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.ui.WaypointCreateDialog
@@ -61,6 +62,8 @@ fun AtlasMapScreen(services: AtlasServices) {
     val waypointDetailId = remember { mutableStateOf<String?>(null) }
     val showTracks = remember { mutableStateOf(false) }
     val trackDetailId = remember { mutableStateOf<String?>(null) }
+    val showOffline = remember { mutableStateOf(false) }
+    val offlineTick = remember { mutableStateOf(0) }
     val recorderTick = remember { mutableStateOf(0) }
     val goToTick = remember { mutableStateOf(0) }
     val positionTick = remember { mutableStateOf(0) }
@@ -158,11 +161,15 @@ fun AtlasMapScreen(services: AtlasServices) {
             goToTick.value += 1
             styleRef.value?.let { style -> pushGoTo(style, services) }
         }
+        val onOffline: () -> Unit = {
+            offlineTick.value += 1
+        }
         services.location.addListener(onLocation)
         services.journal.addListener(onJournal)
         services.measure.addListener(onMeasure)
         services.recorder.addListener(onRecorder)
         services.goTo.addListener(onGoTo)
+        services.offline.addListener(onOffline)
         onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
@@ -170,6 +177,7 @@ fun AtlasMapScreen(services: AtlasServices) {
             services.measure.removeListener(onMeasure)
             services.recorder.removeListener(onRecorder)
             services.goTo.removeListener(onGoTo)
+            services.offline.removeListener(onOffline)
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -189,6 +197,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showTracks.value = true },
             ) {
                 Text("Tracks")
+            }
+            Button(
+                onClick = { showOffline.value = true },
+            ) {
+                Text("Offline")
             }
             Button(
                 onClick = {
@@ -337,6 +350,14 @@ fun AtlasMapScreen(services: AtlasServices) {
                     journal = services.journal,
                     id = id,
                     onClose = { trackDetailId.value = null },
+                )
+            }
+        }
+        if (showOffline.value) {
+            offlineTick.value.let {
+                OfflineDialog(
+                    store = services.offline,
+                    onClose = { showOffline.value = false },
                 )
             }
         }
