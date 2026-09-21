@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.field.waypointSourceName
+import com.sovereignatlas.atlas.geo.Mgrs
 import java.util.Locale
 
 @Composable
@@ -126,6 +127,7 @@ fun WaypointDetailDialog(
         text = {
             Column {
                 Text("Source: ${waypointSourceName(record.source)}")
+                Text("MGRS: ${Mgrs.format(record.latitude, record.longitude)}")
                 OutlinedTextField(
                     value = label.value,
                     onValueChange = { label.value = it },

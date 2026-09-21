@@ -146,8 +146,49 @@ abstract final class AtlasBuiltinProviders {
             'USGSTopo/MapServer/tile/{z}/{y}/{x}',
       );
 
-  static AtlasProviderEndpoint get localBundle => AtlasProviderEndpoint(
+  static AtlasProviderEndpoint get cartoPositron => AtlasProviderEndpoint(
         descriptor: const AtlasProviderDescriptor(
+          id: AtlasId('carto-positron'),
+          kinds: _tileKinds,
+          title: 'CARTO Positron',
+          capabilities: {AtlasProviderCapability.tileServing},
+          nativeMinZoom: 0,
+          nativeMaxZoom: 20,
+          attribution: '© OpenStreetMap contributors © CARTO',
+          license: 'CC-BY-SA (carto.com/attribution)',
+        ),
+        policy: const AtlasProviderPolicy(
+          onlineAllowed: true,
+          cacheAllowed: true,
+          prefetchAllowed: false,
+          requiresKey: false,
+        ),
+        urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        params: const {'s': 'a'},
+      );
+
+  static AtlasProviderEndpoint get cartoDarkMatter => AtlasProviderEndpoint(
+        descriptor: const AtlasProviderDescriptor(
+          id: AtlasId('carto-dark-matter'),
+          kinds: _tileKinds,
+          title: 'CARTO Dark Matter',
+          capabilities: {AtlasProviderCapability.tileServing},
+          nativeMinZoom: 0,
+          nativeMaxZoom: 20,
+          attribution: '© OpenStreetMap contributors © CARTO',
+          license: 'CC-BY-SA (carto.com/attribution)',
+        ),
+        policy: const AtlasProviderPolicy(
+          onlineAllowed: true,
+          cacheAllowed: true,
+          prefetchAllowed: false,
+          requiresKey: false,
+        ),
+        urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        params: const {'s': 'a'},
+      );
+
+  static AtlasProviderEndpoint get localBundle => AtlasProviderEndpoint(        descriptor: const AtlasProviderDescriptor(
           id: AtlasId('local-bundle'),
           kinds: _tileKinds,
           title: 'Local Bundle (file tree)',
@@ -174,6 +215,8 @@ abstract final class AtlasBuiltinProviders {
         esriDarkGray,
         openTopoMap,
         usgsTopo,
+        cartoPositron,
+        cartoDarkMatter,
         localBundle,
       ];
 

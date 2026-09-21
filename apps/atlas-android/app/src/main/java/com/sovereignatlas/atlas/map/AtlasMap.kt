@@ -40,6 +40,7 @@ import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.ui.CompassDial
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.LayersDialog
+import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
@@ -80,6 +81,7 @@ fun AtlasMapScreen(services: AtlasServices) {
     val headingTick = remember { mutableStateOf(0) }
     val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
+    val showLink = remember { mutableStateOf(false) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
     val showGraticule = remember { mutableStateOf(false) }
@@ -282,6 +284,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showLayers.value = true },
             ) {
                 Text("Layers")
+            }
+            Button(
+                onClick = { showLink.value = true },
+            ) {
+                Text("Link")
             }
             Button(
                 onClick = {
@@ -537,6 +544,23 @@ fun AtlasMapScreen(services: AtlasServices) {
                     }
                 },
                 onClose = { showLayers.value = false },
+            )
+        }
+        if (showLink.value) {
+            val map = mapRef.value
+            val center = map?.cameraPosition?.target?.let {
+                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
+            }
+            val fix = usableFixOf(services)
+            val target = services.goTo.targetOrNull()?.let {
+                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
+            }
+            LinkDialog(
+                pointA = fix ?: center,
+                pointB = target ?: center,
+                aLabel = if (fix != null) "GPS" else "map center",
+                bLabel = if (target != null) "go-to" else "map center",
+                onClose = { showLink.value = false },
             )
         }
         if (attribution.value.isNotEmpty()) {

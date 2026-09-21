@@ -49,6 +49,14 @@ final class OfflineProvidersTest {
             resolveTileUrl(OfflineBuiltinProviders.localBundle, 10, 1, 2),
         )
     }
+
+    @Test
+    fun cartoPositronResolvesWithSubdomain() {
+        assertEquals(
+            "https://a.basemaps.cartocdn.com/light_all/10/1/2.png",
+            resolveTileUrl(OfflineBuiltinProviders.cartoPositron, 10, 1, 2),
+        )
+    }
 }
 
 final class OfflineStoreTest {

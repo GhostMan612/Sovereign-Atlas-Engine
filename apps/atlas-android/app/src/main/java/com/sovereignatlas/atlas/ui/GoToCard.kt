@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGeoMath
+import com.sovereignatlas.atlas.geo.Mgrs
 import com.sovereignatlas.atlas.goto.GoToState
 import java.util.Locale
 
@@ -42,6 +43,7 @@ fun GoToCard(
                 target.longitude,
             ),
         )
+        Text("MGRS: ${Mgrs.format(target.latitude, target.longitude)}")
         Text(
             if (distanceKm == null) {
                 "Distance: unavailable"

@@ -115,6 +115,28 @@ object OfflineBuiltinProviders {
         license = "Bundle license (travels with data)",
         prefetchAllowed = false,
     )
+    val cartoPositron = OfflineProviderDescriptor(
+        id = "carto-positron",
+        title = "CARTO Positron",
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        params = mapOf("s" to "a"),
+        minZoom = 0,
+        maxZoom = 20,
+        attribution = "© OpenStreetMap contributors © CARTO",
+        license = "CC-BY-SA (carto.com/attribution)",
+        prefetchAllowed = false,
+    )
+    val cartoDarkMatter = OfflineProviderDescriptor(
+        id = "carto-dark-matter",
+        title = "CARTO Dark Matter",
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        params = mapOf("s" to "a"),
+        minZoom = 0,
+        maxZoom = 20,
+        attribution = "© OpenStreetMap contributors © CARTO",
+        license = "CC-BY-SA (carto.com/attribution)",
+        prefetchAllowed = false,
+    )
 
     val all: List<OfflineProviderDescriptor> = listOf(
         osmStandard,
@@ -123,6 +145,8 @@ object OfflineBuiltinProviders {
         esriDarkGray,
         openTopoMap,
         usgsTopo,
+        cartoPositron,
+        cartoDarkMatter,
         localBundle,
     )
 
