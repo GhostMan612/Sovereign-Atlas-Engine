@@ -118,6 +118,40 @@
   evidence → contract → credential-boundary → fixture → implementation
   (keys never enter repo/history/logs).
 
+## Native MapLibre host — Phase 1 + Tracks/Go-To/offline-base (2026-09-20)
+
+- **Commits (local, unpushed — NO PUSH performed):**
+  `7b582ab feat(android): add native MapLibre host Phase 1
+  (foundation to journal plus Go-To state)` (65 files, 5785 insertions;
+  `:app:testDebugUnitTest` 117/117 green) +
+  `05df386 feat(android): add TrackRecorder, offline pack base,
+  Go-To camera glue` (6 files; `:app:testDebugUnitTest` 139/139 green).
+  Flutter oracle untouched (zero Flutter diff both commits).
+- **Scope:** `apps/atlas-android/` (`com.sovereignatlas.atlas`,
+  MapLibre 13.3.1, Compose BOM 2024.12.01): skeleton + boot screen,
+  parity harness (11 byte-identical golden copies), foundation
+  (core/geo/overlays/units/camera/layers/models + CompassMath/Mgrs/
+  SovereignGrid transplants), camera policy (`max(currentZoom,15)`,
+  startup z13, gated rotation), LocationService + Android source
+  (LocationManager, no Play), heading, Measure state + panel,
+  journal v1 codec + FieldJournal (waypoints + `trk-` tracks),
+  layer features/installer, GoToState + `goToToFeature` + Go-To
+  camera glue, TrackRecorder (12 tests mirroring Dart), offline
+  pack base (record/lifecycle/`countTiles`/formatAge/formatBytes).
+- **Parity catch (evidence):** `countTiles` saturation case failed
+  natively on first run — 32-bit `Int` span overflow vs Dart 64-bit;
+  fixed with `Long` arithmetic, now green. Deferred with reason:
+  map-screen UI wiring, pack downloader/rate-limiter/store (engine
+  types), engine-plan-backed tile estimates, GPX, follow policy.
+- **Hygiene:** nested `apps/atlas-android/.gitignore` (`.gradle/`/
+  `.kotlin/`/`build/`/`local.properties` excluded from commits);
+  all new `.kt` genesis-header-only; no secrets in tree (grep clean).
+  Pre-existing `D analysis_options.yaml` +
+  `?? blueprints/dart_analysis-20260915_194625.txt` preserved untouched.
+- **Gates here:** native unit 139/139 green; Flutter analyze/test NOT
+  re-run in this env (no Flutter SDK present) — justified by zero
+  Flutter diff. No build claimed (human builds in Android Studio).
+
 ## Slices 1–3 closure — Moto G 2025 physical smoke (2026-09-11)
 
 - **Device:** Moto G 2025 physical hardware (not emulator — strictly more
@@ -318,7 +352,10 @@
 
 ## Next actions
 
-1. Camera/layers sprint IMPLEMENTED locally (DEC-023 + adapter +
+1. Native host map-screen wiring (UI + live style application) ONLY on
+   explicit operator authorization — state layers are committed
+   (`7b582ab`, `05df386`), no screen exists yet.
+2. Camera/layers sprint IMPLEMENTED locally (DEC-023 + adapter +
    32 tests, smoke PENDING) — was: spec (`blueprints/camera-layers-
    sprint.md`) pending architect review. Next: human Android Studio
    build + 40-item Moto G physical smoke; no push until told.
