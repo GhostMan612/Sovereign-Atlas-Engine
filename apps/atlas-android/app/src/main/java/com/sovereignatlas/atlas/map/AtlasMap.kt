@@ -33,6 +33,8 @@ import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.ui.MeasurePanel
+import com.sovereignatlas.atlas.ui.TrackDetailDialog
+import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.ui.WaypointCreateDialog
 import com.sovereignatlas.atlas.ui.WaypointDetailDialog
 import com.sovereignatlas.atlas.ui.WaypointsDialog
@@ -44,6 +46,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 @Composable
@@ -55,6 +58,9 @@ fun AtlasMapScreen(services: AtlasServices) {
     val pendingWaypoint = remember { mutableStateOf<AtlasCoordinate?>(null) }
     val showWaypoints = remember { mutableStateOf(false) }
     val waypointDetailId = remember { mutableStateOf<String?>(null) }
+    val showTracks = remember { mutableStateOf(false) }
+    val trackDetailId = remember { mutableStateOf<String?>(null) }
+    val recorderTick = remember { mutableStateOf(0) }
     val journalTick = remember { mutableStateOf(0) }
     val measureActive = remember { mutableStateOf(services.measure.isActive()) }
     val measureSnapshot = remember {
@@ -139,14 +145,20 @@ fun AtlasMapScreen(services: AtlasServices) {
             measureSnapshot.value = services.measure.snapshot()
             styleRef.value?.let { style -> pushMeasure(style, services) }
         }
+        val onRecorder: () -> Unit = {
+            recorderTick.value += 1
+            styleRef.value?.let { style -> pushTracks(style, services) }
+        }
         services.location.addListener(onLocation)
         services.journal.addListener(onJournal)
         services.measure.addListener(onMeasure)
+        services.recorder.addListener(onRecorder)
         onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
             services.journal.removeListener(onJournal)
             services.measure.removeListener(onMeasure)
+            services.recorder.removeListener(onRecorder)
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -161,6 +173,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showWaypoints.value = true },
             ) {
                 Text("Waypoints")
+            }
+            Button(
+                onClick = { showTracks.value = true },
+            ) {
+                Text("Tracks")
             }
             Button(
                 onClick = {
@@ -200,8 +217,15 @@ fun AtlasMapScreen(services: AtlasServices) {
                 Text("Locate")
             }
         }
-        if (measureActive.value) {
-            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
+        if (recorderTick.value >= 0 && services.recorder.isRecording()) {
+            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                Text(
+                    text = "REC • ${services.recorder.pointCount()} pts",
+                    modifier = Modifier.padding(8.dp),
+                )
+            }
+        }
+        if (measureActive.value) {            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
                 MeasurePanel(
                     snapshot = measureSnapshot.value,
                     units = MeasureUnit.values().toList(),
@@ -266,6 +290,27 @@ fun AtlasMapScreen(services: AtlasServices) {
                 )
             }
         }
+        if (showTracks.value) {
+            journalTick.value.let {
+                recorderTick.value.let {
+                    TracksDialog(
+                        journal = services.journal,
+                        recorder = services.recorder,
+                        onOpenDetail = { id -> trackDetailId.value = id },
+                        onClose = { showTracks.value = false },
+                    )
+                }
+            }
+        }
+        trackDetailId.value?.let { id ->
+            journalTick.value.let {
+                TrackDetailDialog(
+                    journal = services.journal,
+                    id = id,
+                    onClose = { trackDetailId.value = null },
+                )
+            }
+        }
     }
 }
 
@@ -287,9 +332,28 @@ fun pushJournal(style: Style, services: AtlasServices) {
         AtlasLayerIds.WAYPOINTS_SOURCE,
         waypointsToFeatures(services.journal.waypoints()),
     )
+    pushTracks(style, services)
+}
+
+fun pushTracks(style: Style, services: AtlasServices) {
     val trackFeatures = ArrayList<Feature>()
     for (track in services.journal.tracks()) {
         trackToFeatures(track).features()?.let { trackFeatures.addAll(it) }
+    }
+    val active = services.recorder.points()
+    if (active.size >= 2) {
+        trackFeatures.add(
+            Feature.fromGeometry(
+                LineString.fromLngLats(
+                    active.map { fix ->
+                        Point.fromLngLat(
+                            fix.position.longitude,
+                            fix.position.latitude,
+                        )
+                    },
+                ),
+            ),
+        )
     }
     pushFeatures(
         style,
