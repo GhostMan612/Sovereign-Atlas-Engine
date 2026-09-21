@@ -81,6 +81,7 @@ fun AtlasMapScreen(services: AtlasServices) {
     val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
+    val basePackId = remember { mutableStateOf<String?>(null) }
     val showGraticule = remember { mutableStateOf(false) }
     val showRings = remember { mutableStateOf(false) }
     val showWaypointsLayer = remember { mutableStateOf(true) }
@@ -130,7 +131,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                 }
                 map.setStyle(Style.Builder().fromJson(BLANK_STYLE)) { style ->
                     styleRef.value = style
-                    ensureBaseLayer(style, baseProviderId.value)
+                    applyBaseSource(style, services, baseProviderId.value, basePackId.value)
                     installAtlasLayers(style)
                     applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
                     pushJournal(style, services)
@@ -139,7 +140,12 @@ fun AtlasMapScreen(services: AtlasServices) {
                     pushGoTo(style, services)
                     pushRings(style, services)
                     if (showGraticule.value) pushGraticule(map, style)
-                    attribution.value = OfflineBuiltinProviders.lookup(baseProviderId.value)?.attribution ?: ""
+                    attribution.value = applyBaseSource(
+                        style,
+                        services,
+                        baseProviderId.value,
+                        basePackId.value,
+                    )
                     services.behavior.startupCamera()?.let { intent ->
                         applyCameraIntent(map, intent)
                     }
@@ -465,6 +471,18 @@ fun AtlasMapScreen(services: AtlasServices) {
             offlineTick.value.let {
                 OfflineDialog(
                     store = services.offline,
+                    onUsePack = { packId ->
+                        basePackId.value = packId
+                        styleRef.value?.let { style ->
+                            attribution.value = applyBaseSource(
+                                style,
+                                services,
+                                baseProviderId.value,
+                                packId,
+                            )
+                        }
+                        showOffline.value = false
+                    },
                     onClose = { showOffline.value = false },
                 )
             }
@@ -474,11 +492,10 @@ fun AtlasMapScreen(services: AtlasServices) {
                 providerId = baseProviderId.value,
                 onProviderSelected = { id ->
                     baseProviderId.value = id
+                    basePackId.value = null
                     styleRef.value?.let { style ->
-                        ensureBaseLayer(style, id)
+                        attribution.value = applyBaseSource(style, services, id, null)
                     }
-                    attribution.value =
-                        OfflineBuiltinProviders.lookup(id)?.attribution ?: ""
                 },
                 showGraticule = showGraticule.value,
                 onGraticuleChanged = { visible ->
@@ -708,29 +725,55 @@ fun applyOverlayVisibility(
 }
 
 fun ensureBaseLayer(style: Style, providerId: String) {
+    val descriptor = OfflineBuiltinProviders.lookup(providerId) ?: return
+    var template = descriptor.urlTemplate ?: return
+    for ((key, value) in descriptor.params) {
+        template = template.replace("{$key}", value)
+    }
+    ensureBaseTemplate(style, template, descriptor.minZoom, descriptor.maxZoom)
+}
+
+fun ensureBaseTemplate(style: Style, template: String, minZoom: Int, maxZoom: Int) {
+    removeBaseLayer(style)
+    val tileSet = TileSet("2.2.0", template)
+    tileSet.minZoom = minZoom.toFloat()
+    tileSet.maxZoom = maxZoom.toFloat()
+    style.addSource(RasterSource(BASE_SOURCE_ID, tileSet, 256))
+    val layer = RasterLayer(BASE_LAYER_ID, BASE_SOURCE_ID)
+    layer.minZoom = minZoom.toFloat()
+    layer.maxZoom = maxZoom.toFloat()
+    if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+        style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
+    } else {
+        style.addLayer(layer)
+    }
+}
+
+fun removeBaseLayer(style: Style) {
     if (style.getLayer(BASE_LAYER_ID) != null) {
         style.removeLayer(BASE_LAYER_ID)
     }
     if (style.getSource(BASE_SOURCE_ID) != null) {
         style.removeSource(BASE_SOURCE_ID)
     }
-    val descriptor = OfflineBuiltinProviders.lookup(providerId) ?: return
-    var template = descriptor.urlTemplate ?: return
-    for ((key, value) in descriptor.params) {
-        template = template.replace("{$key}", value)
+}
+
+fun applyBaseSource(
+    style: Style,
+    services: AtlasServices,
+    providerId: String,
+    packId: String?,
+): String {
+    if (packId != null) {
+        val pack = services.offline.lookup(packId)
+        val url = services.tiles.tileUrl(packId)
+        if (pack != null && url != null) {
+            ensureBaseTemplate(style, url, pack.zMin, pack.zMax)
+            return "${pack.providerTitle} (offline)"
+        }
     }
-    val tileSet = TileSet("2.2.0", template)
-    tileSet.minZoom = descriptor.minZoom.toFloat()
-    tileSet.maxZoom = descriptor.maxZoom.toFloat()
-    style.addSource(RasterSource(BASE_SOURCE_ID, tileSet, 256))
-    val layer = RasterLayer(BASE_LAYER_ID, BASE_SOURCE_ID)
-    layer.minZoom = descriptor.minZoom.toFloat()
-    layer.maxZoom = descriptor.maxZoom.toFloat()
-    if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
-        style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
-    } else {
-        style.addLayer(layer)
-    }
+    ensureBaseLayer(style, providerId)
+    return OfflineBuiltinProviders.lookup(providerId)?.attribution ?: ""
 }
 
 const val BASE_SOURCE_ID = "atlas-base"

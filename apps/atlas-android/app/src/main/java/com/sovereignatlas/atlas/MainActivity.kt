@@ -8,6 +8,7 @@ package com.sovereignatlas.atlas
 import android.content.pm.PackageManager
 import android.hardware.GeomagneticField
 import android.os.Bundle
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +22,8 @@ import com.sovereignatlas.atlas.map.AtlasMapScreen
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.offline.OfflineStore
+import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
+import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
 import org.maplibre.android.MapLibre
 
@@ -54,6 +57,9 @@ final class MainActivity : ComponentActivity() {
     private val offline by lazy {
         OfflineStore(directoryProvider = { filesDir })
     }
+    private val tileServer by lazy {
+        PackTileServer(packsDir = { File(filesDir, PACK_JOURNAL_DIR) })
+    }
 
     private val services by lazy {
         AtlasServices(
@@ -65,6 +71,7 @@ final class MainActivity : ComponentActivity() {
             behavior = behavior,
             offline = offline,
             heading = headingService,
+            tiles = tileServer,
         )
     }
 
@@ -73,6 +80,7 @@ final class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         journal.restore()
         offline.restore()
+        tileServer.start()
         setContent {
             MaterialTheme {
                 AtlasMapScreen(services)
@@ -98,6 +106,7 @@ final class MainActivity : ComponentActivity() {
         recorder.dispose()
         locationService.dispose()
         headingService.dispose()
+        tileServer.stop()
         super.onDestroy()
     }
 }

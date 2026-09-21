@@ -12,6 +12,7 @@ import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.offline.OfflineStore
+import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
 
 class AtlasServices(
@@ -23,4 +24,5 @@ class AtlasServices(
     val behavior: MapBehavior,
     val offline: OfflineStore,
     val heading: HeadingService,
+    val tiles: PackTileServer,
 )

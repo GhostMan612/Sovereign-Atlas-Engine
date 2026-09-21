@@ -43,6 +43,7 @@ import kotlin.concurrent.thread
 @Composable
 fun OfflineDialog(
     store: OfflineStore,
+    onUsePack: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     val tab = remember { mutableStateOf(0) }
@@ -62,7 +63,7 @@ fun OfflineDialog(
                     TextButton(onClick = { tab.value = 2 }) { Text("Providers") }
                 }
                 when (tab.value) {
-                    0 -> PacksTab(store, cancels, mainHandler)
+                    0 -> PacksTab(store, cancels, mainHandler, onUsePack)
                     1 -> PlanTab(store)
                     else -> ProvidersTab()
                 }
@@ -81,6 +82,7 @@ private fun PacksTab(
     store: OfflineStore,
     cancels: MutableMap<String, AtomicBoolean>,
     mainHandler: Handler,
+    onUsePack: (String) -> Unit,
 ) {
     val packs = store.packs()
     val error = store.lastErrorOrNull()
@@ -111,6 +113,13 @@ private fun PacksTab(
                     },
                     trailingContent = {
                         Row {
+                            if (pack.lifecycle == OfflinePackLifecycle.complete) {
+                                TextButton(
+                                    onClick = { onUsePack(pack.packId) },
+                                ) {
+                                    Text("Use")
+                                }
+                            }
                             if (pack.lifecycle == OfflinePackLifecycle.planned ||
                                 pack.lifecycle == OfflinePackLifecycle.failed ||
                                 pack.lifecycle == OfflinePackLifecycle.cancelled
