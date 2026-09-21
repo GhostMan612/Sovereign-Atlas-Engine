@@ -5,14 +5,20 @@
 
 package com.sovereignatlas.atlas.map
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -94,10 +100,29 @@ fun AtlasMapScreen(services: AtlasServices) {
             services.journal.removeListener(onJournal)
         }
     }
-    AndroidView(
-        factory = { mapView },
-        modifier = Modifier.fillMaxSize(),
-    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { mapView },
+            modifier = Modifier.fillMaxSize(),
+        )
+        Button(
+            onClick = {
+                val map = mapRef.value ?: return@Button
+                when (
+                    val outcome = services.behavior.locate(
+                        map.cameraPosition.zoom,
+                        map.cameraPosition.bearing,
+                    )
+                ) {
+                    is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
+                    LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) {
+            Text("Locate")
+        }
+    }
 }
 
 fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {
