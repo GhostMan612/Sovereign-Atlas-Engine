@@ -21,6 +21,8 @@ object AtlasLayerIds {
     const val TRACK_LAYER = "atlas-track-layer"
     const val MEASURE_SOURCE = "atlas-measure"
     const val MEASURE_LAYER = "atlas-measure-layer"
+    const val MEASURE_DOTS_SOURCE = "atlas-measure-dots"
+    const val MEASURE_DOTS_LAYER = "atlas-measure-dots-layer"
     const val GRATICULE_SOURCE = "atlas-graticule"
     const val GRATICULE_LAYER = "atlas-graticule-layer"
     const val RINGS_SOURCE = "atlas-rings"
@@ -33,6 +35,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.WAYPOINTS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.TRACK_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MEASURE_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.MEASURE_DOTS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GRATICULE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.RINGS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.POSITION_SOURCE))
@@ -55,6 +58,15 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.lineWidth(3.0f),
                 PropertyFactory.lineOpacity(0.9f),
             ),
+    )
+    style.addLayer(
+        CircleLayer(
+            AtlasLayerIds.MEASURE_DOTS_LAYER,
+            AtlasLayerIds.MEASURE_DOTS_SOURCE,
+        ).withProperties(
+            PropertyFactory.circleRadius(8.0f),
+            PropertyFactory.circleOpacity(0.9f),
+        ),
     )
     style.addLayer(
         LineLayer(AtlasLayerIds.GRATICULE_LAYER, AtlasLayerIds.GRATICULE_SOURCE)

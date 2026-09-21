@@ -6,9 +6,12 @@
 package com.sovereignatlas.atlas.map
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -24,6 +27,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.location.AtlasLocationStatus
+import com.sovereignatlas.atlas.measure.MeasureSnapshot
+import com.sovereignatlas.atlas.measure.MeasureUnit
+import com.sovereignatlas.atlas.ui.MeasurePanel
+import com.sovereignatlas.atlas.ui.WaypointCreateDialog
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -32,6 +41,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
 
 @Composable
 fun AtlasMapScreen(services: AtlasServices) {
@@ -39,6 +49,11 @@ fun AtlasMapScreen(services: AtlasServices) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val styleRef = remember { mutableStateOf<Style?>(null) }
+    val pendingWaypoint = remember { mutableStateOf<AtlasCoordinate?>(null) }
+    val measureActive = remember { mutableStateOf(services.measure.isActive()) }
+    val measureSnapshot = remember {
+        mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
+    }
     val mapView = remember {
         MapView(context).apply {
             getMapAsync { map ->
@@ -48,11 +63,30 @@ fun AtlasMapScreen(services: AtlasServices) {
                         services.behavior.markUserInteracted()
                     }
                 }
+                map.addOnMapClickListener { point ->
+                    if (services.measure.isActive()) {
+                        services.measure.setB(
+                            AtlasCoordinate(
+                                latitude = point.latitude,
+                                longitude = point.longitude,
+                            ),
+                        )
+                    }
+                    true
+                }
+                map.addOnMapLongClickListener { point ->
+                    pendingWaypoint.value = AtlasCoordinate(
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                    )
+                    true
+                }
                 map.setStyle(Style.Builder().fromJson(BLANK_STYLE)) { style ->
                     styleRef.value = style
                     installAtlasLayers(style)
                     pushJournal(style, services)
                     pushPosition(style, services)
+                    pushMeasure(style, services)
                     services.behavior.startupCamera()?.let { intent ->
                         applyCameraIntent(map, intent)
                     }
@@ -93,11 +127,19 @@ fun AtlasMapScreen(services: AtlasServices) {
         val onJournal: () -> Unit = {
             styleRef.value?.let { style -> pushJournal(style, services) }
         }
+        val onMeasure: () -> Unit = {
+            measureActive.value = services.measure.isActive()
+            measureSnapshot.value = services.measure.snapshot()
+            styleRef.value?.let { style -> pushMeasure(style, services) }
+        }
         services.location.addListener(onLocation)
         services.journal.addListener(onJournal)
+        services.measure.addListener(onMeasure)
+        onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
             services.journal.removeListener(onJournal)
+            services.measure.removeListener(onMeasure)
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -105,22 +147,73 @@ fun AtlasMapScreen(services: AtlasServices) {
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
         )
-        Button(
-            onClick = {
-                val map = mapRef.value ?: return@Button
-                when (
-                    val outcome = services.behavior.locate(
-                        map.cameraPosition.zoom,
-                        map.cameraPosition.bearing,
-                    )
-                ) {
-                    is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
-                    LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
-                }
-            },
+        Column(
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) {
-            Text("Locate")
+            Button(
+                onClick = {
+                    val map = mapRef.value ?: return@Button
+                    val validFix =
+                        if (services.location.status() == AtlasLocationStatus.valid) {
+                            services.location.latestFixOrNull()?.position
+                        } else {
+                            null
+                        }
+                    val target = map.cameraPosition.target ?: return@Button
+                    services.measure.begin(
+                        validFix,
+                        AtlasCoordinate(
+                            latitude = target.latitude,
+                            longitude = target.longitude,
+                        ),
+                    )
+                },
+            ) {
+                Text("Measure")
+            }
+            Button(
+                onClick = {
+                    val map = mapRef.value ?: return@Button
+                    when (
+                        val outcome = services.behavior.locate(
+                            map.cameraPosition.zoom,
+                            map.cameraPosition.bearing,
+                        )
+                    ) {
+                        is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
+                        LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
+                    }
+                },
+            ) {
+                Text("Locate")
+            }
+        }
+        if (measureActive.value) {
+            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
+                MeasurePanel(
+                    snapshot = measureSnapshot.value,
+                    units = MeasureUnit.values().toList(),
+                    onUnitSelected = { services.measure.setUnit(it) },
+                    onClose = { services.measure.clear() },
+                    onClear = { services.measure.clear() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        pendingWaypoint.value?.let { point ->
+            WaypointCreateDialog(
+                point = point,
+                onSave = { label, note ->
+                    services.journal.create(
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                        label = label,
+                        note = note,
+                    )
+                    pendingWaypoint.value = null
+                },
+                onCancel = { pendingWaypoint.value = null },
+            )
         }
     }
 }
@@ -162,6 +255,37 @@ fun pushPosition(style: Style, services: AtlasServices) {
         FeatureCollection.fromFeatures(
             listOf(positionToFeature(fix.position)),
         ),
+    )
+}
+
+fun pushMeasure(style: Style, services: AtlasServices) {
+    val measure = services.measure
+    val a = measure.pointAOrNull()
+    val b = measure.pointBOrNull()
+    pushFeatures(
+        style,
+        AtlasLayerIds.MEASURE_SOURCE,
+        if (a != null && b != null) {
+            measureToFeatures(a, b)
+        } else {
+            FeatureCollection.fromFeatures(emptyList())
+        },
+    )
+    val dots = ArrayList<Feature>()
+    if (a != null) {
+        dots.add(
+            Feature.fromGeometry(Point.fromLngLat(a.longitude, a.latitude)),
+        )
+    }
+    if (b != null) {
+        dots.add(
+            Feature.fromGeometry(Point.fromLngLat(b.longitude, b.latitude)),
+        )
+    }
+    pushFeatures(
+        style,
+        AtlasLayerIds.MEASURE_DOTS_SOURCE,
+        FeatureCollection.fromFeatures(dots),
     )
 }
 
