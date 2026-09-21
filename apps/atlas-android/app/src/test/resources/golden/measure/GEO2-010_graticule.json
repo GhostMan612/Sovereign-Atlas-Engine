@@ -1,0 +1,1 @@
+{"expected": {"interval": 5.0, "meridians": [0.0, 1.0, 2.0, 3.0], "op": "graticule", "parallels": [0.0, 1.0, 2.0, 3.0]}, "id": "GEO2-010", "inputs": {"box": {"east": 3.0, "north": 3.0, "south": 0.0, "west": 0.0}, "interval": 1.0, "zoom": 5}}

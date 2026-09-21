@@ -1,0 +1,1 @@
+{"contract":"ATLAS-GEO-RING-001","expected":{"geometry":"empty"},"fixture_version":1,"id":"RING-002","inputs":{"center":null,"step_index":-1},"notes":"Null center / negative step → empty (SOURCE-VERIFIED :782).","status":"SOURCE-VERIFIED","tolerance":null,"trace":"CAP-018/F-02 SRC-A :779-787"}
