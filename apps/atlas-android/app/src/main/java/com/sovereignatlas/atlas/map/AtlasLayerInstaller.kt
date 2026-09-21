@@ -43,6 +43,10 @@ fun installAtlasLayers(style: Style) {
         SymbolLayer(
             AtlasLayerIds.WAYPOINTS_LAYER,
             AtlasLayerIds.WAYPOINTS_SOURCE,
+        ).withProperties(
+            PropertyFactory.textField("{label}"),
+            PropertyFactory.textSize(12.0f),
+            PropertyFactory.textOpacity(0.9f),
         ),
     )
     style.addLayer(

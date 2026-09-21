@@ -28,11 +28,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.WaypointCreateDialog
+import com.sovereignatlas.atlas.ui.WaypointDetailDialog
+import com.sovereignatlas.atlas.ui.WaypointsDialog
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -50,6 +53,9 @@ fun AtlasMapScreen(services: AtlasServices) {
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val styleRef = remember { mutableStateOf<Style?>(null) }
     val pendingWaypoint = remember { mutableStateOf<AtlasCoordinate?>(null) }
+    val showWaypoints = remember { mutableStateOf(false) }
+    val waypointDetailId = remember { mutableStateOf<String?>(null) }
+    val journalTick = remember { mutableStateOf(0) }
     val measureActive = remember { mutableStateOf(services.measure.isActive()) }
     val measureSnapshot = remember {
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
@@ -125,6 +131,7 @@ fun AtlasMapScreen(services: AtlasServices) {
             }
         }
         val onJournal: () -> Unit = {
+            journalTick.value += 1
             styleRef.value?.let { style -> pushJournal(style, services) }
         }
         val onMeasure: () -> Unit = {
@@ -150,6 +157,11 @@ fun AtlasMapScreen(services: AtlasServices) {
         Column(
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) {
+            Button(
+                onClick = { showWaypoints.value = true },
+            ) {
+                Text("Waypoints")
+            }
             Button(
                 onClick = {
                     val map = mapRef.value ?: return@Button
@@ -214,6 +226,45 @@ fun AtlasMapScreen(services: AtlasServices) {
                 },
                 onCancel = { pendingWaypoint.value = null },
             )
+        }
+        if (showWaypoints.value) {
+            journalTick.value.let {
+                WaypointsDialog(
+                    journal = services.journal,
+                    onOpenDetail = { id -> waypointDetailId.value = id },
+                    onClose = { showWaypoints.value = false },
+                )
+            }
+        }
+        waypointDetailId.value?.let { id ->
+            journalTick.value.let {
+                WaypointDetailDialog(
+                    journal = services.journal,
+                    id = id,
+                    onGoTo = { targetId ->
+                        services.journal.lookup(targetId)?.let { record ->
+                            services.goTo.activate(
+                                id = record.id,
+                                latitude = record.latitude,
+                                longitude = record.longitude,
+                                label = record.label.ifEmpty { record.id },
+                            )
+                            mapRef.value?.let { map ->
+                                goToCameraIntent(
+                                    services.goTo,
+                                    map.cameraPosition.zoom,
+                                    map.cameraPosition.bearing,
+                                )?.let { intent ->
+                                    applyCameraIntent(map, intent)
+                                }
+                            }
+                        }
+                        waypointDetailId.value = null
+                        showWaypoints.value = false
+                    },
+                    onClose = { waypointDetailId.value = null },
+                )
+            }
         }
     }
 }
