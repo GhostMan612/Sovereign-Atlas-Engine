@@ -22,19 +22,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.geo.AtlasAngles
+import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
+import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.ui.CompassDial
 import com.sovereignatlas.atlas.ui.GoToCard
+import com.sovereignatlas.atlas.ui.LayersDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
@@ -48,6 +53,10 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.RasterSource
+import org.maplibre.android.style.sources.TileSet
+import kotlin.math.roundToInt
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
@@ -69,6 +78,14 @@ fun AtlasMapScreen(services: AtlasServices) {
     val headingUp = remember { mutableStateOf(false) }
     val pendingHeadingUp = remember { mutableStateOf(false) }
     val headingTick = remember { mutableStateOf(0) }
+    val showLayers = remember { mutableStateOf(false) }
+    val baseProviderId = remember { mutableStateOf("osm-standard") }
+    val showGraticule = remember { mutableStateOf(false) }
+    val showRings = remember { mutableStateOf(false) }
+    val showWaypointsLayer = remember { mutableStateOf(true) }
+    val showTrackLayer = remember { mutableStateOf(true) }
+    val showMeasureLayer = remember { mutableStateOf(true) }
+    val attribution = remember { mutableStateOf("") }
     val recorderTick = remember { mutableStateOf(0) }
     val goToTick = remember { mutableStateOf(0) }
     val positionTick = remember { mutableStateOf(0) }
@@ -104,13 +121,23 @@ fun AtlasMapScreen(services: AtlasServices) {
                     )
                     true
                 }
+                map.addOnCameraIdleListener {
+                    styleRef.value?.let { style ->
+                        if (showGraticule.value) pushGraticule(map, style)
+                    }
+                }
                 map.setStyle(Style.Builder().fromJson(BLANK_STYLE)) { style ->
                     styleRef.value = style
+                    ensureBaseLayer(style, baseProviderId.value)
                     installAtlasLayers(style)
+                    applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
                     pushJournal(style, services)
                     pushPosition(style, services)
                     pushMeasure(style, services)
                     pushGoTo(style, services)
+                    pushRings(style, services)
+                    if (showGraticule.value) pushGraticule(map, style)
+                    attribution.value = OfflineBuiltinProviders.lookup(baseProviderId.value)?.attribution ?: ""
                     services.behavior.startupCamera()?.let { intent ->
                         applyCameraIntent(map, intent)
                     }
@@ -141,6 +168,7 @@ fun AtlasMapScreen(services: AtlasServices) {
             val style = styleRef.value
             if (map != null && style != null) {
                 pushPosition(style, services)
+                if (showRings.value) pushRings(style, services)
                 services.behavior.onLocationUpdate(
                     map.cameraPosition.zoom,
                     map.cameraPosition.bearing,
@@ -220,6 +248,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showOffline.value = true },
             ) {
                 Text("Offline")
+            }
+            Button(
+                onClick = { showLayers.value = true },
+            ) {
+                Text("Layers")
             }
             Button(
                 onClick = {
@@ -412,6 +445,68 @@ fun AtlasMapScreen(services: AtlasServices) {
                 )
             }
         }
+        if (showLayers.value) {
+            LayersDialog(
+                providerId = baseProviderId.value,
+                onProviderSelected = { id ->
+                    baseProviderId.value = id
+                    styleRef.value?.let { style ->
+                        ensureBaseLayer(style, id)
+                    }
+                    attribution.value =
+                        OfflineBuiltinProviders.lookup(id)?.attribution ?: ""
+                },
+                showGraticule = showGraticule.value,
+                onGraticuleChanged = { visible ->
+                    showGraticule.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, visible)
+                        val map = mapRef.value
+                        if (visible && map != null) pushGraticule(map, style)
+                    }
+                },
+                showRings = showRings.value,
+                onRingsChanged = { visible ->
+                    showRings.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.RINGS_LAYER, visible)
+                        if (visible) pushRings(style, services)
+                    }
+                },
+                showWaypoints = showWaypointsLayer.value,
+                onWaypointsChanged = { visible ->
+                    showWaypointsLayer.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.WAYPOINTS_LAYER, visible)
+                    }
+                },
+                showTrack = showTrackLayer.value,
+                onTrackChanged = { visible ->
+                    showTrackLayer.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.TRACK_LAYER, visible)
+                    }
+                },
+                showMeasure = showMeasureLayer.value,
+                onMeasureChanged = { visible ->
+                    showMeasureLayer.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_LAYER, visible)
+                        setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, visible)
+                    }
+                },
+                onClose = { showLayers.value = false },
+            )
+        }
+        if (attribution.value.isNotEmpty()) {
+            Surface(modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)) {
+                Text(
+                    text = attribution.value,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -532,6 +627,92 @@ fun pushGoTo(style: Style, services: AtlasServices) {
         },
     )
 }
+
+fun usableFixOf(services: AtlasServices): AtlasCoordinate? {
+    return if (services.location.status() == AtlasLocationStatus.valid) {
+        services.location.latestFixOrNull()?.position
+    } else {
+        null
+    }
+}
+
+fun pushRings(style: Style, services: AtlasServices) {
+    pushFeatures(
+        style,
+        AtlasLayerIds.RINGS_SOURCE,
+        ringsToFeatures(usableFixOf(services), RING_STEP_INDEX),
+    )
+}
+
+fun pushGraticule(map: MapLibreMap, style: Style) {
+    val region = map.projection.visibleRegion.latLngBounds
+    val box = AtlasBoundingBox(
+        south = region.latitudeSouth,
+        west = region.longitudeWest,
+        north = region.latitudeNorth,
+        east = region.longitudeEast,
+    )
+    if (!box.validate().isValid) {
+        pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, FeatureCollection.fromFeatures(emptyList()))
+        return
+    }
+    val grid = AtlasGrids.graticuleFor(
+        box,
+        AtlasGrids.intervalForZoom(map.cameraPosition.zoom.roundToInt()),
+    )
+    if (grid.meridians.size + grid.parallels.size > MAX_GRATICULE_LINES) {
+        pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, FeatureCollection.fromFeatures(emptyList()))
+        return
+    }
+    pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, graticuleToFeatures(box, AtlasGrids.intervalForZoom(map.cameraPosition.zoom.roundToInt())))
+}
+
+fun applyOverlayVisibility(
+    style: Style,
+    showGraticule: Boolean,
+    showRings: Boolean,
+    showWaypoints: Boolean,
+    showTrack: Boolean,
+    showMeasure: Boolean,
+) {
+    setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, showGraticule)
+    setAtlasLayerVisible(style, AtlasLayerIds.RINGS_LAYER, showRings)
+    setAtlasLayerVisible(style, AtlasLayerIds.WAYPOINTS_LAYER, showWaypoints)
+    setAtlasLayerVisible(style, AtlasLayerIds.TRACK_LAYER, showTrack)
+    setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_LAYER, showMeasure)
+    setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, showMeasure)
+}
+
+fun ensureBaseLayer(style: Style, providerId: String) {
+    if (style.getLayer(BASE_LAYER_ID) != null) {
+        style.removeLayer(BASE_LAYER_ID)
+    }
+    if (style.getSource(BASE_SOURCE_ID) != null) {
+        style.removeSource(BASE_SOURCE_ID)
+    }
+    val descriptor = OfflineBuiltinProviders.lookup(providerId) ?: return
+    var template = descriptor.urlTemplate ?: return
+    for ((key, value) in descriptor.params) {
+        template = template.replace("{$key}", value)
+    }
+    val tileSet = TileSet("2.2.0", template)
+    tileSet.minZoom = descriptor.minZoom.toFloat()
+    tileSet.maxZoom = descriptor.maxZoom.toFloat()
+    style.addSource(RasterSource(BASE_SOURCE_ID, tileSet, 256))
+    val layer = RasterLayer(BASE_LAYER_ID, BASE_SOURCE_ID)
+    layer.minZoom = descriptor.minZoom.toFloat()
+    layer.maxZoom = descriptor.maxZoom.toFloat()
+    if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+        style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
+    } else {
+        style.addLayer(layer)
+    }
+}
+
+const val BASE_SOURCE_ID = "atlas-base"
+const val BASE_LAYER_ID = "atlas-base-layer"
+const val RING_STEP_INDEX = 3
+const val MAX_GRATICULE_LINES = 240
 
 private const val OVERVIEW_LAT = 0.0
 private const val OVERVIEW_LNG = 0.0
