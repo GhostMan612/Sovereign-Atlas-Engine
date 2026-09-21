@@ -31,6 +31,8 @@ object AtlasLayerIds {
     const val POSITION_LAYER = "atlas-position-layer"
     const val GOTO_SOURCE = "atlas-goto"
     const val GOTO_LAYER = "atlas-goto-layer"
+    const val FENCE_SOURCE = "atlas-fence"
+    const val FENCE_LAYER = "atlas-fence-layer"
 }
 
 fun installAtlasLayers(style: Style) {
@@ -42,6 +44,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.RINGS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.POSITION_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GOTO_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
     style.addLayer(
         SymbolLayer(
             AtlasLayerIds.WAYPOINTS_LAYER,
@@ -101,6 +104,13 @@ fun installAtlasLayers(style: Style) {
             .withProperties(
                 PropertyFactory.circleRadius(12.0f),
                 PropertyFactory.circleOpacity(0.9f),
+            ),
+    )
+    style.addLayer(
+        LineLayer(AtlasLayerIds.FENCE_LAYER, AtlasLayerIds.FENCE_SOURCE)
+            .withProperties(
+                PropertyFactory.lineWidth(2.0f),
+                PropertyFactory.lineOpacity(0.9f),
             ),
     )
 }

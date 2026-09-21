@@ -38,6 +38,9 @@ import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.ui.CompassDial
+import com.sovereignatlas.atlas.tactical.RadialFence
+import com.sovereignatlas.atlas.tactical.fencePolygon
+import com.sovereignatlas.atlas.ui.FenceDialog
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.LayersDialog
 import com.sovereignatlas.atlas.ui.LinkDialog
@@ -82,6 +85,8 @@ fun AtlasMapScreen(services: AtlasServices) {
     val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val showLink = remember { mutableStateOf(false) }
+    val showFence = remember { mutableStateOf(false) }
+    val fence = remember { mutableStateOf<RadialFence?>(null) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
     val showGraticule = remember { mutableStateOf(false) }
@@ -289,6 +294,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showLink.value = true },
             ) {
                 Text("Link")
+            }
+            Button(
+                onClick = { showFence.value = true },
+            ) {
+                Text("Fence")
             }
             Button(
                 onClick = {
@@ -546,8 +556,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClose = { showLayers.value = false },
             )
         }
-        if (showLink.value) {
-            val map = mapRef.value
+        if (showLink.value) {            val map = mapRef.value
             val center = map?.cameraPosition?.target?.let {
                 AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
             }
@@ -561,6 +570,26 @@ fun AtlasMapScreen(services: AtlasServices) {
                 aLabel = if (fix != null) "GPS" else "map center",
                 bLabel = if (target != null) "go-to" else "map center",
                 onClose = { showLink.value = false },
+            )
+        }
+        if (showFence.value) {
+            val map = mapRef.value
+            val center = map?.cameraPosition?.target?.let {
+                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
+            }
+            FenceDialog(
+                center = center,
+                fix = usableFixOf(services),
+                fence = fence.value,
+                onSet = { next ->
+                    fence.value = next
+                    styleRef.value?.let { style -> pushFence(style, next) }
+                },
+                onClear = {
+                    fence.value = null
+                    styleRef.value?.let { style -> pushFence(style, null) }
+                },
+                onClose = { showFence.value = false },
             )
         }
         if (attribution.value.isNotEmpty()) {
@@ -676,8 +705,29 @@ fun pushMeasure(style: Style, services: AtlasServices) {    val measure = servic
     )
 }
 
-fun pushGoTo(style: Style, services: AtlasServices) {
-    val target = services.goTo.targetOrNull()
+fun pushFence(style: Style, fence: RadialFence?) {
+    pushFeatures(
+        style,
+        AtlasLayerIds.FENCE_SOURCE,
+        if (fence == null || !fence.armed) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(
+                    Feature.fromGeometry(
+                        LineString.fromLngLats(
+                            fencePolygon(fence.center, fence.radiusMeters).map { point ->
+                                Point.fromLngLat(point.longitude, point.latitude)
+                            },
+                        ),
+                    ),
+                ),
+            )
+        },
+    )
+}
+
+fun pushGoTo(style: Style, services: AtlasServices) {    val target = services.goTo.targetOrNull()
     pushFeatures(
         style,
         AtlasLayerIds.GOTO_SOURCE,
