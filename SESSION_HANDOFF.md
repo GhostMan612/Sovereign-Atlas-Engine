@@ -196,6 +196,21 @@
   NO install/debug performed — awaiting operator go for the single
   build/install/debug round.
 
+## Feature-gap closure pass (2026-09-21, operator-ordered)
+
+- **Commits (local, unpushed):** `8d93662` (CARTO Positron/Dark
+  Matter keyless endpoints in engine registry + native mirror +
+  MGRS readout in waypoint detail/Go-To card + radio link tool
+  with TAC2-004 vectors + Link dialog) → `d78046c` (radial
+  geofence with TAC2-002 vectors + session Fence dialog + fence
+  layer). Final gate: `:app:testDebugUnitTest` **182/182 green**.
+- **Deliberately left open:** terrain/LOS UI (RADIO-002 reserves
+  terrain-aware LOS to a DEM engine BY DESIGN — no elevation
+  source exists; building it would invent data); MGRS-001 golden
+  stays schema-only (governance: minting vectors forces a library
+  choice); polygon fences (vertex-entry + persistence undecided);
+  Phase 13 release (never executed).
+
 ## Slices 1–3 closure — Moto G 2025 physical smoke (2026-09-11)
 
 - **Device:** Moto G 2025 physical hardware (not emulator — strictly more
