@@ -196,6 +196,26 @@
   NO install/debug performed — awaiting operator go for the single
   build/install/debug round.
 
+## Flutter removal — Kotlin-only tree (2026-09-21, operator-ordered)
+
+- **Commit (local, unpushed):** `2727538 chore: remove Flutter app,
+  Dart engine, Dart tests and tooling` (717 files, 24785
+  deletions). Zero `.dart` files remain tracked. Condition
+  verified first: every user-facing app behavior exists natively
+  (plus GPX/follow/radio/geofence which never existed in
+  Flutter); engine-only packages with no host surface were
+  documented, not ported.
+- **Pre-removal parity closed:** download resume + 500 ms
+  tile throttle + Diagnostics tab + local-serve hit counter
+  (`e1072a9`; 184/184 green, still green after removal).
+- **Governance updated:** RULES.md (Gradle gates, module
+  boundary, golden path, MapLibre API law), AGENTS.md
+  (native-only ramp), `.opencode/commands/verify.md` +
+  `smoke.md`. `blueprints/` + `docs/` kept as read-only history.
+- **Remaining tracked non-product entries:** `D
+  analysis_options.yaml` + `?? blueprints/dart_analysis-
+  20260915_194625.txt` (both pre-existing, untouched).
+
 ## Feature-gap closure pass (2026-09-21, operator-ordered)
 
 - **Commits (local, unpushed):** `8d93662` (CARTO Positron/Dark

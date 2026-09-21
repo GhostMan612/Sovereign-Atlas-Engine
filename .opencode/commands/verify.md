@@ -1,16 +1,15 @@
 ---
-description: Run the host verification gates (analyze + tests, no builds)
+description: Run the host verification gates (unit tests, no builds)
 ---
 
-Run the project verification gates in order. NEVER build anything.
+Run the project verification gates in order. NEVER build an APK.
 
-1. `flutter pub get`
-2. `flutter analyze --no-pub` — must report **No issues found**
-3. `flutter test test/` — all host tests must pass
-4. Engine suite: `dart tools/atlas_tool.dart all` — must report clean
+1. `:app:testDebugUnitTest` (Gradle, from `apps/atlas-android/`) —
+   all unit tests must pass, 0 failures/errors.
+2. Confirm `git status` shows no unintended files.
 
-Filter output to failures only. Report a compact summary: analyze status,
-host count, engine totals, plus any failures with file:line.
+Filter output to failures only. Report a compact summary: total test
+count plus any failures with file:line.
 
-Do NOT run `integration_test/` (it compiles a binary — needs explicit ask).
-Do NOT run `flutter build`, emulator installs, or `flutter run`.
+Do NOT run connected tests (needs a device — explicit ask only).
+Do NOT run `assembleDebug`, emulator installs, or device runs.
