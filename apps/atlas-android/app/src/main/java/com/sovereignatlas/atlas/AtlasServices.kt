@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas
 
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
+import com.sovereignatlas.atlas.heading.HeadingService
 import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
@@ -21,4 +22,5 @@ class AtlasServices(
     val measure: MeasureState,
     val behavior: MapBehavior,
     val offline: OfflineStore,
+    val heading: HeadingService,
 )

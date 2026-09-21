@@ -6,12 +6,15 @@
 package com.sovereignatlas.atlas
 
 import android.content.pm.PackageManager
+import android.hardware.GeomagneticField
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
+import com.sovereignatlas.atlas.heading.AndroidHeadingSource
+import com.sovereignatlas.atlas.heading.HeadingService
 import com.sovereignatlas.atlas.location.AndroidLocationSource
 import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.AtlasMapScreen
@@ -31,6 +34,23 @@ final class MainActivity : ComponentActivity() {
     private val goTo by lazy { GoToState() }
     private val measure by lazy { MeasureState() }
     private val behavior by lazy { MapBehavior(locationService) }
+    private val headingService by lazy {
+        HeadingService(
+            AndroidHeadingSource(
+                this,
+                declinationDeg = {
+                    locationService.latestFixOrNull()?.position?.let { position ->
+                        GeomagneticField(
+                            position.latitude.toFloat(),
+                            position.longitude.toFloat(),
+                            0f,
+                            System.currentTimeMillis(),
+                        ).declination.toDouble()
+                    } ?: 0.0
+                },
+            ),
+        )
+    }
     private val offline by lazy {
         OfflineStore(directoryProvider = { filesDir })
     }
@@ -44,6 +64,7 @@ final class MainActivity : ComponentActivity() {
             measure = measure,
             behavior = behavior,
             offline = offline,
+            heading = headingService,
         )
     }
 
@@ -76,6 +97,7 @@ final class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         recorder.dispose()
         locationService.dispose()
+        headingService.dispose()
         super.onDestroy()
     }
 }

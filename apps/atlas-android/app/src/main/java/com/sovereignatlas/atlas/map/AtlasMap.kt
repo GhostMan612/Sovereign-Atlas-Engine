@@ -27,11 +27,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.geo.AtlasAngles
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
+import com.sovereignatlas.atlas.ui.CompassDial
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
@@ -64,6 +66,9 @@ fun AtlasMapScreen(services: AtlasServices) {
     val trackDetailId = remember { mutableStateOf<String?>(null) }
     val showOffline = remember { mutableStateOf(false) }
     val offlineTick = remember { mutableStateOf(0) }
+    val headingUp = remember { mutableStateOf(false) }
+    val pendingHeadingUp = remember { mutableStateOf(false) }
+    val headingTick = remember { mutableStateOf(0) }
     val recorderTick = remember { mutableStateOf(0) }
     val goToTick = remember { mutableStateOf(0) }
     val positionTick = remember { mutableStateOf(0) }
@@ -164,12 +169,24 @@ fun AtlasMapScreen(services: AtlasServices) {
         val onOffline: () -> Unit = {
             offlineTick.value += 1
         }
+        val onHeading: () -> Unit = {
+            headingTick.value += 1
+            val degrees = services.heading.displayDeg()
+            if (pendingHeadingUp.value && degrees != null) {
+                pendingHeadingUp.value = false
+                headingUp.value = true
+                mapRef.value?.let { map -> rotateMap(map, -degrees) }
+            } else if (headingUp.value && degrees != null) {
+                mapRef.value?.let { map -> rotateMap(map, -degrees) }
+            }
+        }
         services.location.addListener(onLocation)
         services.journal.addListener(onJournal)
         services.measure.addListener(onMeasure)
         services.recorder.addListener(onRecorder)
         services.goTo.addListener(onGoTo)
         services.offline.addListener(onOffline)
+        services.heading.addListener(onHeading)
         onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
@@ -178,6 +195,7 @@ fun AtlasMapScreen(services: AtlasServices) {
             services.recorder.removeListener(onRecorder)
             services.goTo.removeListener(onGoTo)
             services.offline.removeListener(onOffline)
+            services.heading.removeListener(onHeading)
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -202,6 +220,27 @@ fun AtlasMapScreen(services: AtlasServices) {
                 onClick = { showOffline.value = true },
             ) {
                 Text("Offline")
+            }
+            Button(
+                onClick = {
+                    if (headingUp.value) {
+                        headingUp.value = false
+                        pendingHeadingUp.value = false
+                        mapRef.value?.let { map -> rotateMap(map, 0.0) }
+                    } else {
+                        services.heading.ensureStarted()
+                        val degrees = services.heading.displayDeg()
+                        if (degrees != null) {
+                            pendingHeadingUp.value = false
+                            headingUp.value = true
+                            mapRef.value?.let { map -> rotateMap(map, -degrees) }
+                        } else if (!services.heading.isUnsupported()) {
+                            pendingHeadingUp.value = true
+                        }
+                    }
+                },
+            ) {
+                Text(if (headingUp.value) "North-up" else "Head-up")
             }
             Button(
                 onClick = {
@@ -240,6 +279,18 @@ fun AtlasMapScreen(services: AtlasServices) {
             ) {
                 Text("Locate")
             }
+        }
+        headingTick.value.let {
+            CompassDial(
+                heading = services.heading,
+                orientToken = orientToken(services, headingUp.value),
+                onFaceNorth = {
+                    headingUp.value = false
+                    pendingHeadingUp.value = false
+                    mapRef.value?.let { map -> rotateMap(map, 0.0) }
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
+            )
         }
         if (recorderTick.value >= 0 && services.recorder.isRecording()) {
             Surface(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
@@ -374,6 +425,18 @@ fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {
                 .build(),
         ),
     )
+}
+
+fun rotateMap(map: MapLibreMap, bearing: Double) {
+    map.moveCamera(
+        CameraUpdateFactory.bearingTo(AtlasAngles.normalizeBearingDeg(bearing)),
+    )
+}
+
+fun orientToken(services: AtlasServices, headingUp: Boolean): String {
+    if (services.heading.isUnsupported()) return "orient unsupported"
+    if (services.heading.latest() == null) return "orient off"
+    return if (headingUp) "orient heading-up" else "orient north-up"
 }
 
 fun pushJournal(style: Style, services: AtlasServices) {
