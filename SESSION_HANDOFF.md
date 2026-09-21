@@ -152,6 +152,25 @@
   re-run in this env (no Flutter SDK present) — justified by zero
   Flutter diff. No build claimed (human builds in Android Studio).
 
+## Native host resume — MapBehavior camera brain (2026-09-21)
+
+- **Commit (local, unpushed):** `e4fc431 feat(android): add
+  MapBehavior startup/locate/pending-recenter brain`
+  (`map/MapBehavior.kt` + 7 tests; `:app:testDebugUnitTest`
+  146/146 green). Zero MapLibre imports in the unit — camera
+  application stays in the composable.
+- **Semantics (mirrors `main.dart`):** startup once (valid fix →
+  z13/bearing-0; null → retry later; user-interacted → never);
+  locate via `ensureActive` (valid → `max(currentZoom,15)` +
+  bearing passthrough; acquiring-null → pending; denied-null →
+  ignored); location updates while pending retry once then clear.
+- **Oracle discrepancy preserved:** Dart `myLocationIntent` uses
+  fixed z15; native keeps decided `max(currentZoom,15)` semantic.
+- **Next:** composable wiring (Activity-scoped services, permission
+  launcher, style-load install, journal push, My-Location affordance)
+  needs a device/human build for runtime verification — no device
+  attached here (`adb devices` empty).
+
 ## Slices 1–3 closure — Moto G 2025 physical smoke (2026-09-11)
 
 - **Device:** Moto G 2025 physical hardware (not emulator — strictly more
