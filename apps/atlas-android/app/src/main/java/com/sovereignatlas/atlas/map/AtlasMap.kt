@@ -488,6 +488,7 @@ fun AtlasMapScreen(services: AtlasServices) {
             offlineTick.value.let {
                 OfflineDialog(
                     store = services.offline,
+                    tileHits = { services.tiles.tileHits() },
                     onUsePack = { packId ->
                         basePackId.value = packId
                         styleRef.value?.let { style ->

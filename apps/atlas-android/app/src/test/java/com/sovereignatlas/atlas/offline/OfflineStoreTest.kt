@@ -224,7 +224,7 @@ final class OfflineStoreTest {
             approvedBulk = false,
             isPrefetch = false,
         ) as PlanOutcome.Planned
-        val downloader = OfflineDownloader { _, _, _, _ -> byteArrayOf(1, 2, 3) }
+        val downloader = OfflineDownloader(chunk = { _, _, _, _ -> byteArrayOf(1, 2, 3) })
         var progress = 0
         val result = downloader.download(
             record = outcome.record,
@@ -255,7 +255,7 @@ final class OfflineStoreTest {
             approvedBulk = false,
             isPrefetch = false,
         ) as PlanOutcome.Planned
-        val downloader = OfflineDownloader { _, _, _, _ -> byteArrayOf(1) }
+        val downloader = OfflineDownloader(chunk = { _, _, _, _ -> byteArrayOf(1) })
         var calls = 0
         val result = downloader.download(
             record = outcome.record,
@@ -272,8 +272,7 @@ final class OfflineStoreTest {
     }
 
     @Test
-    fun downloadFailureMarksRecord() {
-        val dir = tempDir()
+    fun downloadFailureMarksRecord() {        val dir = tempDir()
         val target = store(dir)
         val outcome = target.plan(
             providerId = "esri-imagery",
@@ -286,7 +285,7 @@ final class OfflineStoreTest {
             approvedBulk = false,
             isPrefetch = false,
         ) as PlanOutcome.Planned
-        val downloader = OfflineDownloader { _, _, _, _ -> null }
+        val downloader = OfflineDownloader(chunk = { _, _, _, _ -> null })
         val result = downloader.download(
             record = outcome.record,
             descriptor = OfflineBuiltinProviders.esriImagery,
@@ -297,5 +296,80 @@ final class OfflineStoreTest {
         assertTrue(result is DownloadResult.Failed)
         assertEquals(OfflinePackLifecycle.failed, outcome.record.lifecycle)
         assertTrue(outcome.record.failureDetail.isNotEmpty())
+    }
+
+    @Test
+    fun downloadResumesPastExistingFiles() {
+        val dir = tempDir()
+        val target = store(dir)
+        val outcome = target.plan(
+            providerId = "esri-imagery",
+            zMin = 10,
+            zMax = 10,
+            xMin = 1,
+            xMax = 2,
+            yMin = 2,
+            yMax = 2,
+            approvedBulk = false,
+            isPrefetch = false,
+        ) as PlanOutcome.Planned
+        val existing = File(target.packDir(outcome.record.packId), "10/1/2.png")
+        existing.parentFile?.mkdirs()
+        existing.writeBytes(byteArrayOf(9, 9))
+        var fetches = 0
+        val downloader = OfflineDownloader(
+            chunk = { _, _, _, _ ->
+                fetches += 1
+                byteArrayOf(1, 2, 3)
+            },
+            minIntervalMs = 0L,
+        )
+        val result = downloader.download(
+            record = outcome.record,
+            descriptor = OfflineBuiltinProviders.esriImagery,
+            dir = target.packDir(outcome.record.packId),
+            onProgress = { _, _ -> },
+            isCancelled = { false },
+        )
+        assertTrue(result is DownloadResult.Complete)
+        assertEquals(1, fetches)
+        assertEquals(2, (result as DownloadResult.Complete).tiles)
+        assertEquals(5L, result.bytes)
+    }
+
+    @Test
+    fun downloadThrottlesBetweenRequests() {
+        val dir = tempDir()
+        val target = store(dir)
+        val outcome = target.plan(
+            providerId = "esri-imagery",
+            zMin = 10,
+            zMax = 10,
+            xMin = 1,
+            xMax = 2,
+            yMin = 2,
+            yMax = 2,
+            approvedBulk = false,
+            isPrefetch = false,
+        ) as PlanOutcome.Planned
+        var slept = 0L
+        var now = 1000L
+        val downloader = OfflineDownloader(
+            chunk = { _, _, _, _ -> byteArrayOf(1) },
+            minIntervalMs = 150L,
+            sleeper = { slept += it },
+            clockMs = { now },
+        )
+        downloader.download(
+            record = outcome.record,
+            descriptor = OfflineBuiltinProviders.esriImagery,
+            dir = target.packDir(outcome.record.packId),
+            onProgress = {
+                _, _ ->
+                now += 10L
+            },
+            isCancelled = { false },
+        )
+        assertEquals(140L, slept)
     }
 }

@@ -49,6 +49,7 @@ final class PackTileServerTest {
             val (code, body) = get("http://127.0.0.1:$port/pack-000001/10/1/2.png")
             assertEquals(200, code)
             assertTrue(body.contentEquals(byteArrayOf(1, 2, 3, 4)))
+            assertEquals(1L, server.tileHits())
         } finally {
             server.stop()
         }

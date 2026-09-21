@@ -20,6 +20,9 @@ sealed interface DownloadResult {
 
 class OfflineDownloader(
     private val chunk: (descriptor: OfflineProviderDescriptor, z: Int, x: Int, y: Int) -> ByteArray?,
+    private val minIntervalMs: Long = 500L,
+    private val sleeper: (Long) -> Unit = { Thread.sleep(it) },
+    private val clockMs: () -> Long = { System.currentTimeMillis() },
 ) {
     fun download(
         record: OfflinePackRecord,
@@ -31,6 +34,7 @@ class OfflineDownloader(
         record.lifecycle = OfflinePackLifecycle.downloading
         var tiles = 0
         var bytes = 0L
+        var lastRequestAt = 0L
         try {
             for (z in record.zMin..record.zMax) {
                 for (x in record.xMin..record.xMax) {
@@ -39,6 +43,17 @@ class OfflineDownloader(
                             record.lifecycle = OfflinePackLifecycle.cancelled
                             return DownloadResult.Cancelled(tiles, bytes)
                         }
+                        val file = File(dir, "$z/$x/$y.png")
+                        if (file.isFile && file.length() > 0) {
+                            tiles += 1
+                            bytes += file.length()
+                            record.receivedTiles = tiles
+                            record.receivedBytes = bytes
+                            onProgress(tiles, bytes)
+                            continue
+                        }
+                        throttle(lastRequestAt)
+                        lastRequestAt = clockMs()
                         val body = try {
                             chunk(descriptor, z, x, y)
                         } catch (error: Throwable) {
@@ -51,7 +66,6 @@ class OfflineDownloader(
                             record.failureDetail = "empty tile $z/$x/$y"
                             return DownloadResult.Failed(record.failureDetail, tiles, bytes)
                         }
-                        val file = File(dir, "$z/$x/$y.png")
                         file.parentFile?.mkdirs()
                         file.writeBytes(body)
                         tiles += 1
@@ -79,6 +93,12 @@ class OfflineDownloader(
         )
         record.lifecycle = OfflinePackLifecycle.complete
         return DownloadResult.Complete(tiles, bytes)
+    }
+
+    private fun throttle(lastRequestAt: Long) {
+        if (minIntervalMs <= 0L || lastRequestAt <= 0L) return
+        val wait = minIntervalMs - (clockMs() - lastRequestAt)
+        if (wait > 0) sleeper(wait)
     }
 
     companion object {

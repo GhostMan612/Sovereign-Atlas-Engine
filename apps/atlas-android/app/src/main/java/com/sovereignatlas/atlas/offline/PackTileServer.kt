@@ -17,10 +17,13 @@ class PackTileServer(
 ) {
     private var socket: ServerSocket? = null
     private val running = AtomicBoolean(false)
+    private var hits = 0L
 
     fun port(): Int = socket?.localPort ?: -1
 
     fun isRunning(): Boolean = running.get()
+
+    fun tileHits(): Long = hits
 
     fun start(): Int {
         if (running.get()) return port()
@@ -71,6 +74,7 @@ class PackTileServer(
                     return
                 }
                 val bytes = body.readBytes()
+                hits += 1
                 val head = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n" +
                     "Content-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
                 output.write(head.toByteArray(Charsets.US_ASCII))

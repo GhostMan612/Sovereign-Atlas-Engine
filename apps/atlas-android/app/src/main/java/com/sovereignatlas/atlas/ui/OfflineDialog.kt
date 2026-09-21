@@ -43,6 +43,7 @@ import kotlin.concurrent.thread
 @Composable
 fun OfflineDialog(
     store: OfflineStore,
+    tileHits: () -> Long,
     onUsePack: (String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -61,11 +62,13 @@ fun OfflineDialog(
                     TextButton(onClick = { tab.value = 0 }) { Text("Packs") }
                     TextButton(onClick = { tab.value = 1 }) { Text("Plan") }
                     TextButton(onClick = { tab.value = 2 }) { Text("Providers") }
+                    TextButton(onClick = { tab.value = 3 }) { Text("Diag") }
                 }
                 when (tab.value) {
                     0 -> PacksTab(store, cancels, mainHandler, onUsePack)
                     1 -> PlanTab(store)
-                    else -> ProvidersTab()
+                    2 -> ProvidersTab()
+                    else -> DiagnosticsTab(store, tileHits)
                 }
             }
         },
@@ -285,8 +288,7 @@ private fun PlanTab(store: OfflineStore) {
 }
 
 @Composable
-private fun ProvidersTab() {
-    LazyColumn {
+private fun ProvidersTab() {    LazyColumn {
         items(OfflineBuiltinProviders.all, key = { it.id }) { provider ->
             ListItem(
                 headlineContent = { Text(provider.title) },
@@ -302,6 +304,33 @@ private fun ProvidersTab() {
                     )
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsTab(
+    store: OfflineStore,
+    tileHits: () -> Long,
+) {
+    val packs = store.packs()
+    var tiles = 0
+    var stored = 0L
+    for (pack in packs) {
+        tiles += pack.receivedTiles
+        stored += pack.receivedBytes
+    }
+    val providers = OfflineBuiltinProviders.all
+    val valid = providers.count { it.urlTemplate != null }
+    Text("Sovereign Atlas native host v1.0")
+    Text("Providers self-valid: $valid/${providers.size}")
+    Text("Packs: ${packs.size} • Tiles stored: $tiles • Bytes: ${formatBytes(stored)}")
+    Text("Local tile serves since launch: ${tileHits()}")
+    val error = store.lastErrorOrNull()
+    if (error != null) Text("Store unavailable: $error")
+    LazyColumn {
+        items(store.events(), key = { it }) { event ->
+            Text(event)
         }
     }
 }
