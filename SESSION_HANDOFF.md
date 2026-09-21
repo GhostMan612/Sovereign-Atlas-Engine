@@ -171,6 +171,31 @@
   needs a device/human build for runtime verification — no device
   attached here (`adb devices` empty).
 
+## Native host completion pass (2026-09-21, operator-ordered, no device)
+
+- **Commits (local, unpushed):** `7a36dcd` screen wiring
+  (services/layers/journal/position/startup camera) → `ee6531c`
+  Locate button → `5ee7e82` tap B-capture, long-press waypoint
+  dialog, measure entry + dots → `0e3ccce` waypoints
+  list/detail/edit/delete + Go-To activation → `1a17f94` tracks
+  list/detail, Start/Stop, REC badge, active polyline → `380762a`
+  Go-To nav card + target layer → `74bf6a7` offline packs,
+  7-provider mirror, threaded downloader, offline dialog →
+  `733b560` compass dial, heading-up, face north, orient token →
+  `299b669` base raster picker, overlay toggles, graticule, rings,
+  attribution → `a5114e6` GPX export + follow policy.
+  Final gate: `:app:testDebugUnitTest` **170/170 green**.
+- **Notable:** base map renders real raster tiles (provider
+  templates, native zoom ceilings); graticule/rings mirror oracle
+  caps (240 lines, step 3); GPX 1.1 + follow (recenter preserving
+  zoom/bearing, gesture exits) are NEW — neither exists in the
+  Flutter oracle. Serving downloaded packs as map tiles is deferred
+  (needs local tile-server/MBTiles integration).
+- **Status:** code-complete per the 10-slice list. NO APK built
+  since `app-debug.apk` (69.8 MB, 40s build earlier this session);
+  NO install/debug performed — awaiting operator go for the single
+  build/install/debug round.
+
 ## Slices 1–3 closure — Moto G 2025 physical smoke (2026-09-11)
 
 - **Device:** Moto G 2025 physical hardware (not emulator — strictly more
