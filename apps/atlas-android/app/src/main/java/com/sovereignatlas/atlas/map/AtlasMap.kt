@@ -32,6 +32,7 @@ import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
+import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
@@ -61,6 +62,8 @@ fun AtlasMapScreen(services: AtlasServices) {
     val showTracks = remember { mutableStateOf(false) }
     val trackDetailId = remember { mutableStateOf<String?>(null) }
     val recorderTick = remember { mutableStateOf(0) }
+    val goToTick = remember { mutableStateOf(0) }
+    val positionTick = remember { mutableStateOf(0) }
     val journalTick = remember { mutableStateOf(0) }
     val measureActive = remember { mutableStateOf(services.measure.isActive()) }
     val measureSnapshot = remember {
@@ -99,6 +102,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                     pushJournal(style, services)
                     pushPosition(style, services)
                     pushMeasure(style, services)
+                    pushGoTo(style, services)
                     services.behavior.startupCamera()?.let { intent ->
                         applyCameraIntent(map, intent)
                     }
@@ -124,6 +128,7 @@ fun AtlasMapScreen(services: AtlasServices) {
     }
     DisposableEffect(services) {
         val onLocation = {
+            positionTick.value += 1
             val map = mapRef.value
             val style = styleRef.value
             if (map != null && style != null) {
@@ -149,16 +154,22 @@ fun AtlasMapScreen(services: AtlasServices) {
             recorderTick.value += 1
             styleRef.value?.let { style -> pushTracks(style, services) }
         }
+        val onGoTo: () -> Unit = {
+            goToTick.value += 1
+            styleRef.value?.let { style -> pushGoTo(style, services) }
+        }
         services.location.addListener(onLocation)
         services.journal.addListener(onJournal)
         services.measure.addListener(onMeasure)
         services.recorder.addListener(onRecorder)
+        services.goTo.addListener(onGoTo)
         onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
             services.journal.removeListener(onJournal)
             services.measure.removeListener(onMeasure)
             services.recorder.removeListener(onRecorder)
+            services.goTo.removeListener(onGoTo)
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -223,6 +234,24 @@ fun AtlasMapScreen(services: AtlasServices) {
                     text = "REC • ${services.recorder.pointCount()} pts",
                     modifier = Modifier.padding(8.dp),
                 )
+            }
+        }
+        goToTick.value.let {
+            positionTick.value.let {
+                if (services.goTo.isActive()) {
+                    Surface(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+                        GoToCard(
+                            goTo = services.goTo,
+                            usableFix =
+                            if (services.location.status() == AtlasLocationStatus.valid) {
+                                services.location.latestFixOrNull()?.position
+                            } else {
+                                null
+                            },
+                            onClear = { services.goTo.clear() },
+                        )
+                    }
+                }
             }
         }
         if (measureActive.value) {            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
@@ -373,8 +402,7 @@ fun pushPosition(style: Style, services: AtlasServices) {
     )
 }
 
-fun pushMeasure(style: Style, services: AtlasServices) {
-    val measure = services.measure
+fun pushMeasure(style: Style, services: AtlasServices) {    val measure = services.measure
     val a = measure.pointAOrNull()
     val b = measure.pointBOrNull()
     pushFeatures(
@@ -401,6 +429,23 @@ fun pushMeasure(style: Style, services: AtlasServices) {
         style,
         AtlasLayerIds.MEASURE_DOTS_SOURCE,
         FeatureCollection.fromFeatures(dots),
+    )
+}
+
+fun pushGoTo(style: Style, services: AtlasServices) {
+    val target = services.goTo.targetOrNull()
+    pushFeatures(
+        style,
+        AtlasLayerIds.GOTO_SOURCE,
+        if (target == null) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(
+                    goToToFeature(target.latitude, target.longitude, target.label),
+                ),
+            )
+        },
     )
 }
 
