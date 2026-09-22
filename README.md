@@ -1,32 +1,43 @@
-# Sovereign Atlas Engine
+# Sovereign Atlas
 
-A modular, portable geospatial engine descended from the Sovereign Mantle TacMap and designed to serve as a reusable mapping platform for Sovereign Mantle, Recovery for All, and the standalone Atlas application.
+Native Kotlin + MapLibre mapping/atlas application for Android, descended
+from the Sovereign Mantle TacMap lineage. Single host app in
+`apps/atlas-android/` — no other runtimes, no cross-platform layer.
 
-## Project Direction
+## What it does
 
-Sovereign Atlas Engine is being built as a geospatial platform rather than a single map screen. The engine separates rendering, tiles, geographic computation, data providers, offline storage, analysis, terrain, tactical tooling, historical mapping, security, and plugins behind reusable interfaces.
-
-## Reference Implementations
-
-- Sovereign Mantle `LandSectorView.kt` — reference TacMap implementation.
-- Recovery for All `meeting_map_screen.dart` and `map_tile_cache.dart` — first Flutter portability implementation.
-
-## Planned Consumers
-
-- Standalone Sovereign Atlas application
-- Sovereign Mantle
-- Recovery for All
+Offline-first field mapping: GPS location + compass heading, measure,
+waypoints + journal, track recording, Go-To navigation, offline tile
+packs (plan/download/render from an embedded localhost tile server),
+base-layer picker (OSM, Esri, OpenTopoMap, USGS, CARTO), graticule,
+range rings, radio link calculator, session geofence, GPX export,
+follow mode.
 
 ## Architecture
 
-See:
+Pure-logic modules (`core/`, `geo/`, `camera/`, `layers/`, `field/`,
+`measure/`, `goto/`, `track/`, `offline/`, `tactical/`) carry zero
+MapLibre/Android/Compose imports. Rendering and platform sources live
+in `map/` + `ui/` + `location/` + `heading/`. Boundary rules in
+`ARCHITECTURE.md`; operating law in `RULES.md`; live state in
+`SESSION_HANDOFF.md`.
 
-- `blueprints/ATLAS_ENGINE_MASTER_BLUEPRINT.md`
-- `docs/architecture/`
-- `blueprints/phase-0/`
+## Verification
 
-## Repository Status
+Host gate (no device, no build):
 
-Phase 0 — foundation and extraction.
+```powershell
+# from apps/atlas-android with JAVA_HOME + ANDROID_HOME set
+.\gradlew.bat :app:testDebugUnitTest --console=plain
+```
 
-No production engine code is committed yet. The initial structure is intentionally separated so implementation can proceed package-by-package without coupling the engine to a single application.
+184/184 unit tests green at last gate. The human builds in Android
+Studio; device runs are explicit-ask only.
+
+## Lineage
+
+`blueprints/` + `docs/` preserve the retired Dart/Flutter history
+(engine packages, golden fixtures, slice closures, ADRs/DECs) as
+read-only context. The MGRS-001 golden stays schema-only by
+governance; terrain-aware LOS is reserved to a future DEM source
+(RADIO-002). Phase 13 (productization/release) was never executed.

@@ -381,20 +381,23 @@
 
 ## Standing environment facts
 
-- **No builds here unless explicitly asked** (RULES.md §1.6). Gates are
-  `pub get` / `analyze` / host `test`. `integration_test/` runs only on
-  explicit ask (it compiles). Human builds + smoke-tests in Android
+- **No builds here unless explicitly asked** (RULES.md §1.6). Live gate:
+  `:app:testDebugUnitTest` (172/172 green). `androidTest/` runs only on
+  explicit ask (needs a device). Human builds + smoke-tests in Android
   Studio; debug from pasted output.
-- Toolchain: Flutter 3.47 / Dart 3.13 / `C:\android` / bundled JDK.
-- Emulator here is short-lived (~15–25 min); stale `multiinstance.lock`
-  blocks reboot (delete it). `adb kill-server` fixes most wedges.
+- Toolchain: Android SDK `C:\android` / JDK 21 via Gradle / AGP 8.13.2 /
+  Kotlin 2.1.0 / MapLibre 13.3.1.
 - Never pipe `adb pull`/binaries through PowerShell pipes; never edit
   sources via PS text pipelines (RULES.md §3).
-- Physical device: Moto G 2025 — structured Slices 1–3 closure smoke
-  recorded above (previously: single unstructured launch observation).
+- `adb kill-server` fixes most wedges. No device attached here.
+- Physical device history: Moto G 2025 — structured Flutter-era slice
+  smokes recorded below (lineage context only; the Flutter host is
+  deleted).
 
 ## Verification posture
 
+- **Live:** native `:app:testDebugUnitTest` 184/184 green. Everything
+  below in this section is Flutter-era history (retired host).
 - Host: 240/240 app tests (208 Slice-4D baseline + 10 camera-policy
   unit + 8 layer-stack unit + 14 camera/layers widget, fake/temp-dir
   sourced) + engine 453/413/0/8/32 untouched + analyze clean. Engine
@@ -431,16 +434,11 @@
 
 ## Next actions
 
-1. Native host map-screen wiring (UI + live style application) ONLY on
-   explicit operator authorization — state layers are committed
-   (`7b582ab`, `05df386`), no screen exists yet.
-2. Camera/layers sprint IMPLEMENTED locally (DEC-023 + adapter +
-   32 tests, smoke PENDING) — was: spec (`blueprints/camera-layers-
-   sprint.md`) pending architect review. Next: human Android Studio
-   build + 40-item Moto G physical smoke; no push until told.
-2. Slice 4E forensic/implementation gate (GPX export) ONLY on explicit
-   operator authorization.
-2. Follow-policy decision when authorized (camera-center policy).
-3. Compass-accuracy investigation ONLY if ever wanted, as its own
+1. Single build/install/debug round on operator go (code-complete,
+   184/184 green, no APK since the 69.8 MB probe build).
+2. Phase 13 productization/release — never executed.
+3. Terrain-aware LOS + DEM source decision (RADIO-002 reserves it;
+   no invented elevation).
+4. Compass-accuracy investigation ONLY if ever wanted, as its own
    evidence pass — never as drive-by tuning.
-4. CARTO provider contract (keys stay out of repo).
+5. No push unless told (34 local commits ahead of origin).

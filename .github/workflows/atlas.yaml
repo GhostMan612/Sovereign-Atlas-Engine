@@ -1,6 +1,6 @@
-# Sovereign Atlas Engine CI (ADR-002).
-# NOTE: UNEXECUTED-ON-CI — added as a file in an offline pass; first green
-# run on GitHub Actions is itself a tracked acceptance item, not assumed.
+# Sovereign Atlas CI.
+# NOTE: UNEXECUTED-ON-CI — first green run on GitHub Actions is itself a
+# tracked acceptance item, not assumed.
 name: atlas
 'on':
   push:
@@ -10,12 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/setup-java@v4
         with:
-          sdk: stable
-      - name: Analyze
-        run: dart tools/atlas_tool.dart analyze
-      - name: Format check
-        run: dart tools/atlas_tool.dart format-check
-      - name: Regression
-        run: dart tools/atlas_tool.dart test
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Unit tests
+        working-directory: apps/atlas-android
+        run: ./gradlew :app:testDebugUnitTest --console=plain
