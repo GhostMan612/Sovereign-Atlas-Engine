@@ -44,6 +44,8 @@ import kotlin.concurrent.thread
 fun OfflineDialog(
     store: OfflineStore,
     tileHits: () -> Long,
+    basemapHits: () -> Long,
+    demHits: () -> Long,
     onUsePack: (String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -68,7 +70,7 @@ fun OfflineDialog(
                     0 -> PacksTab(store, cancels, mainHandler, onUsePack)
                     1 -> PlanTab(store)
                     2 -> ProvidersTab()
-                    else -> DiagnosticsTab(store, tileHits)
+                    else -> DiagnosticsTab(store, tileHits, basemapHits, demHits)
                 }
             }
         },
@@ -312,6 +314,8 @@ private fun ProvidersTab() {    LazyColumn {
 private fun DiagnosticsTab(
     store: OfflineStore,
     tileHits: () -> Long,
+    basemapHits: () -> Long,
+    demHits: () -> Long,
 ) {
     val packs = store.packs()
     var tiles = 0
@@ -326,6 +330,7 @@ private fun DiagnosticsTab(
     Text("Providers self-valid: $valid/${providers.size}")
     Text("Packs: ${packs.size} • Tiles stored: $tiles • Bytes: ${formatBytes(stored)}")
     Text("Local tile serves since launch: ${tileHits()}")
+    Text("Basemap serves: ${basemapHits()} • DEM serves: ${demHits()}")
     val error = store.lastErrorOrNull()
     if (error != null) Text("Store unavailable: $error")
     LazyColumn {

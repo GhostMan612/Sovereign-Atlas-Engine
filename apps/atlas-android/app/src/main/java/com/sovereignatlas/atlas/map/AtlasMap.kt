@@ -5,27 +5,40 @@
 
 package com.sovereignatlas.atlas.map
 
+import android.view.Gravity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.geo.AtlasAngles
@@ -58,6 +71,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.RasterDemSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
 import kotlin.math.roundToInt
@@ -66,6 +80,7 @@ import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AtlasMapScreen(services: AtlasServices) {
     val context = LocalContext.current
@@ -107,6 +122,12 @@ fun AtlasMapScreen(services: AtlasServices) {
         MapView(context).apply {
             getMapAsync { map ->
                 mapRef.value = map
+                map.uiSettings.apply {
+                    isCompassEnabled = true
+                    compassGravity = Gravity.TOP or Gravity.START
+                    val margin = (16 * context.resources.displayMetrics.density).toInt()
+                    setCompassMargins(margin, margin, margin, margin)
+                }
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         services.behavior.markUserInteracted()
@@ -136,8 +157,11 @@ fun AtlasMapScreen(services: AtlasServices) {
                         if (showGraticule.value) pushGraticule(map, style)
                     }
                 }
-                map.setStyle(Style.Builder().fromJson(BLANK_STYLE)) { style ->
+                map.setStyle(Style.Builder().fromJson(if (services.tiles.demAvailable()) BLANK_STYLE_TERRAIN else BLANK_STYLE)) { style ->
                     styleRef.value = style
+                    services.tiles.demTileUrl()?.let { demUrl ->
+                        if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
+                    }
                     applyBaseSource(style, services, baseProviderId.value, basePackId.value)
                     installAtlasLayers(style)
                     applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
@@ -255,108 +279,133 @@ fun AtlasMapScreen(services: AtlasServices) {
             services.heading.removeListener(onHeading)
         }
     }
+    val showTools = remember { mutableStateOf(false) }
+    val toolsScope = rememberCoroutineScope()
+    val toolsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val onToggleFollow: () -> Unit = {
+        following.value = !following.value
+    }
+    val onToggleHeadingUp: () -> Unit = {
+        if (headingUp.value) {
+            headingUp.value = false
+            pendingHeadingUp.value = false
+            mapRef.value?.let { map -> rotateMap(map, 0.0) }
+        } else {
+            services.heading.ensureStarted()
+            val degrees = services.heading.displayDeg()
+            if (degrees != null) {
+                pendingHeadingUp.value = false
+                headingUp.value = true
+                mapRef.value?.let { map -> rotateMap(map, -degrees) }
+            } else if (!services.heading.isUnsupported()) {
+                pendingHeadingUp.value = true
+            }
+        }
+    }
+    val onLocate: () -> Unit = {
+        val map = mapRef.value
+        if (map != null) {
+            when (
+                val outcome = services.behavior.locate(
+                    map.cameraPosition.zoom,
+                    map.cameraPosition.bearing,
+                )
+            ) {
+                is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
+                LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
+            }
+        }
+    }
+    val onMeasure: () -> Unit = {
+        val map = mapRef.value
+        val target = map?.cameraPosition?.target
+        if (map != null && target != null) {
+            val validFix =
+                if (services.location.status() == AtlasLocationStatus.valid) {
+                    services.location.latestFixOrNull()?.position
+                } else {
+                    null
+                }
+            services.measure.begin(
+                validFix,
+                AtlasCoordinate(
+                    latitude = target.latitude,
+                    longitude = target.longitude,
+                ),
+            )
+        }
+    }
+    val openTool: (androidx.compose.runtime.MutableState<Boolean>) -> () -> Unit = { flag ->
+        {
+            showTools.value = false
+            flag.value = true
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
         )
         Column(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
         ) {
-            Button(
-                onClick = { showWaypoints.value = true },
+            FloatingActionButton(
+                onClick = onLocate,
+                modifier = Modifier.semantics { stateDescription = "Locate" },
             ) {
-                Text("Waypoints")
+                Text("Locate")
             }
-            Button(
-                onClick = { showTracks.value = true },
-            ) {
-                Text("Tracks")
-            }
-            Button(
-                onClick = {
-                    following.value = !following.value
+            FloatingActionButton(
+                onClick = onToggleFollow,
+                modifier = Modifier.semantics {
+                    stateDescription = if (following.value) "Follow active" else "Follow inactive"
                 },
             ) {
                 Text(if (following.value) "Unfollow" else "Follow")
             }
-            Button(
-                onClick = { showOffline.value = true },
-            ) {
-                Text("Offline")
-            }
-            Button(
-                onClick = { showLayers.value = true },
-            ) {
-                Text("Layers")
-            }
-            Button(
-                onClick = { showLink.value = true },
-            ) {
-                Text("Link")
-            }
-            Button(
-                onClick = { showFence.value = true },
-            ) {
-                Text("Fence")
-            }
-            Button(
-                onClick = {
-                    if (headingUp.value) {
-                        headingUp.value = false
-                        pendingHeadingUp.value = false
-                        mapRef.value?.let { map -> rotateMap(map, 0.0) }
-                    } else {
-                        services.heading.ensureStarted()
-                        val degrees = services.heading.displayDeg()
-                        if (degrees != null) {
-                            pendingHeadingUp.value = false
-                            headingUp.value = true
-                            mapRef.value?.let { map -> rotateMap(map, -degrees) }
-                        } else if (!services.heading.isUnsupported()) {
-                            pendingHeadingUp.value = true
-                        }
-                    }
-                },
-            ) {
-                Text(if (headingUp.value) "North-up" else "Head-up")
-            }
-            Button(
-                onClick = {
-                    val map = mapRef.value ?: return@Button
-                    val validFix =
-                        if (services.location.status() == AtlasLocationStatus.valid) {
-                            services.location.latestFixOrNull()?.position
-                        } else {
-                            null
-                        }
-                    val target = map.cameraPosition.target ?: return@Button
-                    services.measure.begin(
-                        validFix,
-                        AtlasCoordinate(
-                            latitude = target.latitude,
-                            longitude = target.longitude,
-                        ),
-                    )
+            FloatingActionButton(
+                onClick = onMeasure,
+                modifier = Modifier.semantics {
+                    stateDescription = if (measureActive.value) "Measure active" else "Measure inactive"
                 },
             ) {
                 Text("Measure")
             }
-            Button(
-                onClick = {
-                    val map = mapRef.value ?: return@Button
-                    when (
-                        val outcome = services.behavior.locate(
-                            map.cameraPosition.zoom,
-                            map.cameraPosition.bearing,
-                        )
-                    ) {
-                        is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
-                        LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
-                    }
-                },
+            FloatingActionButton(
+                onClick = { showTools.value = true },
+                modifier = Modifier.semantics { stateDescription = "Tools" },
             ) {
-                Text("Locate")
+                Text("Tools")
+            }
+        }
+        if (showTools.value) {
+            ModalBottomSheet(
+                onDismissRequest = { showTools.value = false },
+                sheetState = toolsSheetState,
+            ) {
+                ToolRow("Waypoints", "Open waypoints", openTool(showWaypoints))
+                ToolRow("Tracks", "Open tracks", openTool(showTracks))
+                ToolRow("Offline", "Open offline packs", openTool(showOffline))
+                ToolRow("Layers", "Open layers", openTool(showLayers))
+                ToolRow("Link", "Open radio link", openTool(showLink))
+                ToolRow("Fence", "Open geofence", openTool(showFence))
+                ToolRow(
+                    if (headingUp.value) "North-up" else "Head-up",
+                    if (headingUp.value) "Head-up on" else "Head-up off",
+                    {
+                        toolsScope.launch {
+                            try {
+                                toolsSheetState.hide()
+                            } finally {
+                                showTools.value = false
+                                onToggleHeadingUp()
+                            }
+                        }
+                    },
+                )
             }
         }
         headingTick.value.let {
@@ -489,6 +538,8 @@ fun AtlasMapScreen(services: AtlasServices) {
                 OfflineDialog(
                     store = services.offline,
                     tileHits = { services.tiles.tileHits() },
+                    basemapHits = { services.tiles.basemapHits() },
+                    demHits = { services.tiles.demHits() },
                     onUsePack = { packId ->
                         basePackId.value = packId
                         styleRef.value?.let { style ->
@@ -605,8 +656,19 @@ fun AtlasMapScreen(services: AtlasServices) {
     }
 }
 
-fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {
-    map.moveCamera(
+@Composable
+private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics { stateDescription = description },
+    ) {
+        Text(label)
+    }
+}
+
+fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {    map.moveCamera(
         CameraUpdateFactory.newCameraPosition(
             CameraPosition.Builder()
                 .target(LatLng(intent.center.latitude, intent.center.longitude))
@@ -833,6 +895,23 @@ fun removeBaseLayer(style: Style) {
     }
 }
 
+fun ensureDemSource(style: Style, demUrl: String) {
+    if (style.getSource(DEM_SOURCE_ID) != null) {
+        style.removeSource(DEM_SOURCE_ID)
+    }
+    val tileSet = TileSet("2.2.0", demUrl)
+    tileSet.minZoom = 0f
+    tileSet.maxZoom = 15f
+    tileSet.encoding = "mapbox"
+    style.addSource(RasterDemSource(DEM_SOURCE_ID, tileSet, 256))
+}
+
+fun removeDemSource(style: Style) {
+    if (style.getSource(DEM_SOURCE_ID) != null) {
+        style.removeSource(DEM_SOURCE_ID)
+    }
+}
+
 fun applyBaseSource(
     style: Style,
     services: AtlasServices,
@@ -853,6 +932,7 @@ fun applyBaseSource(
 
 const val BASE_SOURCE_ID = "atlas-base"
 const val BASE_LAYER_ID = "atlas-base-layer"
+const val DEM_SOURCE_ID = "atlas-dem"
 const val RING_STEP_INDEX = 3
 const val MAX_GRATICULE_LINES = 240
 
@@ -864,6 +944,21 @@ private const val BLANK_STYLE = """
 {
   "version": 8,
   "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#111111" }
+    }
+  ]
+}
+"""
+
+private const val BLANK_STYLE_TERRAIN = """
+{
+  "version": 8,
+  "sources": {},
+  "terrain": { "source": "atlas-dem", "exaggeration": 1.0 },
   "layers": [
     {
       "id": "background",

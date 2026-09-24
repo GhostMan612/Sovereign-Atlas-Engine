@@ -9,6 +9,9 @@ import java.util.Locale
 
 const val PACK_STORE_CAPACITY = 64
 const val MAX_SESSION_TILES = 4096
+const val BASEMAP_SESSION_TILES = MAX_SESSION_TILES
+const val DEM_SESSION_TILES = 2048
+const val GLOBAL_TILE_HARD_CAP = 8192
 const val EVENT_LOG_BOUND = 200
 const val PACK_JOURNAL_DIR = "offline_packs"
 const val PACK_INDEX_FILE = "index.json"
@@ -21,6 +24,11 @@ enum class OfflinePackLifecycle {
     complete,
     failed,
     cancelled,
+}
+
+enum class TileBucket {
+    BASEMAP,
+    DEM,
 }
 
 class OfflinePackRecord(

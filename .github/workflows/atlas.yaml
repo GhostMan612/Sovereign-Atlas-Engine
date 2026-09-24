@@ -17,4 +17,31 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Unit tests
         working-directory: apps/atlas-android
-        run: ./gradlew :app:testDebugUnitTest --console=plain
+        run: ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Build Release APKs
+        working-directory: apps/atlas-android
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set +x
+          umask 077
+          KEYSTORE_DIR=$(mktemp -d)
+          trap 'rm -rf $KEYSTORE_DIR' EXIT
+          
+          base64 -d <<< "$RELEASE_KEYSTORE_BASE64" > $KEYSTORE_DIR/upload.jks
+          export KEYSTORE_PATH=$KEYSTORE_DIR/upload.jks
+          
+          ./gradlew :app:assemblePlayRelease :app:assembleEnterpriseRelease -PdisableBuildScans=true --no-daemon --no-configuration-cache

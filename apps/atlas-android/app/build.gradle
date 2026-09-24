@@ -17,9 +17,66 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing resolution: keystore.properties (module dir) first,
+    // -PKEYSTORE_* project properties second, KEYSTORE_* environment
+    // variables third. Unsigned release is never emitted silently —
+    // see the fail-closed guard below.
+    def keystoreFile = file("keystore.properties")
+    def keystoreProps = new Properties()
+    if (keystoreFile.exists()) {
+        keystoreFile.withInputStream { stream -> keystoreProps.load(stream) }
+    }
+    def releaseStorePath = keystoreProps.getProperty("storeFile") ?: project.findProperty("KEYSTORE_PATH") ?: System.getenv("KEYSTORE_PATH")
+    def releaseStorePassword = keystoreProps.getProperty("storePassword") ?: project.findProperty("KEYSTORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+    def releaseKeyAlias = keystoreProps.getProperty("keyAlias") ?: project.findProperty("KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
+    def releaseKeyPassword = keystoreProps.getProperty("keyPassword") ?: project.findProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+    def hasReleaseSigning = releaseStorePath != null && releaseStorePassword != null &&
+        releaseKeyAlias != null && releaseKeyPassword != null
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    flavorDimensions "distribution"
+    productFlavors {
+        play {
+            dimension "distribution"
+        }
+        enterprise {
+            dimension "distribution"
+            applicationIdSuffix ".enterprise"
+        }
+    }
+
     buildTypes {
         debug {
             debuggable = true
+        }
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    // Fail-closed: any release task in the execution graph without
+    // credentials fails before packaging can emit an unsigned artifact.
+    gradle.taskGraph.whenReady { taskGraph ->
+        def isRelease = taskGraph.allTasks.any { it.name.toLowerCase().contains("release") }
+
+        def hasProps = project.file('apps/atlas-android/app/keystore.properties').exists() || project.file('keystore.properties').exists()
+        def hasExt = project.hasProperty('KEYSTORE_PATH')
+        def hasEnv = System.getenv('KEYSTORE_PATH') != null
+
+        if (isRelease && !hasProps && !hasExt && !hasEnv) {
+            throw new GradleException("FAIL-CLOSED: Release signing credentials missing. Halting before packaging.")
         }
     }
     compileOptions {

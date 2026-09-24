@@ -4,7 +4,7 @@ description: Run the host verification gates (unit tests, no builds)
 
 Run the project verification gates in order. NEVER build an APK.
 
-1. `:app:testDebugUnitTest` (Gradle, from `apps/atlas-android/`) —
+1. `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest` (Gradle, from `apps/atlas-android/`) —
    all unit tests must pass, 0 failures/errors.
 2. Confirm `git status` shows no unintended files.
 
