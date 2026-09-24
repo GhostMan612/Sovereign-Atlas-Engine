@@ -24,6 +24,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +63,7 @@ import com.sovereignatlas.atlas.ui.AtlasLoadingOverlay
 import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
+import com.sovereignatlas.atlas.ui.SettingsDialog
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.ui.WaypointCreateDialog
@@ -105,6 +109,8 @@ fun AtlasMapScreen(
     val showLayers = remember { mutableStateOf(false) }
     val showLink = remember { mutableStateOf(false) }
     val showFence = remember { mutableStateOf(false) }
+    val showSettings = remember { mutableStateOf(false) }
+    val cartoKey by services.keys.cartoKey.collectAsState()
     val fence = remember { mutableStateOf<RadialFence?>(null) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
@@ -183,6 +189,7 @@ fun AtlasMapScreen(
                         services,
                         baseProviderId.value,
                         basePackId.value,
+                        services.keys.cartoKey.value,
                     )
                     services.behavior.startupCamera()?.let { intent ->
                         applyCameraIntent(map, intent)
@@ -348,6 +355,23 @@ fun AtlasMapScreen(
             flag.value = true
         }
     }
+    // Reactive CARTO refresh: when a key arrives while a CARTO base is
+    // active, re-add the source through the same live-mutation path as a
+    // manual provider switch. Camera is preserved; ui/ never calls setStyle.
+    LaunchedEffect(cartoKey, baseProviderId.value, basePackId.value) {
+        val style = styleRef.value
+        if (cartoKey != null && style != null &&
+            isCartoProvider(baseProviderId.value) && basePackId.value == null
+        ) {
+            attribution.value = applyBaseSource(
+                style,
+                services,
+                baseProviderId.value,
+                null,
+                cartoKey,
+            )
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
@@ -399,6 +423,7 @@ fun AtlasMapScreen(
                 ToolRow("Layers", "Open layers", openTool(showLayers))
                 ToolRow("Link", "Open radio link", openTool(showLink))
                 ToolRow("Fence", "Open geofence", openTool(showFence))
+                ToolRow("Settings", "Open settings", openTool(showSettings))
                 ToolRow(
                     if (headingUp.value) "North-up" else "Head-up",
                     if (headingUp.value) "Head-up on" else "Head-up off",
@@ -570,7 +595,13 @@ fun AtlasMapScreen(
                     baseProviderId.value = id
                     basePackId.value = null
                     styleRef.value?.let { style ->
-                        attribution.value = applyBaseSource(style, services, id, null)
+                        attribution.value = applyBaseSource(
+                            style,
+                            services,
+                            id,
+                            null,
+                            services.keys.cartoKey.value,
+                        )
                     }
                 },
                 showGraticule = showGraticule.value,
@@ -631,8 +662,7 @@ fun AtlasMapScreen(
                 onClose = { showLink.value = false },
             )
         }
-        if (showFence.value) {
-            val map = mapRef.value
+        if (showFence.value) {            val map = mapRef.value
             val center = map?.cameraPosition?.target?.let {
                 AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
             }
@@ -649,6 +679,12 @@ fun AtlasMapScreen(
                     styleRef.value?.let { style -> pushFence(style, null) }
                 },
                 onClose = { showFence.value = false },
+            )
+        }
+        if (showSettings.value) {
+            SettingsDialog(
+                keyProvider = services.keys,
+                onClose = { showSettings.value = false },
             )
         }
         if (attribution.value.isNotEmpty()) {
@@ -869,12 +905,16 @@ fun applyOverlayVisibility(
     setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, showMeasure)
 }
 
-fun ensureBaseLayer(style: Style, providerId: String) {
+fun ensureBaseLayer(style: Style, providerId: String, key: String? = null) {
     val descriptor = OfflineBuiltinProviders.lookup(providerId) ?: return
     var template = descriptor.urlTemplate ?: return
-    for ((key, value) in descriptor.params) {
-        template = template.replace("{$key}", value)
+    for ((param, value) in descriptor.params) {
+        template = template.replace("{$param}", value)
     }
+    // Key-aware templates substitute {key}; current CARTO basemaps are
+    // keyless, so a key arrival re-applies the identical source — the
+    // reactive path exists so key rotation takes effect without camera loss.
+    template = template.replace("{key}", key ?: "")
     ensureBaseTemplate(style, template, descriptor.minZoom, descriptor.maxZoom)
 }
 
@@ -925,6 +965,7 @@ fun applyBaseSource(
     services: AtlasServices,
     providerId: String,
     packId: String?,
+    key: String? = null,
 ): String {
     if (packId != null) {
         val pack = services.offline.lookup(packId)
@@ -934,8 +975,12 @@ fun applyBaseSource(
             return "${pack.providerTitle} (offline)"
         }
     }
-    ensureBaseLayer(style, providerId)
+    ensureBaseLayer(style, providerId, key)
     return OfflineBuiltinProviders.lookup(providerId)?.attribution ?: ""
+}
+
+fun isCartoProvider(providerId: String): Boolean {
+    return providerId == "carto-positron" || providerId == "carto-dark-matter"
 }
 
 const val BASE_SOURCE_ID = "atlas-base"

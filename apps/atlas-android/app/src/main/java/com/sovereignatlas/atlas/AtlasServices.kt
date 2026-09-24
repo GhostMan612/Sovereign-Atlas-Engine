@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas
 
+import com.sovereignatlas.atlas.core.KeyProvider
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.HeadingService
@@ -25,4 +26,5 @@ class AtlasServices(
     val offline: OfflineStore,
     val heading: HeadingService,
     val tiles: PackTileServer,
+    val keys: KeyProvider,
 )

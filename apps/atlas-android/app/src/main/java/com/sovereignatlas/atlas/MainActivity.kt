@@ -62,6 +62,9 @@ final class MainActivity : ComponentActivity() {
     private val tileServer by lazy {
         PackTileServer(packsDir = { File(filesDir, PACK_JOURNAL_DIR) })
     }
+    private val keyProvider by lazy {
+        AndroidKeyProvider(this)
+    }
 
     // No ViewModel in this host: splash hold is a plain activity-owned flag.
     // Flipped once the MapLibre style is loaded; offline restore is
@@ -79,6 +82,7 @@ final class MainActivity : ComponentActivity() {
             offline = offline,
             heading = headingService,
             tiles = tileServer,
+            keys = keyProvider,
         )
     }
 
