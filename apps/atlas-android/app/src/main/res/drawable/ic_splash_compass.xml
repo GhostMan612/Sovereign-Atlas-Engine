@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    <!-- Compass rose on transparent: ring radius 70 about (120,120), spans 50..190. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#39FF14"
+        android:strokeWidth="8"
+        android:pathData="M50,120a70,70 0 1,1 140,0a70,70 0 1,1 -140,0" />
+    <!-- Cardinal points. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M120,58l10,52h-20z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M120,182l10,-52h-20z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M182,120l-52,-10v20z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M58,120l52,-10v20z" />
+    <!-- Intercardinal points. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M163,77l5,11h-10z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M163,163l5,-11h-10z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M77,163l5,-11h-10z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M77,77l5,11h-10z" />
+    <!-- Center pivot. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M114,114h12v12h-12z" />
+</vector>

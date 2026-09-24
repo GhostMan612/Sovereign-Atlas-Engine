@@ -12,6 +12,7 @@ import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.AndroidHeadingSource
@@ -25,6 +26,7 @@ import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
 import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
 
 final class MainActivity : ComponentActivity() {
@@ -61,6 +63,11 @@ final class MainActivity : ComponentActivity() {
         PackTileServer(packsDir = { File(filesDir, PACK_JOURNAL_DIR) })
     }
 
+    // No ViewModel in this host: splash hold is a plain activity-owned flag.
+    // Flipped once the MapLibre style is loaded; offline restore is
+    // synchronous in onCreate so packs are initialized by then.
+    private val mapReady = MutableStateFlow(false)
+
     private val services by lazy {
         AtlasServices(
             location = locationService,
@@ -76,6 +83,7 @@ final class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen().setKeepOnScreenCondition { !mapReady.value }
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         journal.restore()
@@ -83,7 +91,10 @@ final class MainActivity : ComponentActivity() {
         tileServer.start()
         setContent {
             MaterialTheme {
-                AtlasMapScreen(services)
+                AtlasMapScreen(
+                    services,
+                    onFirstStyle = { mapReady.value = true },
+                )
             }
         }
     }

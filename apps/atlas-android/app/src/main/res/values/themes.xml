@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Atlas" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#121212</item>
+        <item name="android:statusBarColor">#121212</item>
+        <item name="android:navigationBarColor">#121212</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+    <style name="Theme.SplashScreen.Atlas" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">#121212</item>
+        <item name="windowSplashScreenIconBackgroundColor">#2A2A2A</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_compass</item>
+        <item name="postSplashScreenTheme">@style/Theme.Atlas</item>
+    </style>
+</resources>

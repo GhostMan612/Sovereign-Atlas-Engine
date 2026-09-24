@@ -56,6 +56,7 @@ import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.LayersDialog
+import com.sovereignatlas.atlas.ui.AtlasLoadingOverlay
 import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
@@ -82,7 +83,10 @@ import org.maplibre.geojson.Point
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AtlasMapScreen(services: AtlasServices) {
+fun AtlasMapScreen(
+    services: AtlasServices,
+    onFirstStyle: () -> Unit = {},
+) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
@@ -118,6 +122,7 @@ fun AtlasMapScreen(services: AtlasServices) {
     val measureSnapshot = remember {
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
     }
+    val mapLoading = remember { mutableStateOf(true) }
     val mapView = remember {
         MapView(context).apply {
             getMapAsync { map ->
@@ -159,6 +164,8 @@ fun AtlasMapScreen(services: AtlasServices) {
                 }
                 map.setStyle(Style.Builder().fromJson(if (services.tiles.demAvailable()) BLANK_STYLE_TERRAIN else BLANK_STYLE)) { style ->
                     styleRef.value = style
+                    mapLoading.value = false
+                    onFirstStyle()
                     services.tiles.demTileUrl()?.let { demUrl ->
                         if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
                     }
@@ -653,6 +660,7 @@ fun AtlasMapScreen(services: AtlasServices) {
                 )
             }
         }
+        AtlasLoadingOverlay(visible = mapLoading.value)
     }
 }
 

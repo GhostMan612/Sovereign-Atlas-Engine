@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer ring, radius 30 about (54,54): spans 24..84, inside 18..90 safe zone. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#39FF14"
+        android:strokeWidth="3"
+        android:pathData="M24,54a30,30 0 1,1 60,0a30,30 0 1,1 -60,0" />
+    <!-- Cardinal points: north terminal-green, east/south/west white accents. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M54,26l6,26h-12z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,82l6,-26h-12z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M82,54l-26,-6v12z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M26,54l26,-6v12z" />
+    <!-- Intercardinal points, terminal-green. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M72,36l3,8h-6z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M72,72l3,-8h-6z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M36,72l3,-8h-6z" />
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M36,36l3,8h-6z" />
+    <!-- Center pivot, white. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,51h6v6h-6z" />
+</vector>
