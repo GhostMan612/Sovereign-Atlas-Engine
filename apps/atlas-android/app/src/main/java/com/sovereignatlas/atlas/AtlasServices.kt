@@ -7,7 +7,6 @@ package com.sovereignatlas.atlas
 
 import com.sovereignatlas.atlas.core.KeyProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
-import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.track.TrackRepository
@@ -22,7 +21,6 @@ import com.sovereignatlas.atlas.track.TrackRecorder
 
 class AtlasServices(
     val location: LocationService,
-    val journal: FieldJournal,
     val recorder: TrackRecorder,
     val goTo: GoToState,
     val measure: MeasureState,

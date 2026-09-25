@@ -17,7 +17,6 @@ import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.track.TrackRepository
-import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.AndroidHeadingSource
 import com.sovereignatlas.atlas.heading.HeadingService
@@ -36,9 +35,6 @@ import org.maplibre.android.MapLibre
 final class MainActivity : ComponentActivity() {
     private val locationSource by lazy { AndroidLocationSource(this) }
     private val locationService by lazy { LocationService(locationSource) }
-    private val journal by lazy {
-        FieldJournal(directoryProvider = { filesDir })
-    }
     private val recorder by lazy { TrackRecorder(locationService) }
     private val goTo by lazy { GoToState() }
     private val measure by lazy { MeasureState() }
@@ -87,7 +83,6 @@ final class MainActivity : ComponentActivity() {
     private val services by lazy {
         AtlasServices(
             location = locationService,
-            journal = journal,
             recorder = recorder,
             goTo = goTo,
             measure = measure,
@@ -107,7 +102,6 @@ final class MainActivity : ComponentActivity() {
         installSplashScreen().setKeepOnScreenCondition { !mapReady.value }
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
-        journal.restore()
         offline.restore()
         tileServer.start()
         setContent {

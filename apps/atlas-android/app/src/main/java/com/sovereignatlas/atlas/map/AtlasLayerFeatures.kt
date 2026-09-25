@@ -5,49 +5,62 @@
 
 package com.sovereignatlas.atlas.map
 
+import android.util.Log
 import com.google.gson.JsonObject
-import com.sovereignatlas.atlas.field.StoredTrack
-import com.sovereignatlas.atlas.field.StoredWaypoint
+import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.AtlasRangeRings
+import com.sovereignatlas.atlas.track.parseTrackGeometry
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-fun waypointPoint(record: StoredWaypoint): Point {
-    return Point.fromLngLat(record.longitude, record.latitude)
+fun waypointToFeature(record: Waypoint): Feature? {
+    return runCatching {
+        val properties = JsonObject()
+        properties.addProperty("id", record.id)
+        properties.addProperty("name", record.name)
+        properties.addProperty("label", record.name.ifEmpty { record.id })
+        Feature.fromGeometry(
+            Point.fromLngLat(record.longitude, record.latitude),
+            properties,
+        )
+    }.onFailure {
+        Log.w("AtlasMap", "Skipping waypoint ${record.id}: ${it.message}")
+    }.getOrNull()
 }
 
-fun waypointsToFeatures(records: List<StoredWaypoint>): FeatureCollection {
-    return FeatureCollection.fromFeatures(
-        records.map { record ->
-            val properties = JsonObject()
-            properties.addProperty("id", record.id)
-            properties.addProperty("label", record.label)
-            properties.addProperty(
-                "source",
-                com.sovereignatlas.atlas.field.waypointSourceName(record.source),
-            )
-            Feature.fromGeometry(waypointPoint(record), properties)
-        },
-    )
+fun waypointsToFeatures(records: List<Waypoint>): FeatureCollection {
+    return FeatureCollection.fromFeatures(records.mapNotNull { waypointToFeature(it) })
 }
 
-fun trackToFeatures(track: StoredTrack): FeatureCollection {
-    return FeatureCollection.fromFeatures(
-        listOf(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    track.points.map { point ->
-                        Point.fromLngLat(point.longitude, point.latitude)
-                    },
-                ),
+fun trackToFeature(track: Track): Feature? {
+    val points = parseTrackGeometry(track.geometry)
+    if (points == null || points.size < 2) {
+        Log.w("AtlasMap", "Skipping track ${track.id}: corrupt geometry")
+        return null
+    }
+    return runCatching {
+        val properties = JsonObject()
+        properties.addProperty("id", track.id)
+        properties.addProperty("name", track.name)
+        Feature.fromGeometry(
+            LineString.fromLngLats(
+                points.map { point -> Point.fromLngLat(point.longitude, point.latitude) },
             ),
-        ),
-    )
+            properties,
+        )
+    }.onFailure {
+        Log.w("AtlasMap", "Skipping track ${track.id}: ${it.message}")
+    }.getOrNull()
+}
+
+fun tracksToFeatures(tracks: List<Track>): FeatureCollection {
+    return FeatureCollection.fromFeatures(tracks.mapNotNull { trackToFeature(it) })
 }
 
 fun measureToFeatures(a: AtlasCoordinate, b: AtlasCoordinate): FeatureCollection {

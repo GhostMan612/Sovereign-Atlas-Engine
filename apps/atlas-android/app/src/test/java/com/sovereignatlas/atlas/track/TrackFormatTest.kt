@@ -5,20 +5,13 @@
 
 package com.sovereignatlas.atlas.track
 
-import com.sovereignatlas.atlas.field.StoredWaypoint
-import com.sovereignatlas.atlas.field.WaypointSource
+import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private fun point(latitude: Double, longitude: Double, atMs: Long): StoredWaypoint {
-    return StoredWaypoint(
-        id = "p",
-        latitude = latitude,
-        longitude = longitude,
-        createdAt = atMs,
-        source = WaypointSource.gpsRecorded,
-    )
+private fun point(latitude: Double, longitude: Double): AtlasCoordinate {
+    return AtlasCoordinate(latitude = latitude, longitude = longitude)
 }
 
 final class TrackFormatTest {
@@ -38,9 +31,9 @@ final class TrackFormatTest {
     @Test
     fun lengthSumsSegments() {
         assertEquals(0.0, trackLengthMeters(emptyList()), 0.0)
-        assertEquals(0.0, trackLengthMeters(listOf(point(0.0, 0.0, 0L))), 0.0)
+        assertEquals(0.0, trackLengthMeters(listOf(point(0.0, 0.0))), 0.0)
         val length = trackLengthMeters(
-            listOf(point(0.0, 0.0, 0L), point(0.0, 1.0, 1000L)),
+            listOf(point(0.0, 0.0), point(0.0, 1.0)),
         )
         assertTrue(length > 110000.0 && length < 112000.0)
     }

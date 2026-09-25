@@ -18,32 +18,36 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.sovereignatlas.atlas.field.FieldJournal
-import com.sovereignatlas.atlas.field.waypointSourceName
+import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.Mgrs
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+
+val waypointTimestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
 @Composable
 fun WaypointsDialog(
-    journal: FieldJournal,
+    waypointRepository: WaypointRepository,
     onOpenDetail: (String) -> Unit,
     onClose: () -> Unit,
 ) {
-    val error = journal.lastErrorOrNull()
-    val records = journal.waypoints()
+    val records by waypointRepository.waypoints.collectAsState(initial = emptyList())
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Waypoints") },
         text = {
             Column {
-                if (error != null) {
-                    Text("Journal unavailable: $error")
-                }
                 if (records.isEmpty()) {
                     Text(
                         "No waypoints yet. Long-press the map to add one.",
@@ -55,10 +59,10 @@ fun WaypointsDialog(
                             ListItem(
                                 headlineContent = {
                                     Text(
-                                        if (record.label.isEmpty()) {
+                                        if (record.name.isEmpty()) {
                                             record.id
                                         } else {
-                                            record.label
+                                            record.name
                                         },
                                     )
                                 },
@@ -92,12 +96,14 @@ fun WaypointsDialog(
 
 @Composable
 fun WaypointDetailDialog(
-    journal: FieldJournal,
+    waypointRepository: WaypointRepository,
     id: String,
-    onGoTo: (String) -> Unit,
+    onGoTo: (latitude: Double, longitude: Double, label: String) -> Unit,
     onClose: () -> Unit,
 ) {
-    val record = journal.lookup(id)
+    val scope = rememberCoroutineScope()
+    val records by waypointRepository.waypoints.collectAsState(initial = emptyList())
+    val record = records.firstOrNull { it.id == id }
     if (record == null) {
         AlertDialog(
             onDismissRequest = onClose,
@@ -110,8 +116,8 @@ fun WaypointDetailDialog(
         )
         return
     }
-    val label = remember(id) { mutableStateOf(record.label) }
-    val note = remember(id) { mutableStateOf(record.note) }
+    var label by remember(id) { mutableStateOf(record.name) }
+    var note by remember(id) { mutableStateOf(record.notes ?: "") }
     AlertDialog(
         onDismissRequest = onClose,
         title = {
@@ -126,17 +132,17 @@ fun WaypointDetailDialog(
         },
         text = {
             Column {
-                Text("Source: ${waypointSourceName(record.source)}")
                 Text("MGRS: ${Mgrs.format(record.latitude, record.longitude)}")
+                Text("Saved: ${waypointTimestampFormat.format(Date(record.timestamp))}")
                 OutlinedTextField(
-                    value = label.value,
-                    onValueChange = { label.value = it },
+                    value = label,
+                    onValueChange = { label = it },
                     label = { Text("Label") },
                     modifier = Modifier.testTag("waypoint-edit-label"),
                 )
                 OutlinedTextField(
-                    value = note.value,
-                    onValueChange = { note.value = it },
+                    value = note,
+                    onValueChange = { note = it },
                     label = { Text("Note") },
                     modifier = Modifier.testTag("waypoint-edit-note"),
                 )
@@ -146,8 +152,11 @@ fun WaypointDetailDialog(
             Row {
                 TextButton(
                     onClick = {
-                        journal.updateLabel(id, label.value)
-                        journal.updateNote(id, note.value)
+                        scope.launch {
+                            waypointRepository.saveWaypoint(
+                                record.copy(name = label, notes = note),
+                            )
+                        }
                         onClose()
                     },
                     modifier = Modifier.testTag("waypoint-save"),
@@ -156,7 +165,9 @@ fun WaypointDetailDialog(
                 }
                 TextButton(
                     onClick = {
-                        journal.remove(id)
+                        scope.launch {
+                            waypointRepository.deleteWaypoint(id)
+                        }
                         onClose()
                     },
                     modifier = Modifier.testTag("waypoint-delete"),
@@ -164,7 +175,13 @@ fun WaypointDetailDialog(
                     Text("Delete")
                 }
                 TextButton(
-                    onClick = { onGoTo(id) },
+                    onClick = {
+                        onGoTo(
+                            record.latitude,
+                            record.longitude,
+                            label.ifEmpty { record.id },
+                        )
+                    },
                     modifier = Modifier.testTag("waypoint-go-to"),
                 ) {
                     Text("Go-To")

@@ -119,6 +119,7 @@ dependencies {
     implementation 'org.maplibre.gl:android-sdk:13.3.1'
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1'
     testImplementation 'app.cash.sqldelight:sqlite-driver:2.1.0'
     testImplementation 'com.google.crypto.tink:tink:1.23.0'
     debugImplementation 'androidx.compose.ui:ui-test-manifest:1.7.0'

@@ -83,7 +83,7 @@ fun FenceDialog(
                         Text("Clear")
                     }
                 }
-                Text("Session fence — not saved to the journal.")
+                Text("Session fence — not persisted.")
             }
         },
         confirmButton = {

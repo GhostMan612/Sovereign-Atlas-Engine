@@ -6,6 +6,12 @@
 package com.sovereignatlas.atlas.map
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.util.Log
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +41,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
@@ -47,9 +55,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasAngles
 import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
@@ -76,7 +86,11 @@ import com.sovereignatlas.atlas.ui.SettingsDialog
 import com.sovereignatlas.atlas.ui.TacticalCrosshair
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
-import com.sovereignatlas.atlas.ui.WaypointCreateDialog
+import com.sovereignatlas.atlas.track.TrackRecorder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import com.sovereignatlas.atlas.ui.WaypointDetailDialog
 import com.sovereignatlas.atlas.ui.WaypointsDialog
 import org.maplibre.android.camera.CameraPosition
@@ -112,7 +126,8 @@ fun AtlasMapScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val styleRef = remember { mutableStateOf<Style?>(null) }
-    val pendingWaypoint = remember { mutableStateOf<AtlasCoordinate?>(null) }
+    val repoWaypoints = remember { mutableStateOf<List<Waypoint>>(emptyList()) }
+    val repoTracks = remember { mutableStateOf<List<Track>>(emptyList()) }
     val showWaypoints = remember { mutableStateOf(false) }
     val waypointDetailId = remember { mutableStateOf<String?>(null) }
     val showTracks = remember { mutableStateOf(false) }
@@ -141,7 +156,11 @@ fun AtlasMapScreen(
     val recorderTick = remember { mutableStateOf(0) }
     val goToTick = remember { mutableStateOf(0) }
     val positionTick = remember { mutableStateOf(0) }
-    val journalTick = remember { mutableStateOf(0) }
+    val view = LocalView.current
+    val mapScope = rememberCoroutineScope()
+    val onHaptic: () -> Unit = {
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
     val measureActive = remember { mutableStateOf(services.measure.isActive()) }
     val measureSnapshot = remember {
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
@@ -178,8 +197,14 @@ fun AtlasMapScreen(
             applyBaseSource(style, services, baseProviderId.value, basePackId.value)
         }
         installAtlasLayers(style)
+        ensureWaypointIcon(style)
         applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
-        pushJournal(style, services)
+        pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
+        pushFeatures(
+            style,
+            AtlasLayerIds.TRACK_SOURCE,
+            mergedTrackFeatures(repoTracks.value, services.recorder),
+        )
         pushPosition(style, services)
         pushMeasure(style, services)
         pushGoTo(style, services)
@@ -234,10 +259,20 @@ fun AtlasMapScreen(
                     true
                 }
                 map.addOnMapLongClickListener { point ->
-                    pendingWaypoint.value = AtlasCoordinate(
-                        latitude = point.latitude,
-                        longitude = point.longitude,
-                    )
+                    onHaptic()
+                    val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
+                    mapScope.launch {
+                        services.waypointRepository.saveWaypoint(
+                            Waypoint(
+                                id = UUID.randomUUID().toString(),
+                                name = "WP-$stamp",
+                                latitude = point.latitude,
+                                longitude = point.longitude,
+                                timestamp = System.currentTimeMillis(),
+                                notes = "",
+                            ),
+                        )
+                    }
                     true
                 }
                 map.addOnCameraIdleListener {
@@ -310,10 +345,6 @@ fun AtlasMapScreen(
                 }
             }
         }
-        val onJournal: () -> Unit = {
-            journalTick.value += 1
-            styleRef.value?.let { style -> pushJournal(style, services) }
-        }
         val onMeasure: () -> Unit = {
             measureActive.value = services.measure.isActive()
             measureSnapshot.value = services.measure.snapshot()
@@ -321,7 +352,13 @@ fun AtlasMapScreen(
         }
         val onRecorder: () -> Unit = {
             recorderTick.value += 1
-            styleRef.value?.let { style -> pushTracks(style, services) }
+            styleRef.value?.let { style ->
+                pushFeatures(
+                    style,
+                    AtlasLayerIds.TRACK_SOURCE,
+                    mergedTrackFeatures(repoTracks.value, services.recorder),
+                )
+            }
         }
         val onGoTo: () -> Unit = {
             goToTick.value += 1
@@ -342,7 +379,6 @@ fun AtlasMapScreen(
             }
         }
         services.location.addListener(onLocation)
-        services.journal.addListener(onJournal)
         services.measure.addListener(onMeasure)
         services.recorder.addListener(onRecorder)
         services.goTo.addListener(onGoTo)
@@ -351,7 +387,6 @@ fun AtlasMapScreen(
         onMeasure()
         onDispose {
             services.location.removeListener(onLocation)
-            services.journal.removeListener(onJournal)
             services.measure.removeListener(onMeasure)
             services.recorder.removeListener(onRecorder)
             services.goTo.removeListener(onGoTo)
@@ -360,6 +395,34 @@ fun AtlasMapScreen(
         }
     }
     val showTools = remember { mutableStateOf(false) }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                services.waypointRepository.waypoints.collect { waypoints ->
+                    repoWaypoints.value = waypoints
+                    styleRef.value?.let { style ->
+                        pushFeatures(
+                            style,
+                            AtlasLayerIds.WAYPOINTS_SOURCE,
+                            waypointsToFeatures(waypoints),
+                        )
+                    }
+                }
+            }
+            launch {
+                services.trackRepository.tracks.collect { tracks ->
+                    repoTracks.value = tracks
+                    styleRef.value?.let { style ->
+                        pushFeatures(
+                            style,
+                            AtlasLayerIds.TRACK_SOURCE,
+                            mergedTrackFeatures(tracks, services.recorder),
+                        )
+                    }
+                }
+            }
+        }
+    }
     val toolsScope = rememberCoroutineScope()
     val toolsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val onToggleFollow: () -> Unit = {
@@ -613,81 +676,57 @@ fun AtlasMapScreen(
                 )
             }
         }
-        pendingWaypoint.value?.let { point ->
-            WaypointCreateDialog(
-                point = point,
-                onSave = { label, note ->
-                    services.journal.create(
-                        latitude = point.latitude,
-                        longitude = point.longitude,
-                        label = label,
-                        note = note,
-                    )
-                    pendingWaypoint.value = null
-                },
-                onCancel = { pendingWaypoint.value = null },
+        if (showWaypoints.value) {
+            WaypointsDialog(
+                waypointRepository = services.waypointRepository,
+                onOpenDetail = { id -> waypointDetailId.value = id },
+                onClose = { showWaypoints.value = false },
             )
         }
-        if (showWaypoints.value) {
-            journalTick.value.let {
-                WaypointsDialog(
-                    journal = services.journal,
-                    onOpenDetail = { id -> waypointDetailId.value = id },
-                    onClose = { showWaypoints.value = false },
-                )
-            }
-        }
         waypointDetailId.value?.let { id ->
-            journalTick.value.let {
-                WaypointDetailDialog(
-                    journal = services.journal,
-                    id = id,
-                    onGoTo = { targetId ->
-                        services.journal.lookup(targetId)?.let { record ->
-                            services.goTo.activate(
-                                id = record.id,
-                                latitude = record.latitude,
-                                longitude = record.longitude,
-                                label = record.label.ifEmpty { record.id },
-                            )
-                            mapRef.value?.let { map ->
-                                goToCameraIntent(
-                                    services.goTo,
-                                    map.cameraPosition.zoom,
-                                    map.cameraPosition.bearing,
-                                )?.let { intent ->
-                                    applyCameraIntent(map, intent)
-                                }
-                            }
+            WaypointDetailDialog(
+                waypointRepository = services.waypointRepository,
+                id = id,
+                onGoTo = { latitude, longitude, label ->
+                    services.goTo.activate(
+                        id = id,
+                        latitude = latitude,
+                        longitude = longitude,
+                        label = label,
+                    )
+                    mapRef.value?.let { map ->
+                        goToCameraIntent(
+                            services.goTo,
+                            map.cameraPosition.zoom,
+                            map.cameraPosition.bearing,
+                        )?.let { intent ->
+                            applyCameraIntent(map, intent)
                         }
-                        waypointDetailId.value = null
-                        showWaypoints.value = false
-                    },
-                    onClose = { waypointDetailId.value = null },
-                )
-            }
+                    }
+                    waypointDetailId.value = null
+                    showWaypoints.value = false
+                },
+                onClose = { waypointDetailId.value = null },
+            )
         }
         if (showTracks.value) {
-            journalTick.value.let {
-                recorderTick.value.let {
-                    TracksDialog(
-                        journal = services.journal,
-                        recorder = services.recorder,
-                        exportDir = context.filesDir,
-                        onOpenDetail = { id -> trackDetailId.value = id },
-                        onClose = { showTracks.value = false },
-                    )
-                }
+            recorderTick.value.let {
+                TracksDialog(
+                    trackRepository = services.trackRepository,
+                    waypointRepository = services.waypointRepository,
+                    recorder = services.recorder,
+                    exportDir = context.filesDir,
+                    onOpenDetail = { id -> trackDetailId.value = id },
+                    onClose = { showTracks.value = false },
+                )
             }
         }
         trackDetailId.value?.let { id ->
-            journalTick.value.let {
-                TrackDetailDialog(
-                    journal = services.journal,
-                    id = id,
-                    onClose = { trackDetailId.value = null },
-                )
-            }
+            TrackDetailDialog(
+                trackRepository = services.trackRepository,
+                id = id,
+                onClose = { trackDetailId.value = null },
+            )
         }
         if (showOffline.value) {
             offlineTick.value.let {
@@ -859,23 +898,29 @@ fun rotateMap(map: MapLibreMap, bearing: Double) {
     )
 }
 
-fun pushJournal(style: Style, services: AtlasServices) {
-    pushFeatures(
-        style,
-        AtlasLayerIds.WAYPOINTS_SOURCE,
-        waypointsToFeatures(services.journal.waypoints()),
-    )
-    pushTracks(style, services)
+private val wpIconBitmap: Bitmap by lazy {
+    val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.RED }
+    canvas.drawCircle(12f, 12f, 12f, paint)
+    bitmap
 }
 
-fun pushTracks(style: Style, services: AtlasServices) {
-    val trackFeatures = ArrayList<Feature>()
-    for (track in services.journal.tracks()) {
-        trackToFeatures(track).features()?.let { trackFeatures.addAll(it) }
+fun ensureWaypointIcon(style: Style) {
+    if (style.getImage("wp-icon") == null) {
+        style.addImage("wp-icon", wpIconBitmap)
     }
-    val active = services.recorder.points()
+}
+
+fun mergedTrackFeatures(
+    stored: List<Track>,
+    recorder: TrackRecorder,
+): FeatureCollection {
+    val features = ArrayList<Feature>()
+    tracksToFeatures(stored).features()?.let { features.addAll(it) }
+    val active = recorder.points()
     if (active.size >= 2) {
-        trackFeatures.add(
+        features.add(
             Feature.fromGeometry(
                 LineString.fromLngLats(
                     active.map { fix ->
@@ -888,11 +933,7 @@ fun pushTracks(style: Style, services: AtlasServices) {
             ),
         )
     }
-    pushFeatures(
-        style,
-        AtlasLayerIds.TRACK_SOURCE,
-        FeatureCollection.fromFeatures(trackFeatures),
-    )
+    return FeatureCollection.fromFeatures(features)
 }
 
 fun pushPosition(style: Style, services: AtlasServices) {

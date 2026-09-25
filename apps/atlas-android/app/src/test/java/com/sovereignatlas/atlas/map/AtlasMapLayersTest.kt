@@ -5,24 +5,40 @@
 
 package com.sovereignatlas.atlas.map
 
-import com.sovereignatlas.atlas.field.StoredTrack
-import com.sovereignatlas.atlas.field.StoredWaypoint
-import com.sovereignatlas.atlas.field.WaypointSource
+import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.track.trackGeometryJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-private fun waypoint(id: String, latitude: Double, longitude: Double): StoredWaypoint {
-    return StoredWaypoint(
+private fun waypoint(id: String, latitude: Double, longitude: Double): Waypoint {
+    return Waypoint(
         id = id,
+        name = id,
         latitude = latitude,
         longitude = longitude,
-        createdAt = 1000L,
-        source = WaypointSource.mapSelected,
+        timestamp = 1000L,
+        notes = null,
+    )
+}
+
+private fun segmentTrack(): Track {
+    return Track(
+        id = "trk-000001",
+        name = "trk-000001",
+        timestamp = 1000L,
+        distance_meters = 0.0,
+        geometry = trackGeometryJson(
+            listOf(
+                AtlasCoordinate(latitude = 10.0, longitude = 20.0),
+                AtlasCoordinate(latitude = 11.0, longitude = 21.0),
+            ),
+        ),
     )
 }
 
@@ -44,19 +60,20 @@ final class AtlasMapLayersTest {
 
     @Test
     fun trackBecomesSingleLine() {
-        val track = StoredTrack(
-            id = "trk-000001",
-            createdAt = 1000L,
-            points = listOf(
-                waypoint("trk-000001-p0001", 10.0, 20.0),
-                waypoint("trk-000001-p0002", 11.0, 21.0),
-            ),
-            source = WaypointSource.gpsRecorded,
-        )
-        val collection = trackToFeatures(track)
+        val collection = tracksToFeatures(listOf(segmentTrack()))
         assertEquals(1, collection.features()?.size)
         val line = collection.features()?.get(0)?.geometry() as LineString
         assertEquals(2, line.coordinates().size)
+    }
+
+    @Test
+    fun lineStringFromJsonParsesValidGeometry() {
+        val line = LineString.fromJson(
+            """{"type":"LineString","coordinates":[[20.0,10.0],[21.0,11.0]]}""",
+        )
+        assertEquals(2, line.coordinates().size)
+        assertEquals(20.0, line.coordinates()[0].longitude(), 0.0)
+        assertEquals(10.0, line.coordinates()[0].latitude(), 0.0)
     }
 
     @Test

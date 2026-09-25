@@ -5,8 +5,9 @@
 
 package com.sovereignatlas.atlas.track
 
-import com.sovereignatlas.atlas.field.StoredTrack
-import com.sovereignatlas.atlas.field.StoredWaypoint
+import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.Waypoint
+import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,7 +34,7 @@ fun formatGpxTime(atMs: Long): String {
     return format.format(Date(atMs))
 }
 
-fun waypointsToGpx(records: List<StoredWaypoint>): String {
+fun waypointsToGpx(records: List<Waypoint>): String {
     val out = StringBuilder()
     out.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     out.append("<gpx version=\"1.1\" creator=\"SovereignAtlas\">\n")
@@ -41,18 +42,18 @@ fun waypointsToGpx(records: List<StoredWaypoint>): String {
         out.append(
             "  <wpt lat=\"${record.latitude}\" lon=\"${record.longitude}\">\n",
         )
-        out.append("    <name>${escapeXml(record.label.ifEmpty { record.id })}</name>\n")
-        if (record.note.isNotEmpty()) {
-            out.append("    <desc>${escapeXml(record.note)}</desc>\n")
+        out.append("    <name>${escapeXml(record.name.ifEmpty { record.id })}</name>\n")
+        record.notes?.takeIf { it.isNotEmpty() }?.let { note ->
+            out.append("    <desc>${escapeXml(note)}</desc>\n")
         }
-        out.append("    <time>${formatGpxTime(record.createdAt)}</time>\n")
+        out.append("    <time>${formatGpxTime(record.timestamp)}</time>\n")
         out.append("  </wpt>\n")
     }
     out.append("</gpx>\n")
     return out.toString()
 }
 
-fun exportAllGpx(waypoints: List<StoredWaypoint>, tracks: List<StoredTrack>): String {
+fun exportAllGpx(waypoints: List<Waypoint>, tracks: List<Track>): String {
     val out = StringBuilder()
     out.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     out.append("<gpx version=\"1.1\" creator=\"SovereignAtlas\">\n")
@@ -60,22 +61,23 @@ fun exportAllGpx(waypoints: List<StoredWaypoint>, tracks: List<StoredTrack>): St
         out.append(
             "  <wpt lat=\"${record.latitude}\" lon=\"${record.longitude}\">\n",
         )
-        out.append("    <name>${escapeXml(record.label.ifEmpty { record.id })}</name>\n")
-        if (record.note.isNotEmpty()) {
-            out.append("    <desc>${escapeXml(record.note)}</desc>\n")
+        out.append("    <name>${escapeXml(record.name.ifEmpty { record.id })}</name>\n")
+        record.notes?.takeIf { it.isNotEmpty() }?.let { note ->
+            out.append("    <desc>${escapeXml(note)}</desc>\n")
         }
-        out.append("    <time>${formatGpxTime(record.createdAt)}</time>\n")
+        out.append("    <time>${formatGpxTime(record.timestamp)}</time>\n")
         out.append("  </wpt>\n")
     }
     for (record in tracks) {
         out.append("  <trk>\n")
-        out.append("    <name>${escapeXml(record.id)}</name>\n")
+        out.append("    <name>${escapeXml(record.name.ifEmpty { record.id })}</name>\n")
         out.append("    <trkseg>\n")
-        for (point in record.points) {
+        val points = parseTrackGeometry(record.geometry) ?: emptyList()
+        for (point in points) {
             out.append(
                 "      <trkpt lat=\"${point.latitude}\" lon=\"${point.longitude}\">\n",
             )
-            out.append("        <time>${formatGpxTime(point.createdAt)}</time>\n")
+            out.append("        <time>${formatGpxTime(record.timestamp)}</time>\n")
             out.append("      </trkpt>\n")
         }
         out.append("    </trkseg>\n")
@@ -85,18 +87,19 @@ fun exportAllGpx(waypoints: List<StoredWaypoint>, tracks: List<StoredTrack>): St
     return out.toString()
 }
 
-fun trackToGpx(record: StoredTrack): String {
+fun trackToGpx(record: Track): String {
     val out = StringBuilder()
     out.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     out.append("<gpx version=\"1.1\" creator=\"SovereignAtlas\">\n")
     out.append("  <trk>\n")
-    out.append("    <name>${escapeXml(record.id)}</name>\n")
+    out.append("    <name>${escapeXml(record.name.ifEmpty { record.id })}</name>\n")
     out.append("    <trkseg>\n")
-    for (point in record.points) {
+    val points = parseTrackGeometry(record.geometry) ?: emptyList()
+    for (point in points) {
         out.append(
             "      <trkpt lat=\"${point.latitude}\" lon=\"${point.longitude}\">\n",
         )
-        out.append("        <time>${formatGpxTime(point.createdAt)}</time>\n")
+        out.append("        <time>${formatGpxTime(record.timestamp)}</time>\n")
         out.append("      </trkpt>\n")
     }
     out.append("    </trkseg>\n")

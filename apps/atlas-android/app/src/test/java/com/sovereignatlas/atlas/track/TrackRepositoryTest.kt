@@ -11,9 +11,15 @@ import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.db.Track
 import java.util.UUID
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 final class TrackRepositoryTest {
@@ -62,5 +68,23 @@ final class TrackRepositoryTest {
             }
             assertEquals("newer", rows.first().id)
         }
+    }
+
+    @Test
+    fun tracksFlowEmitsAfterSave() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AtlasDatabase.Schema.create(driver)
+        val testTrack = track(UUID.randomUUID().toString(), 1000L)
+        val repo = TrackRepository(AtlasDatabase(driver), UnconfinedTestDispatcher())
+
+        val emissions = mutableListOf<List<Track>>()
+        val job = launch { repo.tracks.toList(emissions) }
+        runCurrent()
+
+        repo.saveTrack(testTrack)
+        runCurrent()
+
+        assertTrue(emissions.last().any { it.id == testTrack.id })
+        job.cancel()
     }
 }

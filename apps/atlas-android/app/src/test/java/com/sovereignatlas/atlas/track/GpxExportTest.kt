@@ -5,22 +5,36 @@
 
 package com.sovereignatlas.atlas.track
 
-import com.sovereignatlas.atlas.field.StoredTrack
-import com.sovereignatlas.atlas.field.StoredWaypoint
-import com.sovereignatlas.atlas.field.WaypointSource
+import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.Waypoint
+import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private fun waypoint(): StoredWaypoint {
-    return StoredWaypoint(
+private fun waypoint(): Waypoint {
+    return Waypoint(
         id = "wp-000001",
+        name = "A&B",
         latitude = 45.0,
         longitude = -93.0,
-        createdAt = 0L,
-        label = "A&B",
-        note = "x<y>",
-        source = WaypointSource.mapSelected,
+        timestamp = 0L,
+        notes = "x<y>",
+    )
+}
+
+private fun segmentTrack(): Track {
+    return Track(
+        id = "trk-000001",
+        name = "",
+        timestamp = 0L,
+        distance_meters = 0.0,
+        geometry = trackGeometryJson(
+            listOf(
+                AtlasCoordinate(latitude = 45.0, longitude = -93.0),
+                AtlasCoordinate(latitude = 46.0, longitude = -93.0),
+            ),
+        ),
     )
 }
 
@@ -47,24 +61,14 @@ final class GpxExportTest {
 
     @Test
     fun unlabeledWaypointUsesId() {
-        val text = waypointsToGpx(listOf(waypoint().copy(label = "", note = "")))
+        val text = waypointsToGpx(listOf(waypoint().copy(name = "", notes = "")))
         assertTrue(text.contains("<name>wp-000001</name>"))
         assertTrue(!text.contains("<desc>"))
     }
 
     @Test
     fun trackGpxHasSegmentPoints() {
-        val text = trackToGpx(
-            StoredTrack(
-                id = "trk-000001",
-                createdAt = 0L,
-                points = listOf(
-                    waypoint().copy(id = "trk-000001-p0001"),
-                    waypoint().copy(id = "trk-000001-p0002", latitude = 46.0),
-                ),
-                source = WaypointSource.gpsRecorded,
-            ),
-        )
+        val text = trackToGpx(segmentTrack())
         assertTrue(text.contains("<trk>"))
         assertTrue(text.contains("<name>trk-000001</name>"))
         assertTrue(text.contains("<trkpt lat=\"45.0\" lon=\"-93.0\">"))

@@ -50,6 +50,8 @@ fun installAtlasLayers(style: Style) {
             AtlasLayerIds.WAYPOINTS_LAYER,
             AtlasLayerIds.WAYPOINTS_SOURCE,
         ).withProperties(
+            PropertyFactory.iconImage("wp-icon"),
+            PropertyFactory.iconSize(1.0f),
             PropertyFactory.textField("{label}"),
             PropertyFactory.textSize(12.0f),
             PropertyFactory.textOpacity(0.9f),
@@ -58,6 +60,7 @@ fun installAtlasLayers(style: Style) {
     style.addLayer(
         LineLayer(AtlasLayerIds.TRACK_LAYER, AtlasLayerIds.TRACK_SOURCE)
             .withProperties(
+                PropertyFactory.lineColor("#39FF14"),
                 PropertyFactory.lineWidth(4.0f),
                 PropertyFactory.lineOpacity(0.9f),
             ),

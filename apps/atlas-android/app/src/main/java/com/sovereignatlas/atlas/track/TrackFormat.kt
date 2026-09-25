@@ -5,25 +5,18 @@
 
 package com.sovereignatlas.atlas.track
 
-import com.sovereignatlas.atlas.field.StoredWaypoint
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGeoMath
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-fun trackLengthMeters(points: List<StoredWaypoint>): Double {
+fun trackLengthMeters(points: List<AtlasCoordinate>): Double {
     var totalKm = 0.0
     for (index in 1 until points.size) {
         totalKm += AtlasGeoMath.haversineKm(
-            AtlasCoordinate(
-                latitude = points[index - 1].latitude,
-                longitude = points[index - 1].longitude,
-            ),
-            AtlasCoordinate(
-                latitude = points[index].latitude,
-                longitude = points[index].longitude,
-            ),
+            points[index - 1],
+            points[index],
         )
     }
     return totalKm * 1000.0
