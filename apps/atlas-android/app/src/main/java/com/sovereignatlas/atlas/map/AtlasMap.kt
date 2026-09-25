@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas.map
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -127,6 +128,7 @@ fun AtlasMapScreen(
     val showFence = remember { mutableStateOf(false) }
     val showSettings = remember { mutableStateOf(false) }
     val cartoKey by services.keys.cartoKey.collectAsState()
+    val activeOfflineMap by services.maps.activeMap.collectAsState()
     val fence = remember { mutableStateOf<RadialFence?>(null) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
@@ -145,6 +147,7 @@ fun AtlasMapScreen(
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
     }
     val mapLoading = remember { mutableStateOf(true) }
+    val hadOfflineMap = remember { mutableStateOf(false) }
     val cameraState = remember {
         MutableStateFlow(
             CameraState(
@@ -154,6 +157,48 @@ fun AtlasMapScreen(
                 isIdle = true,
             ),
         )
+    }
+    // Shared post-style content: re-installs the atlas layer stack after any
+    // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
+    // skips the online/pack base so the MBTiles source survives.
+    val onStyleLoaded: (Style, MapLibreMap, Boolean) -> Unit = { style, map, applyOnlineBase ->
+        styleRef.value = style
+        mapLoading.value = false
+        onFirstStyle()
+        cameraState.value = CameraState(
+            center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
+            zoom = map.cameraPosition.zoom,
+            bearing = map.cameraPosition.bearing,
+            isIdle = true,
+        )
+        services.tiles.demTileUrl()?.let { demUrl ->
+            if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
+        }
+        if (applyOnlineBase) {
+            applyBaseSource(style, services, baseProviderId.value, basePackId.value)
+        }
+        installAtlasLayers(style)
+        applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
+        pushJournal(style, services)
+        pushPosition(style, services)
+        pushMeasure(style, services)
+        pushGoTo(style, services)
+        pushRings(style, services)
+        if (showGraticule.value) pushGraticule(map, style)
+        attribution.value = if (applyOnlineBase) {
+            applyBaseSource(
+                style,
+                services,
+                baseProviderId.value,
+                basePackId.value,
+                services.keys.cartoKey.value,
+            )
+        } else {
+            "Offline map (MBTiles)"
+        }
+        services.behavior.startupCamera()?.let { intent ->
+            applyCameraIntent(map, intent)
+        }
     }
     val mapView = remember {
         MapView(context).apply {
@@ -206,38 +251,15 @@ fun AtlasMapScreen(
                         if (showGraticule.value) pushGraticule(map, style)
                     }
                 }
-                map.setStyle(Style.Builder().fromJson(if (services.tiles.demAvailable()) BLANK_STYLE_TERRAIN else BLANK_STYLE)) { style ->
-                    styleRef.value = style
-                    mapLoading.value = false
-                    onFirstStyle()
-                    cameraState.value = CameraState(
-                        center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
-                        zoom = map.cameraPosition.zoom,
-                        bearing = map.cameraPosition.bearing,
-                        isIdle = true,
-                    )
-                    services.tiles.demTileUrl()?.let { demUrl ->
-                        if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
-                    }
-                    applyBaseSource(style, services, baseProviderId.value, basePackId.value)
-                    installAtlasLayers(style)
-                    applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
-                    pushJournal(style, services)
-                    pushPosition(style, services)
-                    pushMeasure(style, services)
-                    pushGoTo(style, services)
-                    pushRings(style, services)
-                    if (showGraticule.value) pushGraticule(map, style)
-                    attribution.value = applyBaseSource(
+                val initialJson = services.maps.activeMap.value?.let { offline ->
+                    buildMbtilesStyleJson(context, offline.absolutePath)
+                } ?: if (services.tiles.demAvailable()) BLANK_STYLE_TERRAIN else BLANK_STYLE
+                map.setStyle(Style.Builder().fromJson(initialJson)) { style ->
+                    onStyleLoaded(
                         style,
-                        services,
-                        baseProviderId.value,
-                        basePackId.value,
-                        services.keys.cartoKey.value,
+                        map,
+                        services.maps.activeMap.value == null,
                     )
-                    services.behavior.startupCamera()?.let { intent ->
-                        applyCameraIntent(map, intent)
-                    }
                 }
             }
         }
@@ -414,6 +436,31 @@ fun AtlasMapScreen(
                 null,
                 cartoKey,
             )
+        }
+    }
+    // MBTiles swap: selecting an offline map reloads the style from the
+    // bundled template over the native mbtiles:// protocol, then re-installs
+    // the atlas layers. Deselecting falls back to the online base WITHOUT a
+    // full setStyle, preserving camera and overlays.
+    LaunchedEffect(activeOfflineMap, mapRef.value) {
+        val map = mapRef.value
+        if (activeOfflineMap != null && map != null) {
+            hadOfflineMap.value = true
+            val json = buildMbtilesStyleJson(context, activeOfflineMap!!.absolutePath)
+            map.setStyle(Style.Builder().fromJson(json)) { style ->
+                onStyleLoaded(style, map, false)
+            }
+        } else if (activeOfflineMap == null && hadOfflineMap.value) {
+            hadOfflineMap.value = false
+            styleRef.value?.let { style ->
+                attribution.value = applyBaseSource(
+                    style,
+                    services,
+                    baseProviderId.value,
+                    basePackId.value,
+                    services.keys.cartoKey.value,
+                )
+            }
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -646,6 +693,7 @@ fun AtlasMapScreen(
             offlineTick.value.let {
                 OfflineDialog(
                     store = services.offline,
+                    maps = services.maps,
                     tileHits = { services.tiles.tileHits() },
                     basemapHits = { services.tiles.basemapHits() },
                     demHits = { services.tiles.demHits() },
@@ -787,6 +835,11 @@ private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
     ) {
         Text(label)
     }
+}
+
+fun buildMbtilesStyleJson(context: Context, absolutePath: String): String {
+    val template = context.assets.open("offline_style.json").bufferedReader().use { it.readText() }
+    return template.replace("___FILE_URI___", "mbtiles://file://$absolutePath")
 }
 
 fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {    map.moveCamera(

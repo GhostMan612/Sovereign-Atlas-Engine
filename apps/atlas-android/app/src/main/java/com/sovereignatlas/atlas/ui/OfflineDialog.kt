@@ -24,14 +24,20 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.offline.DownloadResult
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.OfflineDownloader
+import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.offline.OfflinePackLifecycle
 import com.sovereignatlas.atlas.offline.OfflinePackRecord
 import com.sovereignatlas.atlas.offline.OfflineStore
@@ -39,10 +45,12 @@ import com.sovereignatlas.atlas.offline.PlanOutcome
 import com.sovereignatlas.atlas.offline.formatBytes
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import kotlinx.coroutines.launch
 
 @Composable
 fun OfflineDialog(
     store: OfflineStore,
+    maps: OfflineMapRepository,
     tileHits: () -> Long,
     basemapHits: () -> Long,
     demHits: () -> Long,
@@ -65,12 +73,14 @@ fun OfflineDialog(
                     TextButton(onClick = { tab.value = 1 }) { Text("Plan") }
                     TextButton(onClick = { tab.value = 2 }) { Text("Providers") }
                     TextButton(onClick = { tab.value = 3 }) { Text("Diag") }
+                    TextButton(onClick = { tab.value = 4 }) { Text("Maps") }
                 }
                 when (tab.value) {
                     0 -> PacksTab(store, cancels, mainHandler, onUsePack)
                     1 -> PlanTab(store)
                     2 -> ProvidersTab()
-                    else -> DiagnosticsTab(store, tileHits, basemapHits, demHits)
+                    3 -> DiagnosticsTab(store, tileHits, basemapHits, demHits)
+                    else -> MapsTab(maps, onClose)
                 }
             }
         },
@@ -336,6 +346,46 @@ private fun DiagnosticsTab(
     LazyColumn {
         items(store.events(), key = { it }) { event ->
             Text(event)
+        }
+    }
+}
+
+@Composable
+private fun MapsTab(
+    maps: OfflineMapRepository,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val available by maps.availableMaps.collectAsState()
+    val active by maps.activeMap.collectAsState()
+    LaunchedEffect(Unit) {
+        maps.scanForMaps()
+    }
+    if (available.isEmpty()) {
+        Text(
+            "No offline maps found. Push .mbtiles files via ADB/USB to " +
+                "/Android/data/${context.packageName}/files/mbtiles/",
+        )
+        return
+    }
+    LazyColumn {
+        items(available, key = { it.absolutePath }) { map ->
+            ListItem(
+                headlineContent = { Text(map.name) },
+                supportingContent = {
+                    Text(
+                        android.text.format.Formatter.formatShortFileSize(context, map.sizeBytes) +
+                            if (map.absolutePath == active?.absolutePath) " • active" else "",
+                    )
+                },
+                modifier = Modifier.clickable {
+                    scope.launch {
+                        maps.setActiveMap(map)
+                        onClose()
+                    }
+                },
+            )
         }
     }
 }

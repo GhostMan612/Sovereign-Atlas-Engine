@@ -1,0 +1,33 @@
+{
+  "version": 8,
+  "name": "Atlas Offline",
+  "glyphs": "asset://glyphs/{fontstack}/{range}.pbf",
+  "sprite": "asset://sprites/sprite",
+  "sources": {
+    "atlas-offline": {
+      "type": "vector",
+      "url": "___FILE_URI___"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#121212" }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "atlas-offline",
+      "source-layer": "water",
+      "paint": { "fill-color": "#0e3a5d" }
+    },
+    {
+      "id": "roads",
+      "type": "line",
+      "source": "atlas-offline",
+      "source-layer": "roads",
+      "paint": { "line-color": "#8a8a8a", "line-width": 1 }
+    }
+  ]
+}

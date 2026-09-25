@@ -65,6 +65,9 @@ final class MainActivity : ComponentActivity() {
     private val keyProvider by lazy {
         AndroidKeyProvider(this)
     }
+    private val mapRepository by lazy {
+        AndroidOfflineMapRepository(applicationContext)
+    }
 
     // No ViewModel in this host: splash hold is a plain activity-owned flag.
     // Flipped once the MapLibre style is loaded; offline restore is
@@ -83,6 +86,7 @@ final class MainActivity : ComponentActivity() {
             heading = headingService,
             tiles = tileServer,
             keys = keyProvider,
+            maps = mapRepository,
         )
     }
 
