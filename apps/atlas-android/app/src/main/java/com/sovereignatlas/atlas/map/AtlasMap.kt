@@ -91,7 +91,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import com.sovereignatlas.atlas.ui.WaypointDetailDialog
+import com.sovereignatlas.atlas.ui.WaypointEditorSheet
 import com.sovereignatlas.atlas.ui.WaypointsDialog
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -129,7 +129,6 @@ fun AtlasMapScreen(
     val repoWaypoints = remember { mutableStateOf<List<Waypoint>>(emptyList()) }
     val repoTracks = remember { mutableStateOf<List<Track>>(emptyList()) }
     val showWaypoints = remember { mutableStateOf(false) }
-    val waypointDetailId = remember { mutableStateOf<String?>(null) }
     val showTracks = remember { mutableStateOf(false) }
     val trackDetailId = remember { mutableStateOf<String?>(null) }
     val showOffline = remember { mutableStateOf(false) }
@@ -225,6 +224,7 @@ fun AtlasMapScreen(
             applyCameraIntent(map, intent)
         }
     }
+    val waypointSelection = remember { WaypointSelection() }
     val mapView = remember {
         MapView(context).apply {
             getMapAsync { map ->
@@ -255,6 +255,21 @@ fun AtlasMapScreen(
                                 longitude = point.longitude,
                             ),
                         )
+                    } else {
+                        // addOnMapClickListener replaces the prior listener, so this
+                        // single registration is swap-safe: the map outlives styles.
+                        val screen = map.projection.toScreenLocation(point)
+                        val hits = if (screen == null) {
+                            emptyList()
+                        } else {
+                            map.queryRenderedFeatures(screen, AtlasLayerIds.WAYPOINTS_LAYER)
+                        }
+                        val hitId = hits.firstOrNull()?.getStringProperty("id")
+                        if (hitId == null) {
+                            waypointSelection.clearWaypointSelection()
+                        } else {
+                            waypointSelection.selectWaypoint(hitId)
+                        }
                     }
                     true
                 }
@@ -679,36 +694,37 @@ fun AtlasMapScreen(
         if (showWaypoints.value) {
             WaypointsDialog(
                 waypointRepository = services.waypointRepository,
-                onOpenDetail = { id -> waypointDetailId.value = id },
+                onCenterWaypoint = { latitude, longitude ->
+                    mapRef.value?.let { map -> animateToWaypoint(map, latitude, longitude) }
+                },
+                onEditWaypoint = { id -> waypointSelection.selectWaypoint(id) },
                 onClose = { showWaypoints.value = false },
             )
         }
-        waypointDetailId.value?.let { id ->
-            WaypointDetailDialog(
-                waypointRepository = services.waypointRepository,
-                id = id,
-                onGoTo = { latitude, longitude, label ->
+        WaypointEditorSheet(
+            selection = waypointSelection,
+            waypointRepository = services.waypointRepository,
+            onGoTo = { latitude, longitude, label ->
+                waypointSelection.selectedWaypointId.value?.let { id ->
                     services.goTo.activate(
                         id = id,
                         latitude = latitude,
                         longitude = longitude,
                         label = label,
                     )
-                    mapRef.value?.let { map ->
-                        goToCameraIntent(
-                            services.goTo,
-                            map.cameraPosition.zoom,
-                            map.cameraPosition.bearing,
-                        )?.let { intent ->
-                            applyCameraIntent(map, intent)
-                        }
+                }
+                mapRef.value?.let { map ->
+                    goToCameraIntent(
+                        services.goTo,
+                        map.cameraPosition.zoom,
+                        map.cameraPosition.bearing,
+                    )?.let { intent ->
+                        applyCameraIntent(map, intent)
                     }
-                    waypointDetailId.value = null
-                    showWaypoints.value = false
-                },
-                onClose = { waypointDetailId.value = null },
-            )
-        }
+                }
+                showWaypoints.value = false
+            },
+        )
         if (showTracks.value) {
             recorderTick.value.let {
                 TracksDialog(
