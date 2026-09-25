@@ -5,7 +5,7 @@
 
 package com.sovereignatlas.atlas.map
 
-import android.view.Gravity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -29,6 +29,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,17 +58,21 @@ import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
-import com.sovereignatlas.atlas.ui.CompassDial
+import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
 import com.sovereignatlas.atlas.ui.GoToCard
 import com.sovereignatlas.atlas.ui.LayersDialog
+import com.sovereignatlas.atlas.ui.MgrsHud
+import com.sovereignatlas.atlas.geo.MgrsConverter
 import com.sovereignatlas.atlas.ui.AtlasLoadingOverlay
 import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
+import com.sovereignatlas.atlas.ui.ScaleBar
 import com.sovereignatlas.atlas.ui.SettingsDialog
+import com.sovereignatlas.atlas.ui.TacticalCrosshair
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.ui.WaypointCreateDialog
@@ -84,6 +93,13 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+
+data class CameraState(
+    val center: LatLng,
+    val zoom: Double,
+    val bearing: Double,
+    val isIdle: Boolean,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,21 +145,37 @@ fun AtlasMapScreen(
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
     }
     val mapLoading = remember { mutableStateOf(true) }
+    val cameraState = remember {
+        MutableStateFlow(
+            CameraState(
+                center = LatLng(0.0, 0.0),
+                zoom = 0.0,
+                bearing = 0.0,
+                isIdle = true,
+            ),
+        )
+    }
     val mapView = remember {
         MapView(context).apply {
             getMapAsync { map ->
                 mapRef.value = map
                 map.uiSettings.apply {
-                    isCompassEnabled = true
-                    compassGravity = Gravity.TOP or Gravity.START
-                    val margin = (16 * context.resources.displayMetrics.density).toInt()
-                    setCompassMargins(margin, margin, margin, margin)
+                    // Compose HUD owns compass + scale: native widgets stay off.
+                    isCompassEnabled = false
                 }
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         services.behavior.markUserInteracted()
                         following.value = false
                     }
+                }
+                map.addOnCameraMoveListener {
+                    val current = cameraState.value
+                    cameraState.value = current.copy(
+                        zoom = map.cameraPosition.zoom,
+                        bearing = map.cameraPosition.bearing,
+                        isIdle = false,
+                    )
                 }
                 map.addOnMapClickListener { point ->
                     if (services.measure.isActive()) {
@@ -164,6 +196,12 @@ fun AtlasMapScreen(
                     true
                 }
                 map.addOnCameraIdleListener {
+                    cameraState.value = CameraState(
+                        center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
+                        zoom = map.cameraPosition.zoom,
+                        bearing = map.cameraPosition.bearing,
+                        isIdle = true,
+                    )
                     styleRef.value?.let { style ->
                         if (showGraticule.value) pushGraticule(map, style)
                     }
@@ -172,6 +210,12 @@ fun AtlasMapScreen(
                     styleRef.value = style
                     mapLoading.value = false
                     onFirstStyle()
+                    cameraState.value = CameraState(
+                        center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
+                        zoom = map.cameraPosition.zoom,
+                        bearing = map.cameraPosition.bearing,
+                        isIdle = true,
+                    )
                     services.tiles.demTileUrl()?.let { demUrl ->
                         if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
                     }
@@ -381,7 +425,7 @@ fun AtlasMapScreen(
             modifier = Modifier.align(Alignment.BottomEnd)
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(16.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             FloatingActionButton(
                 onClick = onLocate,
@@ -440,25 +484,58 @@ fun AtlasMapScreen(
                 )
             }
         }
-        headingTick.value.let {
-            CompassDial(
-                heading = services.heading,
-                orientToken = orientToken(services, headingUp.value),
+        // MGRS HUD - only recompose when center changes AND isIdle is true
+        val mgrsInput by remember {
+            cameraState
+                .filter { it.isIdle }
+                .map { it.center }
+                .distinctUntilChanged()
+        }.collectAsStateWithLifecycle(initialValue = null)
+        // Compass - only recompose when bearing changes
+        val bearingHud by remember {
+            cameraState.map { it.bearing }.distinctUntilChanged()
+        }.collectAsStateWithLifecycle(initialValue = 0.0)
+        // Scale Bar - only recompose when zoom or latitude changes
+        val scaleInput by remember {
+            cameraState.map { it.zoom to it.center.latitude }.distinctUntilChanged()
+        }.collectAsStateWithLifecycle(initialValue = 0.0 to 0.0)
+        val mgrsText = remember(mgrsInput) {
+            mgrsInput?.let {
+                MgrsConverter.spaced(MgrsConverter.toMgrs(it.latitude, it.longitude))
+            } ?: ""
+        }
+        val metersPerPixel = mapRef.value?.projection
+            ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
+        TacticalCrosshair(modifier = Modifier.align(Alignment.Center))
+        Box(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)) {
+            MgrsHud(mgrsText = mgrsText)
+        }
+        Column(
+            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (recorderTick.value >= 0 && services.recorder.isRecording()) {
+                Surface {
+                    Text(
+                        text = "REC • ${services.recorder.pointCount()} pts",
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            }
+            CompassOverlay(
+                bearing = bearingHud,
                 onFaceNorth = {
                     headingUp.value = false
                     pendingHeadingUp.value = false
-                    mapRef.value?.let { map -> rotateMap(map, 0.0) }
+                    mapRef.value?.let { map ->
+                        map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
+                    }
                 },
-                modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
             )
         }
-        if (recorderTick.value >= 0 && services.recorder.isRecording()) {
-            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-                Text(
-                    text = "REC • ${services.recorder.pointCount()} pts",
-                    modifier = Modifier.padding(8.dp),
-                )
-            }
+        Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            ScaleBar(metersPerPixel = metersPerPixel)
         }
         goToTick.value.let {
             positionTick.value.let {
@@ -727,12 +804,6 @@ fun rotateMap(map: MapLibreMap, bearing: Double) {
     map.moveCamera(
         CameraUpdateFactory.bearingTo(AtlasAngles.normalizeBearingDeg(bearing)),
     )
-}
-
-fun orientToken(services: AtlasServices, headingUp: Boolean): String {
-    if (services.heading.isUnsupported()) return "orient unsupported"
-    if (services.heading.latest() == null) return "orient off"
-    return if (headingUp) "orient heading-up" else "orient north-up"
 }
 
 fun pushJournal(style: Style, services: AtlasServices) {

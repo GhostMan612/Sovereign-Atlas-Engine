@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Outer ring, radius 20 about (24,24): spans 4..44, transparent field. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M4,24a20,20 0 1,1 40,0a20,20 0 1,1 -40,0" />
+    <!-- North arrow, terminal green. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M24,5l5,17h-10z" />
+    <!-- South/east/west points, white. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,43l5,-17h-10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,24l-17,-5v10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5,24l17,-5v10z" />
+    <!-- Center pivot, terminal green. -->
+    <path
+        android:fillColor="#39FF14"
+        android:pathData="M22,22h4v4h-4z" />
+</vector>
