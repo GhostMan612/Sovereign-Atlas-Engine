@@ -13,6 +13,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import com.sovereignatlas.atlas.db.AtlasDatabase
+import com.sovereignatlas.atlas.field.WaypointRepository
+import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.field.FieldJournal
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.AndroidHeadingSource
@@ -68,6 +72,12 @@ final class MainActivity : ComponentActivity() {
     private val mapRepository by lazy {
         AndroidOfflineMapRepository(applicationContext)
     }
+    private val sqlDriver by lazy {
+        AndroidSqliteDriver(AtlasDatabase.Schema, applicationContext, "atlas.db")
+    }
+    private val atlasDatabase by lazy {
+        AtlasDatabase(sqlDriver)
+    }
 
     // No ViewModel in this host: splash hold is a plain activity-owned flag.
     // Flipped once the MapLibre style is loaded; offline restore is
@@ -87,6 +97,9 @@ final class MainActivity : ComponentActivity() {
             tiles = tileServer,
             keys = keyProvider,
             maps = mapRepository,
+            database = atlasDatabase,
+            waypointRepository = WaypointRepository(atlasDatabase),
+            trackRepository = TrackRepository(atlasDatabase),
         )
     }
 

@@ -1,0 +1,36 @@
+CREATE TABLE Waypoint (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    timestamp INTEGER NOT NULL,
+    notes TEXT
+);
+
+selectAllWaypoints:
+SELECT * FROM Waypoint ORDER BY timestamp DESC;
+
+insertWaypoint:
+INSERT OR REPLACE INTO Waypoint (id, name, latitude, longitude, timestamp, notes)
+VALUES (?, ?, ?, ?, ?, ?);
+
+deleteWaypoint:
+DELETE FROM Waypoint WHERE id = ?;
+
+CREATE TABLE Track (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    distance_meters REAL NOT NULL,
+    geometry TEXT NOT NULL
+);
+
+selectAllTracks:
+SELECT * FROM Track ORDER BY timestamp DESC;
+
+insertTrack:
+INSERT OR REPLACE INTO Track (id, name, timestamp, distance_meters, geometry)
+VALUES (?, ?, ?, ?, ?);
+
+deleteTrack:
+DELETE FROM Track WHERE id = ?;

@@ -6,8 +6,11 @@
 package com.sovereignatlas.atlas
 
 import com.sovereignatlas.atlas.core.KeyProvider
+import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.FieldJournal
+import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
+import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.HeadingService
 import com.sovereignatlas.atlas.location.LocationService
@@ -29,4 +32,7 @@ class AtlasServices(
     val tiles: PackTileServer,
     val keys: KeyProvider,
     val maps: OfflineMapRepository,
+    val database: AtlasDatabase,
+    val waypointRepository: WaypointRepository,
+    val trackRepository: TrackRepository,
 )
