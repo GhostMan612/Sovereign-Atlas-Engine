@@ -63,6 +63,11 @@ import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.SqliteDemTileStore
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.geo.DemEngine
+import com.sovereignatlas.atlas.geo.GeoPoint
+import com.sovereignatlas.atlas.geo.LoSMode
+import com.sovereignatlas.atlas.geo.LoSRequest
+import com.sovereignatlas.atlas.geo.LoSResult
+import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasAngles
@@ -106,6 +111,8 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.RasterDemSource
 import org.maplibre.android.style.sources.RasterSource
@@ -149,6 +156,8 @@ fun AtlasMapScreen(
     val showFence = remember { mutableStateOf(false) }
     val showSettings = remember { mutableStateOf(false) }
     val cartoKey by services.keys.cartoKey.collectAsState()
+    val losMode by services.losState.mode.collectAsStateWithLifecycle(initialValue = LoSMode.Inactive)
+    val losResult by services.losState.result.collectAsStateWithLifecycle(initialValue = null)
     val activeOfflineMap by services.maps.activeMap.collectAsState()
     val activeDem by services.maps.activeDem.collectAsState()
     val demStoreState = remember { mutableStateOf<DemTileStore?>(null) }
@@ -242,6 +251,12 @@ fun AtlasMapScreen(
         ensureUserPuck(style)
         ensureScrubIcon(style)
         pushScrubPoint(style, services.scrubState.activePoint.value)
+        pushLosState(
+            style,
+            services.losState.observer.value,
+            services.losState.target.value,
+            services.losState.result.value,
+        )
         applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
@@ -293,7 +308,36 @@ fun AtlasMapScreen(
                     )
                 }
                 map.addOnMapClickListener { point ->
-                    if (services.measure.isActive()) {
+                    val losMode = services.losState.mode.value
+                    if (losMode != LoSMode.Inactive) {
+                        val tapped = GeoPoint(
+                            point.latitude,
+                            point.longitude,
+                            null,
+                            null,
+                            null,
+                            System.currentTimeMillis(),
+                        )
+                        if (losMode == LoSMode.AwaitingObserver) {
+                            services.losState.setObserver(tapped)
+                            services.losState.setResult(null)
+                            services.losState.setMode(LoSMode.AwaitingTarget)
+                        } else {
+                            services.losState.setTarget(tapped)
+                            services.losState.setMode(LoSMode.Inactive)
+                            mapScope.launch {
+                                runLosCalculation(services)
+                            }
+                        }
+                        styleRef.value?.let { style ->
+                            pushLosState(
+                                style,
+                                services.losState.observer.value,
+                                services.losState.target.value,
+                                services.losState.result.value,
+                            )
+                        }
+                    } else if (services.measure.isActive()) {
                         services.measure.setB(
                             AtlasCoordinate(
                                 latitude = point.latitude,
@@ -488,6 +532,18 @@ fun AtlasMapScreen(
                     }
                 }
             }
+            launch {
+                services.losState.result.collect { result ->
+                    styleRef.value?.let { style ->
+                        pushLosState(
+                            style,
+                            services.losState.observer.value,
+                            services.losState.target.value,
+                            result,
+                        )
+                    }
+                }
+            }
         }
     }
     val toolsScope = rememberCoroutineScope()
@@ -655,6 +711,29 @@ fun AtlasMapScreen(
                 ToolRow("Fence", "Open geofence", openTool(showFence))
                 ToolRow("Settings", "Open settings", openTool(showSettings))
                 ToolRow(
+                    if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
+                    if (losMode != LoSMode.Inactive) {
+                        "Cancel line-of-sight"
+                    } else {
+                        "Start line-of-sight"
+                    },
+                    {
+                        toolsScope.launch {
+                            try {
+                                toolsSheetState.hide()
+                            } finally {
+                                showTools.value = false
+                                if (losMode != LoSMode.Inactive) {
+                                    services.losState.reset()
+                                } else {
+                                    services.losState.reset()
+                                    services.losState.setMode(LoSMode.AwaitingObserver)
+                                }
+                            }
+                        }
+                    },
+                )
+                ToolRow(
                     if (headingUp.value) "North-up" else "Head-up",
                     if (headingUp.value) "Head-up on" else "Head-up off",
                     {
@@ -693,8 +772,46 @@ fun AtlasMapScreen(
         val metersPerPixel = mapRef.value?.projection
             ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
         TacticalCrosshair(modifier = Modifier.align(Alignment.Center))
-        Box(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)) {
+        Column(
+            modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             MgrsHud(mgrsText = mgrsText)
+            when (losMode) {
+                LoSMode.AwaitingObserver -> Text(
+                    text = "LoS: tap observer point",
+                    fontSize = 12.sp,
+                )
+                LoSMode.AwaitingTarget -> Text(
+                    text = "LoS: tap target point",
+                    fontSize = 12.sp,
+                )
+                LoSMode.Inactive -> {
+                    val error = losResult?.errorMessage
+                    if (error != null) {
+                        Text(
+                            text = error,
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Red,
+                        )
+                    } else if (losResult != null) {
+                        val result = losResult!!
+                        if (result.isVisible) {
+                            Text(
+                                text = "CLEAR",
+                                fontSize = 12.sp,
+                                color = androidx.compose.ui.graphics.Color(0xFF39FF14),
+                            )
+                        } else {
+                            Text(
+                                text = "OBSTRUCTED at ${result.blockingDistanceMeters?.toInt()}m",
+                                fontSize = 12.sp,
+                                color = androidx.compose.ui.graphics.Color.Red,
+                            )
+                        }
+                    }
+                }
+            }
         }
         Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
@@ -1069,6 +1186,87 @@ fun pushScrubPoint(style: Style, point: ProfilePoint?) {
         )
     }
     pushFeatures(style, AtlasLayerIds.SCRUB_SOURCE, features)
+}
+
+suspend fun runLosCalculation(services: AtlasServices) {
+    val observer = services.losState.observer.value
+    val target = services.losState.target.value
+    if (observer == null || target == null) return
+    val engine = DemSession.engine
+    if (engine == null) {
+        services.losState.setResult(
+            LoSResult(false, null, null, emptyList(), "DEM unavailable: activate a relief map."),
+        )
+        return
+    }
+    services.losState.setResult(
+        LineOfSightEngine.calculate(LoSRequest(observer, target), engine),
+    )
+}
+
+fun pushLosState(    style: Style,
+    observer: GeoPoint?,
+    target: GeoPoint?,
+    result: LoSResult?,
+) {
+    pushFeatures(
+        style,
+        AtlasLayerIds.LOS_OBSERVER_SOURCE,
+        if (observer == null) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(Feature.fromGeometry(Point.fromLngLat(observer.longitude, observer.latitude))),
+            )
+        },
+    )
+    pushFeatures(
+        style,
+        AtlasLayerIds.LOS_TARGET_SOURCE,
+        if (target == null) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(Feature.fromGeometry(Point.fromLngLat(target.longitude, target.latitude))),
+            )
+        },
+    )
+    pushFeatures(
+        style,
+        AtlasLayerIds.LOS_SOURCE,
+        if (observer == null || target == null) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(
+                    Feature.fromGeometry(
+                        LineString.fromLngLats(
+                            listOf(
+                                Point.fromLngLat(observer.longitude, observer.latitude),
+                                Point.fromLngLat(target.longitude, target.latitude),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        },
+    )
+    pushFeatures(
+        style,
+        AtlasLayerIds.LOS_BLOCK_SOURCE,
+        if (result?.blockingPoint == null) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            val block = result.blockingPoint
+            FeatureCollection.fromFeatures(
+                listOf(Feature.fromGeometry(Point.fromLngLat(block.longitude, block.latitude))),
+            )
+        },
+    )
+    val ray = style.getLayerAs<LineLayer>(AtlasLayerIds.LOS_LAYER)
+    ray?.setProperties(
+        PropertyFactory.lineColor(if (result != null && !result.isVisible) "#FF0000" else "#39FF14"),
+    )
 }
 
 fun mergedTrackFeatures(

@@ -56,8 +56,7 @@ final class DemEngineTest {
     }
 
     @Test
-    fun edgeSamplingStaysInBounds() {
-        // 2x2 distinct tile: corners must not index out of range.
+    fun edgeSamplingStaysInBounds() {        // 2x2 distinct tile: corners must not index out of range.
         val pixels = intArrayOf(
             (0xFF shl 24),
             (0xFF shl 24) or (10 shl 16),
@@ -68,5 +67,17 @@ final class DemEngineTest {
         val engine = DemEngine(stubStore(), decoder)
         val elevation = engine.getElevation(85.0, 179.0)
         assertEquals(true, elevation != null)
+    }
+
+    @Test
+    fun batchMatchesSingleQueries() {
+        val engine = DemEngine(stubStore(), flatDecoder(100, 150, 200))
+        val points = listOf(0.0 to 0.0, 1.0 to 1.0, -1.0 to -1.0)
+        val batch = kotlinx.coroutines.runBlocking { engine.getElevationsBatch(points) }
+        assertEquals(3, batch.size)
+        for (index in points.indices) {
+            val (latitude, longitude) = points[index]
+            assertEquals(engine.getElevation(latitude, longitude)!!, batch[index]!!, 0.0)
+        }
     }
 }

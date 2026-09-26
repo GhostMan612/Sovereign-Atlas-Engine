@@ -36,6 +36,14 @@ object AtlasLayerIds {
     const val GOTO_LAYER = "atlas-goto-layer"
     const val FENCE_SOURCE = "atlas-fence"
     const val FENCE_LAYER = "atlas-fence-layer"
+    const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
+    const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
+    const val LOS_TARGET_SOURCE = "atlas-los-target"
+    const val LOS_TARGET_LAYER = "atlas-los-target-layer"
+    const val LOS_SOURCE = "atlas-los-ray"
+    const val LOS_LAYER = "atlas-los-ray-layer"
+    const val LOS_BLOCK_SOURCE = "atlas-los-block"
+    const val LOS_BLOCK_LAYER = "atlas-los-block-layer"
 }
 
 fun installAtlasLayers(style: Style) {
@@ -54,6 +62,10 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.POSITION_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GOTO_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.LOS_BLOCK_SOURCE))
     style.addLayer(
         SymbolLayer(
             AtlasLayerIds.WAYPOINTS_LAYER,
@@ -132,6 +144,38 @@ fun installAtlasLayers(style: Style) {
             .withProperties(
                 PropertyFactory.lineWidth(2.0f),
                 PropertyFactory.lineOpacity(0.9f),
+            ),
+    )
+    style.addLayer(
+        SymbolLayer(AtlasLayerIds.LOS_OBSERVER_LAYER, AtlasLayerIds.LOS_OBSERVER_SOURCE)
+            .withProperties(
+                PropertyFactory.iconImage("user-puck"),
+                PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconAllowOverlap(true),
+            ),
+    )
+    style.addLayer(
+        SymbolLayer(AtlasLayerIds.LOS_TARGET_LAYER, AtlasLayerIds.LOS_TARGET_SOURCE)
+            .withProperties(
+                PropertyFactory.iconImage("wp-icon"),
+                PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconAllowOverlap(true),
+            ),
+    )
+    style.addLayer(
+        LineLayer(AtlasLayerIds.LOS_LAYER, AtlasLayerIds.LOS_SOURCE)
+            .withProperties(
+                PropertyFactory.lineColor("#39FF14"),
+                PropertyFactory.lineWidth(3.0f),
+                PropertyFactory.lineOpacity(0.9f),
+            ),
+    )
+    style.addLayer(
+        SymbolLayer(AtlasLayerIds.LOS_BLOCK_LAYER, AtlasLayerIds.LOS_BLOCK_SOURCE)
+            .withProperties(
+                PropertyFactory.iconImage("scrub-icon"),
+                PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconAllowOverlap(true),
             ),
     )
 }

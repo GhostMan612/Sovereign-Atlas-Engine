@@ -7,6 +7,8 @@ package com.sovereignatlas.atlas.geo
 
 import com.sovereignatlas.atlas.offline.DemTileStore
 import kotlin.math.floor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class DemTileKey(val z: Int, val x: Int, val y: Int)
 
@@ -37,29 +39,53 @@ class DemEngine(
 
     fun getElevation(latitude: Double, longitude: Double): Double? {
         if (latitude < -85.05112878 || latitude > 85.05112878) return null
-        val scale = (1 shl ZOOM).toDouble()
-        val tileX = floor((longitude + 180.0) / 360.0 * scale).toInt()
-        val tileY = floor(
-            (1.0 - kotlin.math.ln(
-                kotlin.math.tan(Math.toRadians(latitude)) +
-                    1.0 / kotlin.math.cos(Math.toRadians(latitude)),
-            ) / Math.PI) / 2.0 * scale,
-        ).toInt()
-        val key = DemTileKey(ZOOM, tileX, tileY)
+        val (key, fracX, fracY) = latLngToTileFraction(latitude, longitude, ZOOM)
         val image = getCachedTile(key) ?: run {
-            val bytes = tiles.tileBytes(ZOOM, tileX, tileY) ?: return null
+            val bytes = tiles.tileBytes(key.z, key.x, key.y) ?: return null
             val decoded = decoder.decodeRgb8(bytes) ?: return null
             putCachedTile(key, decoded)
             decoded
         }
-        val px = ((longitude + 180.0) / 360.0 * scale - tileX) * image.width
-        val py = (
-            (1.0 - kotlin.math.ln(
-                kotlin.math.tan(Math.toRadians(latitude)) +
-                    1.0 / kotlin.math.cos(Math.toRadians(latitude)),
-            ) / Math.PI) / 2.0 * scale - tileY
-            ) * image.height
-        return sampleBilinear(image, px, py)
+        return sampleBilinear(image, fracX * image.width, fracY * image.height)
+    }
+
+    suspend fun getElevationsBatch(points: List<Pair<Double, Double>>): List<Double?> =
+        withContext(Dispatchers.IO) {
+            val results = arrayOfNulls<Double>(points.size)
+            val missing = LinkedHashMap<DemTileKey, MutableList<Int>>()
+            val fractionOf = HashMap<Int, Pair<Double, Double>>()
+            points.forEachIndexed { index, (latitude, longitude) ->
+                if (latitude < -85.05112878 || latitude > 85.05112878) return@forEachIndexed
+                val (key, fracX, fracY) = latLngToTileFraction(latitude, longitude, ZOOM)
+                fractionOf[index] = fracX to fracY
+                val cached = getCachedTile(key)
+                if (cached != null) {
+                    results[index] = sampleBilinear(cached, fracX * cached.width, fracY * cached.height)
+                } else {
+                    missing.getOrPut(key) { ArrayList() }.add(index)
+                }
+            }
+            for ((key, indices) in missing) {
+                val bytes = tiles.tileBytes(key.z, key.x, key.y) ?: continue
+                val image = decoder.decodeRgb8(bytes) ?: continue
+                putCachedTile(key, image)
+                for (index in indices) {
+                    val (fracX, fracY) = fractionOf[index] ?: continue
+                    results[index] = sampleBilinear(image, fracX * image.width, fracY * image.height)
+                }
+            }
+            results.toList()
+        }
+
+    fun latLngToTileFraction(latitude: Double, longitude: Double, zoom: Int): Triple<DemTileKey, Double, Double> {
+        val scale = (1 shl zoom).toDouble()
+        val exactX = (longitude + 180.0) / 360.0 * scale
+        val exactY = (1.0 - kotlin.math.ln(
+            kotlin.math.tan(Math.toRadians(latitude)) +
+                1.0 / kotlin.math.cos(Math.toRadians(latitude)),
+        ) / Math.PI) / 2.0 * scale
+        val key = DemTileKey(zoom, floor(exactX).toInt(), floor(exactY).toInt())
+        return Triple(key, exactX - floor(exactX), exactY - floor(exactY))
     }
 
     fun decodeElevation(red: Int, green: Int, blue: Int): Double {
