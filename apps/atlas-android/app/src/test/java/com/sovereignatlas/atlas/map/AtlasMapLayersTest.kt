@@ -7,7 +7,7 @@ package com.sovereignatlas.atlas.map
 
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
-import com.sovereignatlas.atlas.geo.AtlasBoundingBox
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.track.trackGeometryJson
 import org.junit.Assert.assertEquals

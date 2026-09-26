@@ -9,6 +9,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -70,11 +71,10 @@ import com.sovereignatlas.atlas.geo.LoSMode
 import com.sovereignatlas.atlas.geo.LoSRequest
 import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
-import com.sovereignatlas.atlas.core.BoundingBox
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasAngles
-import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.MgrsEngine
@@ -218,11 +218,11 @@ fun AtlasMapScreen(
     val refreshMgrsGrid: (MapLibreMap) -> Unit = { map ->
         mapScope.launch {
             val bounds = map.projection.visibleRegion.latLngBounds
-            val box = BoundingBox(
-                minLat = bounds.latitudeSouth,
-                minLon = bounds.longitudeWest,
-                maxLat = bounds.latitudeNorth,
-                maxLon = bounds.longitudeEast,
+            val box = AtlasBoundingBox(
+                south = bounds.latitudeSouth,
+                west = bounds.longitudeWest,
+                north = bounds.latitudeNorth,
+                east = bounds.longitudeEast,
             )
             val grid = withContext(Dispatchers.IO) {
                 MgrsEngine.generate(box, map.cameraPosition.zoom)
@@ -274,7 +274,7 @@ fun AtlasMapScreen(
         }
         installAtlasLayers(style)
         ensureWaypointIcon(style)
-        ensureUserPuck(style)
+        ensureGpsPuck(style, context)
         ensureScrubIcon(style)
         pushScrubPoint(style, services.scrubState.activePoint.value)
         if (showMgrsGrid.value) {
@@ -1182,19 +1182,13 @@ fun ensureWaypointIcon(style: Style) {
     }
 }
 
-private val userPuckBitmap: Bitmap by lazy {
-    // Non-directional circular dot. Heading display intentionally removed
-    // with the invalid SDF rotation; a true SDF asset restores it later.
-    val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GREEN }
-    canvas.drawCircle(12f, 12f, 12f, paint)
-    bitmap
-}
-
-fun ensureUserPuck(style: Style) {
-    if (style.getImage("user-puck") == null) {
-        style.addImage("user-puck", userPuckBitmap)
+fun ensureGpsPuck(style: Style, context: Context) {
+    if (style.getImage("gps-puck-icon") == null) {
+        val bitmap = BitmapFactory.decodeResource(
+            context.resources,
+            com.sovereignatlas.atlas.R.drawable.ic_gps_puck_sdf,
+        ) ?: return
+        style.addImage("gps-puck-icon", bitmap, true)
     }
 }
 

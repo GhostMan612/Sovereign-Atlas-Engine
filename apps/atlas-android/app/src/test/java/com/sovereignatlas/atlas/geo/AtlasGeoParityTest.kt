@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.geo
 
 import com.sovereignatlas.atlas.parity.GoldenHarness
 import com.sovereignatlas.atlas.parity.JsonValue
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

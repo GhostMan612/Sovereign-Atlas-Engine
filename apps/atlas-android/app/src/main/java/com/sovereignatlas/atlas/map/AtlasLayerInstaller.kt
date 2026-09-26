@@ -134,8 +134,11 @@ fun installAtlasLayers(style: Style) {
     style.addLayer(
         SymbolLayer(AtlasLayerIds.POSITION_LAYER, AtlasLayerIds.POSITION_SOURCE)
             .withProperties(
-                PropertyFactory.iconImage("user-puck"),
+                PropertyFactory.iconImage("gps-puck-icon"),
                 PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconRotate(Expression.get("bearing")),
+                PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                PropertyFactory.iconColor("#39FF14"),
                 PropertyFactory.iconAllowOverlap(true),
             ),
     )

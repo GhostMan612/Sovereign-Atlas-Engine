@@ -7,9 +7,9 @@ package com.sovereignatlas.atlas.map
 
 import android.util.Log
 import com.google.gson.JsonObject
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
-import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.AtlasRangeRings

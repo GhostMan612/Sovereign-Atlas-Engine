@@ -5,7 +5,7 @@
 
 package com.sovereignatlas.atlas.geo
 
-import com.sovereignatlas.atlas.core.BoundingBox
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import mil.nga.grid.features.Bounds
 import mil.nga.mgrs.grid.Grids
 import mil.nga.mgrs.gzd.GridZones
@@ -25,23 +25,19 @@ object MgrsEngine {
 
     // Tactical scope is UTM only: UPS polar regions (>84N, <80S) are
     // unhandled by this overlay configuration.
-    fun generate(boundingBox: BoundingBox, zoom: Double): MgrsGrid {
+    fun generate(boundingBox: AtlasBoundingBox, zoom: Double): MgrsGrid {
         val zoomInt = zoom.toInt()
         if (zoom >= SUPPRESS_ZOOM) return MgrsGrid(emptyList(), emptyList())
         val grids = Grids.create()
-        val zoomGrids = grids.getGrids(zoomInt)
+        val zoomGrids = grids.getGrids(zoomInt) ?: return MgrsGrid(emptyList(), emptyList())
         if (!zoomGrids.hasGrids()) return MgrsGrid(emptyList(), emptyList())
-        val ngaBounds = Bounds.degrees(
-            boundingBox.minLon,
-            boundingBox.minLat,
-            boundingBox.maxLon,
-            boundingBox.maxLat,
-        )
-        val gridRange = GridZones.getGridRange(ngaBounds)
         val domainLines = ArrayList<MgrsGridLine>()
         val domainLabels = ArrayList<MgrsGridLabel>()
-        for (zone in gridRange) {
-            for (grid in zoomGrids) {
+        for (part in boundingBox.unwrap()) {
+            val ngaBounds = Bounds.degrees(part.west, part.south, part.east, part.north)
+            val gridRange = GridZones.getGridRange(ngaBounds) ?: continue
+            for (zone in gridRange) {
+                for (grid in zoomGrids) {
                 val lines = grid.getLines(zoomInt, ngaBounds, zone) ?: emptyList()
                 for (line in lines) {
                     val p1 = line.point1
@@ -49,10 +45,14 @@ object MgrsEngine {
                     val utmStart = UTM.from(p1)
                     val utmEnd = UTM.from(p2)
                     if (utmStart.zone != utmEnd.zone) continue
-                    val lineLengthMeters = AtlasGeoMath.haversineKm(
-                        AtlasCoordinate(p1.latitude, p1.longitude),
-                        AtlasCoordinate(p2.latitude, p2.longitude),
-                    ) * 1000.0
+                    // UTM-space densification only: great-circle interpolation
+                    // must never replace this loop (see AtlasGeoMath).
+                    val lineLengthMeters = AtlasGeoMath.haversine(
+                        p1.latitude,
+                        p1.longitude,
+                        p2.latitude,
+                        p2.longitude,
+                    )
                     val densifyInterval = when {
                         lineLengthMeters > 50_000 -> 10_000.0
                         lineLengthMeters > 5_000 -> 1_000.0
@@ -87,6 +87,7 @@ object MgrsEngine {
                         domainLabels.clear()
                         break
                     }
+                }
                 }
             }
         }

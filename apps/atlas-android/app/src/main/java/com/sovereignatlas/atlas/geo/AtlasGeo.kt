@@ -109,6 +109,7 @@ object AtlasAngles {
 
 object AtlasGeoMath {
     const val REFERENCE_RADIUS_KM = 6371.0088
+    const val SPHERE_RADIUS_M = 6371000.0
 
     fun haversineKm(
         from: AtlasCoordinate,
@@ -172,6 +173,42 @@ object AtlasGeoMath {
             return "${(km * 1000).round()} M"
         }
         return "${"%.2f".format(java.util.Locale.US, km)} KM"
+    }
+
+    fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val p1 = Math.toRadians(lat1)
+        val p2 = Math.toRadians(lat2)
+        val dp = Math.toRadians(lat2 - lat1)
+        val dl = Math.toRadians(lon2 - lon1)
+        val h = sin(dp / 2).pow(2) + cos(p1) * cos(p2) * sin(dl / 2).pow(2)
+        return 2 * SPHERE_RADIUS_M * asin(sqrt(h))
+    }
+
+    /**
+     * Great-circle path interpolation.
+     * Do NOT use for MGRS grid line densification — MGRS requires UTM-space linear interpolation.
+     */
+    fun interpolateGreatCircle(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double,
+        fraction: Double,
+        totalMeters: Double,
+    ): Pair<Double, Double> {
+        if (totalMeters == 0.0) return lat1 to lon1
+        val p1 = Math.toRadians(lat1)
+        val l1 = Math.toRadians(lon1)
+        val p2 = Math.toRadians(lat2)
+        val l2 = Math.toRadians(lon2)
+        val delta = totalMeters / SPHERE_RADIUS_M
+        val a = sin((1 - fraction) * delta) / sin(delta)
+        val b = sin(fraction * delta) / sin(delta)
+        val x = a * cos(p1) * cos(l1) + b * cos(p2) * cos(l2)
+        val y = a * cos(p1) * sin(l1) + b * cos(p2) * sin(l2)
+        val z = a * sin(p1) + b * sin(p2)
+        return Math.toDegrees(atan2(z, sqrt(x * x + y * y))) to
+            Math.toDegrees(atan2(y, x))
     }
 
     fun formatBearing(degrees: Double): String {

@@ -5,17 +5,17 @@
 
 package com.sovereignatlas.atlas.geo
 
-import com.sovereignatlas.atlas.core.BoundingBox
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 final class MgrsEngineTest {
-    private val straddle = BoundingBox(
-        minLat = 51.4,
-        minLon = 5.9,
-        maxLat = 51.6,
-        maxLon = 6.1,
+    private val straddle = AtlasBoundingBox(
+        south = 51.4,
+        west = 5.9,
+        north = 51.6,
+        east = 6.1,
     )
 
     @Test

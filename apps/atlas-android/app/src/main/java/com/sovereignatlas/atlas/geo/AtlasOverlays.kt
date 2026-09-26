@@ -5,73 +5,12 @@
 
 package com.sovereignatlas.atlas.geo
 
-import com.sovereignatlas.atlas.core.AtlasContractException
-import com.sovereignatlas.atlas.core.AtlasRejection
-import com.sovereignatlas.atlas.core.AtlasValidation
+import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
-
-data class AtlasBoundingBox(
-    val south: Double,
-    val west: Double,
-    val north: Double,
-    val east: Double,
-) {
-    fun validate(): AtlasValidation {
-        for (edge in listOf(south, west, north, east)) {
-            if (!edge.isFinite()) {
-                return AtlasValidation.invalid(
-                    AtlasRejection("NON_FINITE", "Bounds edges must be finite."),
-                )
-            }
-        }
-        if (south < -90.0 || south > 90.0 || north < -90.0 || north > 90.0) {
-            return AtlasValidation.invalid(
-                AtlasRejection(
-                    "OUT_OF_RANGE",
-                    "Bounds latitudes must be within [-90, 90].",
-                ),
-            )
-        }
-        if (west < -180.0 || west > 180.0 || east < -180.0 || east > 180.0) {
-            return AtlasValidation.invalid(
-                AtlasRejection(
-                    "OUT_OF_RANGE",
-                    "Bounds longitudes must be within [-180, 180] (DEC-004).",
-                ),
-            )
-        }
-        if (south > north) {
-            return AtlasValidation.invalid(
-                AtlasRejection(
-                    "INVALID_GEOMETRY",
-                    "Bounds require south <= north.",
-                ),
-            )
-        }
-        return AtlasValidation.valid()
-    }
-
-    val crossesAntimeridian: Boolean get() = west > east
-
-    fun contains(point: AtlasCoordinate): Boolean {
-        if (crossesAntimeridian) {
-            throw AtlasContractException(
-                AtlasRejection(
-                    "UNRESOLVED_ANTIMERIDIAN",
-                    "Containment for antimeridian-crossing boxes is undecided (DEC-005).",
-                ),
-            )
-        }
-        return point.latitude >= south &&
-            point.latitude <= north &&
-            point.longitude >= west &&
-            point.longitude <= east
-    }
-}
 
 data class AtlasGraticule(
     val meridians: List<Double>,
