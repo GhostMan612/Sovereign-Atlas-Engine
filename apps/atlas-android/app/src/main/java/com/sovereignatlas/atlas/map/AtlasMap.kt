@@ -93,6 +93,7 @@ import com.sovereignatlas.atlas.ui.TacticalCrosshair
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.track.TrackRecorder
+import com.sovereignatlas.atlas.track.ProfilePoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -239,6 +240,8 @@ fun AtlasMapScreen(
         installAtlasLayers(style)
         ensureWaypointIcon(style)
         ensureUserPuck(style)
+        ensureScrubIcon(style)
+        pushScrubPoint(style, services.scrubState.activePoint.value)
         applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
@@ -475,6 +478,13 @@ fun AtlasMapScreen(
                             AtlasLayerIds.TRACK_SOURCE,
                             mergedTrackFeatures(tracks, services.recorder),
                         )
+                    }
+                }
+            }
+            launch {
+                services.scrubState.activePoint.collect { point ->
+                    styleRef.value?.let { style ->
+                        pushScrubPoint(style, point)
                     }
                 }
             }
@@ -792,6 +802,8 @@ fun AtlasMapScreen(
         trackDetailId.value?.let { id ->
             TrackDetailDialog(
                 trackRepository = services.trackRepository,
+                scrubState = services.scrubState,
+                demEngine = DemSession.engine,
                 id = id,
                 onClose = { trackDetailId.value = null },
             )
@@ -1024,6 +1036,39 @@ fun ensureUserPuck(style: Style) {
     if (style.getImage("user-puck") == null) {
         style.addImage("user-puck", userPuckBitmap)
     }
+}
+
+private val scrubIconBitmap: Bitmap by lazy {
+    val bitmap = Bitmap.createBitmap(28, 28, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.GREEN
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+    }
+    canvas.drawCircle(14f, 14f, 11f, paint)
+    bitmap
+}
+
+fun ensureScrubIcon(style: Style) {
+    if (style.getImage("scrub-icon") == null) {
+        style.addImage("scrub-icon", scrubIconBitmap)
+    }
+}
+
+fun pushScrubPoint(style: Style, point: ProfilePoint?) {
+    val features = if (point == null) {
+        FeatureCollection.fromFeatures(emptyList())
+    } else {
+        FeatureCollection.fromFeatures(
+            listOf(
+                Feature.fromGeometry(
+                    Point.fromLngLat(point.longitude, point.latitude),
+                ),
+            ),
+        )
+    }
+    pushFeatures(style, AtlasLayerIds.SCRUB_SOURCE, features)
 }
 
 fun mergedTrackFeatures(

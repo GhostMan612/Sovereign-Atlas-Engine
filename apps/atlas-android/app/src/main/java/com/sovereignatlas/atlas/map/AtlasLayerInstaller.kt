@@ -11,6 +11,7 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.FeatureCollection
 
@@ -19,6 +20,8 @@ object AtlasLayerIds {
     const val WAYPOINTS_LAYER = "atlas-waypoints-layer"
     const val TRACK_SOURCE = "atlas-track"
     const val TRACK_LAYER = "atlas-track-layer"
+    const val SCRUB_SOURCE = "atlas-scrub"
+    const val SCRUB_LAYER = "atlas-scrub-layer"
     const val MEASURE_SOURCE = "atlas-measure"
     const val MEASURE_LAYER = "atlas-measure-layer"
     const val MEASURE_DOTS_SOURCE = "atlas-measure-dots"
@@ -38,6 +41,12 @@ object AtlasLayerIds {
 fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.WAYPOINTS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.TRACK_SOURCE))
+    style.addSource(
+        GeoJsonSource(
+            AtlasLayerIds.SCRUB_SOURCE,
+            GeoJsonOptions().withSynchronousUpdate(true),
+        ),
+    )
     style.addSource(GeoJsonSource(AtlasLayerIds.MEASURE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MEASURE_DOTS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GRATICULE_SOURCE))
@@ -63,6 +72,14 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.lineColor("#39FF14"),
                 PropertyFactory.lineWidth(4.0f),
                 PropertyFactory.lineOpacity(0.9f),
+            ),
+    )
+    style.addLayer(
+        SymbolLayer(AtlasLayerIds.SCRUB_LAYER, AtlasLayerIds.SCRUB_SOURCE)
+            .withProperties(
+                PropertyFactory.iconImage("scrub-icon"),
+                PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconAllowOverlap(true),
             ),
     )
     style.addLayer(

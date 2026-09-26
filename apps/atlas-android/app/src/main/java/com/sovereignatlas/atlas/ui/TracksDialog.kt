@@ -28,11 +28,13 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -43,8 +45,12 @@ import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.location.LocationService
+import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.track.TrackRepository
+import com.sovereignatlas.atlas.track.TrackProfile
+import com.sovereignatlas.atlas.track.TrackProfileGenerator
 import com.sovereignatlas.atlas.track.TrackRecorder
+import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.track.exportAllGpx
 import com.sovereignatlas.atlas.track.formatTrackDistance
 import com.sovereignatlas.atlas.track.formatTrackStart
@@ -56,8 +62,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private fun hasNotificationPermission(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < 33) return true
@@ -263,6 +271,8 @@ fun TracksDialog(
 @Composable
 fun TrackDetailDialog(
     trackRepository: TrackRepository,
+    scrubState: TrackScrubState,
+    demEngine: DemEngine?,
     id: String,
     onClose: () -> Unit,
 ) {
@@ -282,6 +292,15 @@ fun TrackDetailDialog(
         return
     }
     val points = trackPointCount(record.geometry)
+    var profile by remember(id) { mutableStateOf<TrackProfile?>(null) }
+    var profileMissing by remember(id) { mutableStateOf(false) }
+    LaunchedEffect(id) {
+        val result = withContext(Dispatchers.IO) {
+            TrackProfileGenerator.generate(record, demEngine)
+        }
+        profile = result
+        profileMissing = result == null
+    }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(record.name.ifEmpty { record.id }) },
@@ -292,6 +311,12 @@ fun TrackDetailDialog(
                     "Distance: ${formatTrackDistance(record.distance_meters)}",
                 )
                 Text("Started: ${formatTrackStart(record.timestamp)}")
+                val current = profile
+                if (current != null) {
+                    TrackProfileChart(profile = current, scrubState = scrubState)
+                } else if (profileMissing) {
+                    Text("No elevation data")
+                }
             }
         },
         confirmButton = {
