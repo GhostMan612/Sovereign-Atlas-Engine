@@ -10,6 +10,7 @@ import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.ImageDecoder
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
@@ -39,4 +40,5 @@ class AtlasServices(
     val imageDecoder: ImageDecoder,
     val scrubState: TrackScrubState,
     val losState: LoSState,
+    val routing: RoutingState,
 )

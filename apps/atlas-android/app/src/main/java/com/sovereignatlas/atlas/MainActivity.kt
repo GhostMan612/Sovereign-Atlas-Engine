@@ -18,6 +18,7 @@ import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.goto.GoToState
@@ -104,6 +105,7 @@ final class MainActivity : ComponentActivity() {
             imageDecoder = AndroidImageDecoder(),
             scrubState = TrackScrubState(),
             losState = LoSState(),
+            routing = RoutingState(),
         )
     }
 

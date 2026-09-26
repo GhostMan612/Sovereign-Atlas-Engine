@@ -62,8 +62,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import com.sovereignatlas.atlas.AtlasServices
+import com.sovereignatlas.atlas.android.AndroidRoutingLoader
 import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.SqliteDemTileStore
+import com.sovereignatlas.atlas.geo.routing.LoadProfile
+import com.sovereignatlas.atlas.geo.routing.RoutingRequest
+import com.sovereignatlas.atlas.geo.routing.RoutingResult
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.geo.GeoPoint
@@ -277,6 +281,7 @@ fun AtlasMapScreen(
         ensureGpsPuck(style, context)
         ensureScrubIcon(style)
         pushScrubPoint(style, services.scrubState.activePoint.value)
+        pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
             pushFeatures(style, AtlasLayerIds.MGRS_LINE_SOURCE, mgrsLinesToFeatures(cached.lines))
@@ -499,6 +504,15 @@ fun AtlasMapScreen(
         val onGoTo: () -> Unit = {
             goToTick.value += 1
             styleRef.value?.let { style -> pushGoTo(style, services) }
+            val target = services.goTo.targetOrNull()
+            val fix = usableFixOf(services)
+            if (target != null && fix != null) {
+                mapScope.launch {
+                    refreshFootRoute(services, context, fix.latitude, fix.longitude)
+                }
+            } else {
+                services.routing.setResult(null)
+            }
         }
         val onOffline: () -> Unit = {
             offlineTick.value += 1
@@ -561,6 +575,13 @@ fun AtlasMapScreen(
                 services.scrubState.activePoint.collect { point ->
                     styleRef.value?.let { style ->
                         pushScrubPoint(style, point)
+                    }
+                }
+            }
+            launch {
+                services.routing.result.collect { result ->
+                    styleRef.value?.let { style ->
+                        pushRouteResult(style, result)
                     }
                 }
             }
@@ -1223,6 +1244,49 @@ fun pushScrubPoint(style: Style, point: ProfilePoint?) {
         )
     }
     pushFeatures(style, AtlasLayerIds.SCRUB_SOURCE, features)
+}
+
+suspend fun refreshFootRoute(
+    services: AtlasServices,
+    context: Context,
+    fromLat: Double,
+    fromLng: Double,
+) {
+    val target = services.goTo.targetOrNull()
+    if (target == null) {
+        services.routing.setResult(null)
+        return
+    }
+    val engine = services.routing.ensureEngine {
+        AndroidRoutingLoader.load(context.applicationContext)
+    } ?: return
+    val startId = engine.nearestNodeId(fromLat, fromLng) ?: return
+    val endId = engine.nearestNodeId(target.latitude, target.longitude) ?: return
+    // PATROL is the default foot profile; a selector is follow-up UI.
+    val result = engine.route(RoutingRequest(startId, endId, LoadProfile.PATROL))
+    services.routing.setResult(result)
+}
+
+fun pushRouteResult(style: Style, result: RoutingResult?) {
+    pushFeatures(
+        style,
+        AtlasLayerIds.ROUTE_SOURCE,
+        if (result == null || result.path.size < 2) {
+            FeatureCollection.fromFeatures(emptyList())
+        } else {
+            FeatureCollection.fromFeatures(
+                listOf(
+                    Feature.fromGeometry(
+                        LineString.fromLngLats(
+                            result.path.map { node ->
+                                Point.fromLngLat(node.longitude, node.latitude)
+                            },
+                        ),
+                    ),
+                ),
+            )
+        },
+    )
 }
 
 suspend fun runLosCalculation(services: AtlasServices) {

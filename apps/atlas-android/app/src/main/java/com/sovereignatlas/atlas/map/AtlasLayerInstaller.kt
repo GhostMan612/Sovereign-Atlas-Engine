@@ -41,6 +41,8 @@ object AtlasLayerIds {
     const val MGRS_LINE_LAYER = "atlas-mgrs-lines-layer"
     const val MGRS_LABEL_SOURCE = "atlas-mgrs-labels"
     const val MGRS_LABEL_LAYER = "atlas-mgrs-labels-layer"
+    const val ROUTE_SOURCE = "atlas-tactical-route"
+    const val ROUTE_LAYER = "atlas-tactical-route-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -69,6 +71,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LINE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LABEL_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.ROUTE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
@@ -173,6 +176,15 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.textColor("#9AA89A"),
                 PropertyFactory.textAllowOverlap(false),
                 PropertyFactory.textIgnorePlacement(false),
+            ),
+        AtlasLayerIds.WAYPOINTS_LAYER,
+    )
+    style.addLayerBelow(
+        LineLayer(AtlasLayerIds.ROUTE_LAYER, AtlasLayerIds.ROUTE_SOURCE)
+            .withProperties(
+                PropertyFactory.lineColor("#39FF14"),
+                PropertyFactory.lineWidth(4.0f),
+                PropertyFactory.lineOpacity(0.8f),
             ),
         AtlasLayerIds.WAYPOINTS_LAYER,
     )
