@@ -6,6 +6,8 @@
 package com.sovereignatlas.atlas.map
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -57,7 +59,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import com.sovereignatlas.atlas.AtlasServices
+import com.sovereignatlas.atlas.android.DemSession
+import com.sovereignatlas.atlas.android.SqliteDemTileStore
 import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasAngles
@@ -68,6 +73,7 @@ import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
+import com.sovereignatlas.atlas.offline.DemTileStore
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.tactical.RadialFence
@@ -143,6 +149,41 @@ fun AtlasMapScreen(
     val showSettings = remember { mutableStateOf(false) }
     val cartoKey by services.keys.cartoKey.collectAsState()
     val activeOfflineMap by services.maps.activeMap.collectAsState()
+    val activeDem by services.maps.activeDem.collectAsState()
+    val demStoreState = remember { mutableStateOf<DemTileStore?>(null) }
+    val demDbState = remember { mutableStateOf<SQLiteDatabase?>(null) }
+    LaunchedEffect(activeDem) {
+        demDbState.value?.let { db ->
+            try {
+                db.close()
+            } catch (error: Exception) {
+                Unit
+            }
+            demDbState.value = null
+        }
+        DemSession.engine = null
+        DemSession.store = null
+        services.tiles.demStore = null
+        demStoreState.value = null
+        val dem = activeDem
+        if (dem != null) {
+            try {
+                val db = SQLiteDatabase.openDatabase(
+                    dem.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READONLY,
+                )
+                val store = SqliteDemTileStore(db)
+                demDbState.value = db
+                demStoreState.value = store
+                DemSession.store = store
+                DemSession.engine = DemEngine(store, services.imageDecoder)
+                services.tiles.demStore = store
+            } catch (error: SQLiteException) {
+                Log.w("AtlasMap", "DEM open failed: ${dem.name}", error)
+            }
+        }
+    }
     val fence = remember { mutableStateOf<RadialFence?>(null) }
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
@@ -521,11 +562,20 @@ fun AtlasMapScreen(
     // bundled template over the native mbtiles:// protocol, then re-installs
     // the atlas layers. Deselecting falls back to the online base WITHOUT a
     // full setStyle, preserving camera and overlays.
-    LaunchedEffect(activeOfflineMap, mapRef.value) {
+    LaunchedEffect(activeOfflineMap, demStoreState.value, mapRef.value) {
         val map = mapRef.value
         if (activeOfflineMap != null && map != null) {
             hadOfflineMap.value = true
-            val json = buildMbtilesStyleJson(context, activeOfflineMap!!.absolutePath)
+            val demUrl = if (demStoreState.value != null) {
+                services.tiles.demTileUrl()
+            } else {
+                null
+            }
+            val json = buildMbtilesStyleJson(
+                context,
+                activeOfflineMap!!.absolutePath,
+                demUrl,
+            )
             map.setStyle(Style.Builder().fromJson(json)) { style ->
                 onStyleLoaded(style, map, false)
             }
@@ -895,8 +945,38 @@ private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
 }
 
 fun buildMbtilesStyleJson(context: Context, absolutePath: String): String {
+    return buildMbtilesStyleJson(context, absolutePath, null)
+}
+
+fun buildMbtilesStyleJson(
+    context: Context,
+    absolutePath: String,
+    demTileUrl: String?,
+): String {
     val template = context.assets.open("offline_style.json").bufferedReader().use { it.readText() }
-    return template.replace("___FILE_URI___", "mbtiles://file://$absolutePath")
+    var json = template.replace("___FILE_URI___", "mbtiles://file://$absolutePath")
+    if (demTileUrl != null) {
+        json = json.replace(
+            "\"atlas-offline\": {",
+            "\"dem-source\": {\n" +
+                "      \"type\": \"raster-dem\",\n" +
+                "      \"encoding\": \"mapbox\",\n" +
+                "      \"tiles\": [\"$demTileUrl\"],\n" +
+                "      \"tileSize\": 256\n" +
+                "    },\n" +
+                "    \"atlas-offline\": {",
+        )
+        json = json.replace(
+            "\"id\": \"water\",",
+            "\"id\": \"hillshade-layer\",\n" +
+                "      \"type\": \"hillshade\",\n" +
+                "      \"source\": \"dem-source\"\n" +
+                "    },\n" +
+                "    {\n" +
+                "      \"id\": \"water\",",
+        )
+    }
+    return json
 }
 
 fun applyCameraIntent(map: MapLibreMap, intent: AtlasCameraState) {    map.moveCamera(
@@ -931,23 +1011,18 @@ fun ensureWaypointIcon(style: Style) {
 }
 
 private val userPuckBitmap: Bitmap by lazy {
-    val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+    // Non-directional circular dot. Heading display intentionally removed
+    // with the invalid SDF rotation; a true SDF asset restores it later.
+    val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GREEN }
-    val path = android.graphics.Path().apply {
-        moveTo(16f, 2f)
-        lineTo(27f, 25f)
-        lineTo(16f, 19f)
-        lineTo(5f, 25f)
-        close()
-    }
-    canvas.drawPath(path, paint)
+    canvas.drawCircle(12f, 12f, 12f, paint)
     bitmap
 }
 
 fun ensureUserPuck(style: Style) {
     if (style.getImage("user-puck") == null) {
-        style.addImage("user-puck", userPuckBitmap, true)
+        style.addImage("user-puck", userPuckBitmap)
     }
 }
 

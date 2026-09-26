@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.track.TrackRepository
@@ -98,6 +99,7 @@ final class MainActivity : ComponentActivity() {
             database = atlasDatabase,
             waypointRepository = WaypointRepository(atlasDatabase),
             trackRepository = TrackRepository(atlasDatabase),
+            imageDecoder = AndroidImageDecoder(),
         )
     }
 

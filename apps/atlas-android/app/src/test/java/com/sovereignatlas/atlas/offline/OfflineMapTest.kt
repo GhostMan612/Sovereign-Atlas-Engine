@@ -38,4 +38,27 @@ final class OfflineMapTest {
         )
         assertEquals(map, map.copy())
     }
+
+    @Test
+    fun kindDefaultsToVector() {
+        val map = OfflineMap(
+            name = "region.mbtiles",
+            absolutePath = "/data/region.mbtiles",
+            sizeBytes = 1024L,
+        )
+        assertEquals(OfflineMapKind.VECTOR, map.kind)
+    }
+
+    @Test
+    fun demKindCarriesTerrainFormat() {
+        val map = OfflineMap(
+            name = "alps_dem.mbtiles",
+            absolutePath = "/data/alps_dem.mbtiles",
+            sizeBytes = 2048L,
+            format = "png",
+            kind = OfflineMapKind.DEM,
+        )
+        assertEquals(OfflineMapKind.DEM, map.kind)
+        assertEquals("png", map.format)
+    }
 }

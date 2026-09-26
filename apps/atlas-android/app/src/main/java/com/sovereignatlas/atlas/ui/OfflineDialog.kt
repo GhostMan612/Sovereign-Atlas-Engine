@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.offline.DownloadResult
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.OfflineDownloader
+import com.sovereignatlas.atlas.offline.OfflineMapKind
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.offline.OfflinePackLifecycle
 import com.sovereignatlas.atlas.offline.OfflinePackRecord
@@ -359,6 +360,7 @@ private fun MapsTab(
     val scope = rememberCoroutineScope()
     val available by maps.availableMaps.collectAsState()
     val active by maps.activeMap.collectAsState()
+    val activeDem by maps.activeDem.collectAsState()
     LaunchedEffect(Unit) {
         maps.scanForMaps()
     }
@@ -371,18 +373,36 @@ private fun MapsTab(
     }
     LazyColumn {
         items(available, key = { it.absolutePath }) { map ->
+            val isDem = map.kind == OfflineMapKind.DEM
             ListItem(
                 headlineContent = { Text(map.name) },
                 supportingContent = {
                     Text(
                         android.text.format.Formatter.formatShortFileSize(context, map.sizeBytes) +
+                            (if (isDem) " • DEM relief" else "") +
                             if (map.absolutePath == active?.absolutePath) " • active" else "",
                     )
                 },
+                trailingContent = {
+                    if (isDem) {
+                        val demActive = map.absolutePath == activeDem?.absolutePath
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    maps.setActiveDem(if (demActive) null else map)
+                                }
+                            },
+                        ) {
+                            Text(if (demActive) "Relief on" else "Relief")
+                        }
+                    }
+                },
                 modifier = Modifier.clickable {
-                    scope.launch {
-                        maps.setActiveMap(map)
-                        onClose()
+                    if (!isDem) {
+                        scope.launch {
+                            maps.setActiveMap(map)
+                            onClose()
+                        }
                     }
                 },
             )

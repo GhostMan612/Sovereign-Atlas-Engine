@@ -124,4 +124,16 @@ final class TrackRepositoryTest {
             assertTrue(repository.bufferedPoints("sess-1").isEmpty())
         }
     }
+
+    @Test
+    fun bufferAltitudeUpdateLandsOnRow() {
+        runBlocking {
+            val repository = TrackRepository(database())
+            repository.insertBufferedPoint("sess-1", 0L, 45.0, -93.0, null, 1000L)
+            repository.updateBufferedAltitude(321.5, "sess-1", 0L)
+            val points = repository.bufferedPoints("sess-1")
+            assertEquals(1, points.size)
+            assertEquals(321.5, points[0].altitude!!, 0.0)
+        }
+    }
 }

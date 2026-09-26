@@ -10,6 +10,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.util.Log
 import com.sovereignatlas.atlas.offline.OfflineMap
+import com.sovereignatlas.atlas.offline.OfflineMapKind
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import java.io.File
 import java.io.FileInputStream
@@ -30,6 +31,9 @@ class AndroidOfflineMapRepository(
     private val _activeMap = MutableStateFlow<OfflineMap?>(null)
     override val activeMap: StateFlow<OfflineMap?> = _activeMap.asStateFlow()
 
+    private val _activeDem = MutableStateFlow<OfflineMap?>(null)
+    override val activeDem: StateFlow<OfflineMap?> = _activeDem.asStateFlow()
+
     override suspend fun scanForMaps() {
         val maps = withContext(ioDispatcher) {
             val dir = context.getExternalFilesDir("mbtiles") ?: return@withContext emptyList()
@@ -45,6 +49,11 @@ class AndroidOfflineMapRepository(
         _activeMap.value = map
     }
 
+    override suspend fun setActiveDem(map: OfflineMap?) {
+        if (map != null && map.kind != OfflineMapKind.DEM) return
+        _activeDem.value = map
+    }
+
     private fun validateMbtiles(file: File): OfflineMap? {
         val header = ByteArray(16)
         FileInputStream(file).use { it.read(header) }
@@ -58,7 +67,23 @@ class AndroidOfflineMapRepository(
                 SQLiteDatabase.OPEN_READONLY,
             )
             db.rawQuery("SELECT value FROM metadata WHERE name = 'format'", null).use { cursor ->
-                if (cursor.moveToFirst() && cursor.getString(0) == "pbf") {
+                if (!cursor.moveToFirst()) return null
+                val format = cursor.getString(0) ?: return null
+                if (file.name.endsWith("_dem.mbtiles", ignoreCase = true)) {
+                    if (file.name.contains("terrarium", ignoreCase = true)) {
+                        Log.w("OfflineRepo", "Terrarium encoding unsupported; Mapbox Terrain-RGB required.")
+                        return null
+                    }
+                    if (format != "png" && format != "webp") return null
+                    return OfflineMap(
+                        name = file.name,
+                        absolutePath = file.absolutePath,
+                        sizeBytes = file.length(),
+                        format = format,
+                        kind = OfflineMapKind.DEM,
+                    )
+                }
+                if (format == "pbf") {
                     return OfflineMap(
                         name = file.name,
                         absolutePath = file.absolutePath,

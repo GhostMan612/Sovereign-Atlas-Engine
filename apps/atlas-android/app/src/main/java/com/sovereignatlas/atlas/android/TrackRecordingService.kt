@@ -152,6 +152,17 @@ class TrackRecordingService : Service() {
                 altitude = if (location.hasAltitude()) location.altitude else null,
                 timestamp = time,
             )
+            // Non-blocking DEM profiling: never stalls the GPS listener.
+            // UPDATEs only match existing rows, so a stop-flush cannot orphan.
+            val engine = DemSession.engine
+            if (engine != null) {
+                scope.launch(Dispatchers.IO) {
+                    val elevation = engine.getElevation(location.latitude, location.longitude)
+                    if (elevation != null) {
+                        repo.updateBufferedAltitude(elevation, id, seq)
+                    }
+                }
+            }
         }
     }
 }

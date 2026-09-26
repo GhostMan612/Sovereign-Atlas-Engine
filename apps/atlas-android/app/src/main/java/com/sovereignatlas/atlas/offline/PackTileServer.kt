@@ -23,6 +23,11 @@ class PackTileServer(
     private var baseHits = 0L
     private var demHits = 0L
 
+    // MBTiles-backed DEM source, injected when a DEM map is activated.
+    // Takes precedence over the flat dem/ directory on the /dem/ route.
+    @Volatile
+    var demStore: DemTileStore? = null
+
     fun port(): Int = socket?.localPort ?: -1
 
     fun isRunning(): Boolean = running.get()
@@ -90,6 +95,19 @@ class PackTileServer(
                     writeStatus(output, "HTTP/1.1 404 Not Found")
                     return
                 }
+                if (route.bucket == TileBucket.DEM) {
+                    val store = demStore
+                    if (store != null) {
+                        val tile = demStoreTile(path, store)
+                        if (tile == null) {
+                            writeStatus(output, "HTTP/1.1 404 Not Found")
+                            return
+                        }
+                        demHits += 1
+                        writeTile(output, tile.first, tile.second)
+                        return
+                    }
+                }
                 val body = fileFor(path, route.bucket)
                 if (body == null || !body.isFile) {
                     writeStatus(output, "HTTP/1.1 404 Not Found")
@@ -137,6 +155,25 @@ class PackTileServer(
     private fun writeStatus(output: java.io.OutputStream, status: String) {
         val head = "$status\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         output.write(head.toByteArray(Charsets.US_ASCII))
+    }
+
+    private fun writeTile(output: java.io.OutputStream, bytes: ByteArray, mime: String) {
+        val head = "HTTP/1.1 200 OK\r\nContent-Type: $mime\r\n" +
+            "Content-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+        output.write(head.toByteArray(Charsets.US_ASCII))
+        output.write(bytes)
+    }
+
+    private fun demStoreTile(path: String, store: DemTileStore): Pair<ByteArray, String>? {
+        val parts = path.trimStart('/').split("/")
+        if (parts.size != 4) return null
+        val z = parts[1].toIntOrNull() ?: return null
+        val x = parts[2].toIntOrNull() ?: return null
+        val y = parts[3].removeSuffix(".png").toIntOrNull() ?: return null
+        if (!isTileRef(parts[1]) || !isTileRef(parts[2])) return null
+        val bytes = store.tileBytes(z, x, y) ?: return null
+        val mime = if (store.tileFormat() == "webp") "image/webp" else "image/png"
+        return bytes to mime
     }
 
     private fun fileFor(path: String, bucket: TileBucket): File? {

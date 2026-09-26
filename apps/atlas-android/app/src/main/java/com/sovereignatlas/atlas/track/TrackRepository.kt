@@ -63,4 +63,16 @@ class TrackRepository(
     suspend fun clearBufferedPoints(trackId: String) = withContext(ioDispatcher) {
         db.atlasQueries.clearTrackPoints(trackId)
     }
+
+    suspend fun updateBufferedAltitude(
+        altitude: Double,
+        trackId: String,
+        sequence: Long,
+    ) = withContext(ioDispatcher) {
+        db.atlasQueries.updateTrackPointAltitude(
+            altitude = altitude,
+            track_id = trackId,
+            sequence = sequence,
+        )
+    }
 }
