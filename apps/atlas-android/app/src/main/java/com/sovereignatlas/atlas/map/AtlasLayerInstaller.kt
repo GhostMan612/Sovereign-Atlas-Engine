@@ -6,6 +6,7 @@
 package com.sovereignatlas.atlas.map
 
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -36,6 +37,10 @@ object AtlasLayerIds {
     const val GOTO_LAYER = "atlas-goto-layer"
     const val FENCE_SOURCE = "atlas-fence"
     const val FENCE_LAYER = "atlas-fence-layer"
+    const val MGRS_LINE_SOURCE = "atlas-mgrs-lines"
+    const val MGRS_LINE_LAYER = "atlas-mgrs-lines-layer"
+    const val MGRS_LABEL_SOURCE = "atlas-mgrs-labels"
+    const val MGRS_LABEL_LAYER = "atlas-mgrs-labels-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -62,6 +67,8 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.POSITION_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GOTO_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LINE_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LABEL_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
@@ -145,6 +152,26 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.lineWidth(2.0f),
                 PropertyFactory.lineOpacity(0.9f),
             ),
+    )
+    style.addLayerBelow(
+        LineLayer(AtlasLayerIds.MGRS_LINE_LAYER, AtlasLayerIds.MGRS_LINE_SOURCE)
+            .withProperties(
+                PropertyFactory.lineColor("#7A8A7A"),
+                PropertyFactory.lineWidth(1.0f),
+                PropertyFactory.lineOpacity(0.7f),
+            ),
+        AtlasLayerIds.WAYPOINTS_LAYER,
+    )
+    style.addLayerBelow(
+        SymbolLayer(AtlasLayerIds.MGRS_LABEL_LAYER, AtlasLayerIds.MGRS_LABEL_SOURCE)
+            .withProperties(
+                PropertyFactory.textField(Expression.get("title")),
+                PropertyFactory.textSize(10.0f),
+                PropertyFactory.textColor("#9AA89A"),
+                PropertyFactory.textAllowOverlap(false),
+                PropertyFactory.textIgnorePlacement(false),
+            ),
+        AtlasLayerIds.WAYPOINTS_LAYER,
     )
     style.addLayer(
         SymbolLayer(AtlasLayerIds.LOS_OBSERVER_LAYER, AtlasLayerIds.LOS_OBSERVER_SOURCE)

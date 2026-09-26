@@ -13,6 +13,9 @@ import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.AtlasRangeRings
+import com.sovereignatlas.atlas.geo.MgrsGrid
+import com.sovereignatlas.atlas.geo.MgrsGridLabel
+import com.sovereignatlas.atlas.geo.MgrsGridLine
 import com.sovereignatlas.atlas.track.parseTrackGeometry
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -61,6 +64,33 @@ fun trackToFeature(track: Track): Feature? {
 
 fun tracksToFeatures(tracks: List<Track>): FeatureCollection {
     return FeatureCollection.fromFeatures(tracks.mapNotNull { trackToFeature(it) })
+}
+
+fun mgrsLinesToFeatures(lines: List<MgrsGridLine>): FeatureCollection {
+    return FeatureCollection.fromFeatures(
+        lines.map { line ->
+            Feature.fromGeometry(
+                LineString.fromLngLats(
+                    line.coordinates.map { (latitude, longitude) ->
+                        Point.fromLngLat(longitude, latitude)
+                    },
+                ),
+            )
+        },
+    )
+}
+
+fun mgrsLabelsToFeatures(labels: List<MgrsGridLabel>): FeatureCollection {
+    return FeatureCollection.fromFeatures(
+        labels.map { label ->
+            val properties = JsonObject()
+            properties.addProperty("title", label.text)
+            Feature.fromGeometry(
+                Point.fromLngLat(label.longitude, label.latitude),
+                properties,
+            )
+        },
+    )
 }
 
 fun measureToFeatures(a: AtlasCoordinate, b: AtlasCoordinate): FeatureCollection {

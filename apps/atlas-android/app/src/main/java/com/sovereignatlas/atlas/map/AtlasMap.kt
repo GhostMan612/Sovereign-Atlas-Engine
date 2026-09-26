@@ -39,10 +39,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -68,12 +70,15 @@ import com.sovereignatlas.atlas.geo.LoSMode
 import com.sovereignatlas.atlas.geo.LoSRequest
 import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
+import com.sovereignatlas.atlas.core.BoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasAngles
 import com.sovereignatlas.atlas.geo.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
+import com.sovereignatlas.atlas.geo.MgrsEngine
+import com.sovereignatlas.atlas.geo.MgrsGrid
 import com.sovereignatlas.atlas.goto.goToCameraIntent
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.measure.MeasureSnapshot
@@ -198,6 +203,8 @@ fun AtlasMapScreen(
     val baseProviderId = remember { mutableStateOf("osm-standard") }
     val basePackId = remember { mutableStateOf<String?>(null) }
     val showGraticule = remember { mutableStateOf(false) }
+    val showMgrsGrid = remember { mutableStateOf(false) }
+    val mgrsCache = remember { mutableStateOf(MgrsGrid(emptyList(), emptyList())) }
     val showRings = remember { mutableStateOf(false) }
     val showWaypointsLayer = remember { mutableStateOf(true) }
     val showTrackLayer = remember { mutableStateOf(true) }
@@ -208,6 +215,25 @@ fun AtlasMapScreen(
     val positionTick = remember { mutableStateOf(0) }
     val view = LocalView.current
     val mapScope = rememberCoroutineScope()
+    val refreshMgrsGrid: (MapLibreMap) -> Unit = { map ->
+        mapScope.launch {
+            val bounds = map.projection.visibleRegion.latLngBounds
+            val box = BoundingBox(
+                minLat = bounds.latitudeSouth,
+                minLon = bounds.longitudeWest,
+                maxLat = bounds.latitudeNorth,
+                maxLon = bounds.longitudeEast,
+            )
+            val grid = withContext(Dispatchers.IO) {
+                MgrsEngine.generate(box, map.cameraPosition.zoom)
+            }
+            mgrsCache.value = grid
+            styleRef.value?.let { style ->
+                pushFeatures(style, AtlasLayerIds.MGRS_LINE_SOURCE, mgrsLinesToFeatures(grid.lines))
+                pushFeatures(style, AtlasLayerIds.MGRS_LABEL_SOURCE, mgrsLabelsToFeatures(grid.labels))
+            }
+        }
+    }
     val onHaptic: () -> Unit = {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
@@ -251,13 +277,18 @@ fun AtlasMapScreen(
         ensureUserPuck(style)
         ensureScrubIcon(style)
         pushScrubPoint(style, services.scrubState.activePoint.value)
+        if (showMgrsGrid.value) {
+            val cached = mgrsCache.value
+            pushFeatures(style, AtlasLayerIds.MGRS_LINE_SOURCE, mgrsLinesToFeatures(cached.lines))
+            pushFeatures(style, AtlasLayerIds.MGRS_LABEL_SOURCE, mgrsLabelsToFeatures(cached.labels))
+        }
         pushLosState(
             style,
             services.losState.observer.value,
             services.losState.target.value,
             services.losState.result.value,
         )
-        applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
+        applyOverlayVisibility(style, showGraticule.value, showMgrsGrid.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
             style,
@@ -386,6 +417,7 @@ fun AtlasMapScreen(
                         bearing = map.cameraPosition.bearing,
                         isIdle = true,
                     )
+                    if (showMgrsGrid.value) refreshMgrsGrid(map)
                     styleRef.value?.let { style ->
                         if (showGraticule.value) pushGraticule(map, style)
                     }
@@ -974,6 +1006,17 @@ fun AtlasMapScreen(
                         if (visible && map != null) pushGraticule(map, style)
                     }
                 },
+                showMgrsGrid = showMgrsGrid.value,
+                onMgrsGridChanged = { visible ->
+                    showMgrsGrid.value = visible
+                    styleRef.value?.let { style ->
+                        setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LINE_LAYER, visible)
+                        setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LABEL_LAYER, visible)
+                        if (visible) {
+                            mapRef.value?.let { map -> refreshMgrsGrid(map) }
+                        }
+                    }
+                },
                 showRings = showRings.value,
                 onRingsChanged = { visible ->
                     showRings.value = visible
@@ -1414,12 +1457,15 @@ fun pushGraticule(map: MapLibreMap, style: Style) {
 fun applyOverlayVisibility(
     style: Style,
     showGraticule: Boolean,
+    showMgrsGrid: Boolean,
     showRings: Boolean,
     showWaypoints: Boolean,
     showTrack: Boolean,
     showMeasure: Boolean,
 ) {
     setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, showGraticule)
+    setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LINE_LAYER, showMgrsGrid)
+    setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LABEL_LAYER, showMgrsGrid)
     setAtlasLayerVisible(style, AtlasLayerIds.RINGS_LAYER, showRings)
     setAtlasLayerVisible(style, AtlasLayerIds.WAYPOINTS_LAYER, showWaypoints)
     setAtlasLayerVisible(style, AtlasLayerIds.TRACK_LAYER, showTrack)

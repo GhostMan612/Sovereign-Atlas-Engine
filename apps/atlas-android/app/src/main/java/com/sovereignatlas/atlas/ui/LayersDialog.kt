@@ -27,6 +27,8 @@ fun LayersDialog(
     onProviderSelected: (String) -> Unit,
     showGraticule: Boolean,
     onGraticuleChanged: (Boolean) -> Unit,
+    showMgrsGrid: Boolean,
+    onMgrsGridChanged: (Boolean) -> Unit,
     showRings: Boolean,
     onRingsChanged: (Boolean) -> Unit,
     showWaypoints: Boolean,
@@ -60,6 +62,7 @@ fun LayersDialog(
                 }
                 for (row in listOf(
                     "Graticule" to (showGraticule to onGraticuleChanged),
+                    "MGRS grid" to (showMgrsGrid to onMgrsGridChanged),
                     "Range rings" to (showRings to onRingsChanged),
                     "Waypoints" to (showWaypoints to onWaypointsChanged),
                     "Track" to (showTrack to onTrackChanged),
