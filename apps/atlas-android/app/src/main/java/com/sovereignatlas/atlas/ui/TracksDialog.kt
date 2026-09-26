@@ -5,6 +5,15 @@
 
 package com.sovereignatlas.atlas.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,11 +34,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.sovereignatlas.atlas.android.TrackRecordingService
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.location.AtlasLocationStatus
+import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackRecorder
 import com.sovereignatlas.atlas.track.exportAllGpx
@@ -46,18 +59,34 @@ import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private fun hasNotificationPermission(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < 33) return true
+    return context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+}
+
+private fun isBatteryUnrestricted(context: Context): Boolean {
+    val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return power.isIgnoringBatteryOptimizations(context.packageName)
+}
+
 @Composable
 fun TracksDialog(
     trackRepository: TrackRepository,
     waypointRepository: WaypointRepository,
     recorder: TrackRecorder,
+    locationService: LocationService,
     exportDir: File,
     onOpenDetail: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val records by trackRepository.tracks.collectAsState(initial = emptyList())
     val message = remember { mutableStateOf("") }
+    val batteryRestricted = remember(recorder.isRecording()) {
+        !isBatteryUnrestricted(context)
+    }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Tracks") },
@@ -65,7 +94,35 @@ fun TracksDialog(
             Column {
                 if (!recorder.isRecording()) {
                     Button(
-                        onClick = { recorder.start() },
+                        onClick = {
+                            when (locationService.status()) {
+                                AtlasLocationStatus.valid,
+                                AtlasLocationStatus.acquiring,
+                                AtlasLocationStatus.stale -> {
+                                    if (!hasNotificationPermission(context)) {
+                                        (context as? Activity)?.requestPermissions(
+                                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                                            7002,
+                                        )
+                                        message.value = "Notifications denied: " +
+                                            "recording continues without a visible notification."
+                                    }
+                                    context.startForegroundService(
+                                        Intent(context, TrackRecordingService::class.java),
+                                    )
+                                    recorder.start()
+                                }
+                                AtlasLocationStatus.permanentlyDenied -> {
+                                    message.value = "Location permanently denied: " +
+                                        "enable it in system settings."
+                                }
+                                else -> {
+                                    locationService.requestPermission()
+                                    message.value = "Location permission requested: " +
+                                        "tap Start again after granting."
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .padding(16.dp)
                             .testTag("track-start"),
@@ -82,16 +139,34 @@ fun TracksDialog(
                         Button(
                             onClick = {
                                 val fixes = recorder.stop()
-                                if (fixes.size >= 2) {
-                                    val coords = fixes.map { fix ->
-                                        AtlasCoordinate(
-                                            latitude = fix.position.latitude,
-                                            longitude = fix.position.longitude,
-                                        )
+                                context.stopService(
+                                    Intent(context, TrackRecordingService::class.java),
+                                )
+                                val sessionId = TrackRecordingService.currentTrackId
+                                scope.launch {
+                                    // Durable buffer first (survives backgrounding);
+                                    // in-memory fixes are the fallback.
+                                    val buffered = sessionId?.let { id ->
+                                        trackRepository.bufferedPoints(id)
+                                    } ?: emptyList()
+                                    val coords = if (buffered.size >= 2) {
+                                        buffered.map { point ->
+                                            AtlasCoordinate(
+                                                latitude = point.latitude,
+                                                longitude = point.longitude,
+                                            )
+                                        }
+                                    } else {
+                                        fixes.map { fix ->
+                                            AtlasCoordinate(
+                                                latitude = fix.position.latitude,
+                                                longitude = fix.position.longitude,
+                                            )
+                                        }
                                     }
-                                    val stamp = SimpleDateFormat("HHmmss", Locale.US)
-                                        .format(Date())
-                                    scope.launch {
+                                    if (coords.size >= 2) {
+                                        val stamp = SimpleDateFormat("HHmmss", Locale.US)
+                                            .format(Date())
                                         trackRepository.saveTrack(
                                             Track(
                                                 id = UUID.randomUUID().toString(),
@@ -102,11 +177,28 @@ fun TracksDialog(
                                             ),
                                         )
                                     }
+                                    sessionId?.let { id ->
+                                        trackRepository.clearBufferedPoints(id)
+                                    }
                                 }
                             },
                             modifier = Modifier.testTag("track-stop"),
                         ) {
                             Text("Stop")
+                        }
+                    }
+                    if (batteryRestricted) {
+                        TextButton(
+                            onClick = {
+                                (context as? Activity)?.startActivity(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                        Uri.fromParts("package", context.packageName, null),
+                                    ),
+                                )
+                            },
+                        ) {
+                            Text("Allow unrestricted battery use")
                         }
                     }
                 }

@@ -72,6 +72,9 @@ final class MainActivity : ComponentActivity() {
         AndroidSqliteDriver(AtlasDatabase.Schema, applicationContext, "atlas.db")
     }
     private val atlasDatabase by lazy {
+        // Idempotent (IF NOT EXISTS): backfills tables such as the track
+        // buffer on installs that predate them.
+        AtlasDatabase.Schema.create(sqlDriver)
         AtlasDatabase(sqlDriver)
     }
 

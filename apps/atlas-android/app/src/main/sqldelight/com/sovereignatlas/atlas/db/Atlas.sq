@@ -1,4 +1,4 @@
-CREATE TABLE Waypoint (
+CREATE TABLE IF NOT EXISTS Waypoint (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
     latitude REAL NOT NULL,
@@ -17,7 +17,7 @@ VALUES (?, ?, ?, ?, ?, ?);
 deleteWaypoint:
 DELETE FROM Waypoint WHERE id = ?;
 
-CREATE TABLE Track (
+CREATE TABLE IF NOT EXISTS Track (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
@@ -34,3 +34,23 @@ VALUES (?, ?, ?, ?, ?);
 
 deleteTrack:
 DELETE FROM Track WHERE id = ?;
+
+CREATE TABLE IF NOT EXISTS TrackPointBuffer (
+    track_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    altitude REAL,
+    timestamp INTEGER NOT NULL,
+    PRIMARY KEY (track_id, sequence)
+);
+
+insertTrackPoint:
+INSERT OR REPLACE INTO TrackPointBuffer (track_id, sequence, latitude, longitude, altitude, timestamp)
+VALUES (?, ?, ?, ?, ?, ?);
+
+getTrackPoints:
+SELECT * FROM TrackPointBuffer WHERE track_id = ? ORDER BY sequence ASC;
+
+clearTrackPoints:
+DELETE FROM TrackPointBuffer WHERE track_id = ?;

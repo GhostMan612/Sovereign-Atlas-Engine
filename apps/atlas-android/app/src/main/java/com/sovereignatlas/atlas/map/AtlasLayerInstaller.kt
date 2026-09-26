@@ -6,6 +6,7 @@
 package com.sovereignatlas.atlas.map
 
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -96,10 +97,12 @@ fun installAtlasLayers(style: Style) {
             ),
     )
     style.addLayer(
-        CircleLayer(AtlasLayerIds.POSITION_LAYER, AtlasLayerIds.POSITION_SOURCE)
+        SymbolLayer(AtlasLayerIds.POSITION_LAYER, AtlasLayerIds.POSITION_SOURCE)
             .withProperties(
-                PropertyFactory.circleRadius(10.0f),
-                PropertyFactory.circleOpacity(0.9f),
+                PropertyFactory.iconImage("user-puck"),
+                PropertyFactory.iconSize(1.0f),
+                PropertyFactory.iconRotate(Expression.get("bearing")),
+                PropertyFactory.iconAllowOverlap(true),
             ),
     )
     style.addLayer(

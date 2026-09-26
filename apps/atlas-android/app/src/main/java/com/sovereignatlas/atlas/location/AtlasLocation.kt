@@ -13,6 +13,7 @@ data class AtlasLocationFix(
     val accuracyM: Double? = null,
     val speedMps: Double? = null,
     val headingDeg: Double? = null,
+    val altitudeM: Double? = null,
     val source: String = "",
 )
 

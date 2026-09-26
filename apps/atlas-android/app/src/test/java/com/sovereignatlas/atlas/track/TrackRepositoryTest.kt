@@ -87,4 +87,41 @@ final class TrackRepositoryTest {
         assertTrue(emissions.last().any { it.id == testTrack.id })
         job.cancel()
     }
+
+    @Test
+    fun bufferRoundTripPreservesSequenceOrder() {
+        runBlocking {
+            val repository = TrackRepository(database())
+            repository.insertBufferedPoint("sess-1", 1L, 45.0, -93.0, null, 1000L)
+            repository.insertBufferedPoint("sess-1", 0L, 44.0, -94.0, 250.0, 900L)
+            repository.insertBufferedPoint("sess-2", 0L, 0.0, 0.0, null, 1000L)
+            val points = repository.bufferedPoints("sess-1")
+            assertEquals(2, points.size)
+            assertEquals(0L, points[0].sequence)
+            assertEquals(250.0, points[0].altitude!!, 0.0)
+            assertEquals(1L, points[1].sequence)
+        }
+    }
+
+    @Test
+    fun bufferReplaceSurvivesSequenceRestart() {
+        runBlocking {
+            val repository = TrackRepository(database())
+            repository.insertBufferedPoint("sess-1", 0L, 44.0, -94.0, null, 900L)
+            repository.insertBufferedPoint("sess-1", 0L, 45.0, -93.0, null, 1000L)
+            val points = repository.bufferedPoints("sess-1")
+            assertEquals(1, points.size)
+            assertEquals(45.0, points[0].latitude, 0.0)
+        }
+    }
+
+    @Test
+    fun bufferClearRemovesSession() {
+        runBlocking {
+            val repository = TrackRepository(database())
+            repository.insertBufferedPoint("sess-1", 0L, 45.0, -93.0, null, 1000L)
+            repository.clearBufferedPoints("sess-1")
+            assertTrue(repository.bufferedPoints("sess-1").isEmpty())
+        }
+    }
 }

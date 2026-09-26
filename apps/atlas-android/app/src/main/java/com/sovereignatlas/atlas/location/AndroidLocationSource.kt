@@ -189,6 +189,7 @@ final class AndroidLocationSource(
             accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
             speedMps = if (location.hasSpeed()) location.speed.toDouble() else null,
             headingDeg = if (location.hasBearing()) location.bearing.toDouble() else null,
+            altitudeM = if (location.hasAltitude()) location.altitude else null,
             source = location.provider ?: "",
         )
     }

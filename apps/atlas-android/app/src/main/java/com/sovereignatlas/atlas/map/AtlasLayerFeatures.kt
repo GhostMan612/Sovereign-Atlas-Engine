@@ -133,8 +133,15 @@ fun ringsToFeatures(
 }
 
 fun positionToFeature(center: AtlasCoordinate): Feature {
+    return positionToFeature(center, null)
+}
+
+fun positionToFeature(center: AtlasCoordinate, bearingDeg: Double?): Feature {
+    val properties = JsonObject()
+    properties.addProperty("bearing", bearingDeg ?: 0.0)
     return Feature.fromGeometry(
         Point.fromLngLat(center.longitude, center.latitude),
+        properties,
     )
 }
 

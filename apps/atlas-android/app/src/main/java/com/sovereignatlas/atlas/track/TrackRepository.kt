@@ -9,6 +9,7 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.db.TrackPointBuffer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -34,5 +35,32 @@ class TrackRepository(
 
     suspend fun deleteTrack(id: String) = withContext(ioDispatcher) {
         db.atlasQueries.deleteTrack(id)
+    }
+
+    suspend fun insertBufferedPoint(
+        trackId: String,
+        sequence: Long,
+        latitude: Double,
+        longitude: Double,
+        altitude: Double?,
+        timestamp: Long,
+    ) = withContext(ioDispatcher) {
+        db.atlasQueries.insertTrackPoint(
+            track_id = trackId,
+            sequence = sequence,
+            latitude = latitude,
+            longitude = longitude,
+            altitude = altitude,
+            timestamp = timestamp,
+        )
+    }
+
+    suspend fun bufferedPoints(trackId: String): List<TrackPointBuffer> =
+        withContext(ioDispatcher) {
+            db.atlasQueries.getTrackPoints(trackId).executeAsList()
+        }
+
+    suspend fun clearBufferedPoints(trackId: String) = withContext(ioDispatcher) {
+        db.atlasQueries.clearTrackPoints(trackId)
     }
 }

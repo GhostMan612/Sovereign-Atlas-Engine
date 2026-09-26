@@ -197,6 +197,7 @@ fun AtlasMapScreen(
         }
         installAtlasLayers(style)
         ensureWaypointIcon(style)
+        ensureUserPuck(style)
         applyOverlayVisibility(style, showGraticule.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
@@ -731,6 +732,7 @@ fun AtlasMapScreen(
                     trackRepository = services.trackRepository,
                     waypointRepository = services.waypointRepository,
                     recorder = services.recorder,
+                    locationService = services.location,
                     exportDir = context.filesDir,
                     onOpenDetail = { id -> trackDetailId.value = id },
                     onClose = { showTracks.value = false },
@@ -928,6 +930,27 @@ fun ensureWaypointIcon(style: Style) {
     }
 }
 
+private val userPuckBitmap: Bitmap by lazy {
+    val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GREEN }
+    val path = android.graphics.Path().apply {
+        moveTo(16f, 2f)
+        lineTo(27f, 25f)
+        lineTo(16f, 19f)
+        lineTo(5f, 25f)
+        close()
+    }
+    canvas.drawPath(path, paint)
+    bitmap
+}
+
+fun ensureUserPuck(style: Style) {
+    if (style.getImage("user-puck") == null) {
+        style.addImage("user-puck", userPuckBitmap, true)
+    }
+}
+
 fun mergedTrackFeatures(
     stored: List<Track>,
     recorder: TrackRecorder,
@@ -958,7 +981,7 @@ fun pushPosition(style: Style, services: AtlasServices) {
         style,
         AtlasLayerIds.POSITION_SOURCE,
         FeatureCollection.fromFeatures(
-            listOf(positionToFeature(fix.position)),
+            listOf(positionToFeature(fix.position, fix.headingDeg)),
         ),
     )
 }
