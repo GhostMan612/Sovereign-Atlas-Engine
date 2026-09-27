@@ -28,8 +28,7 @@ object CotGenerator {
         }
     }
 
-    fun generatePliXml(
-        uid: String,
+    fun generatePliXml(        uid: String,
         callsign: String,
         latitude: Double,
         longitude: Double,
@@ -57,4 +56,70 @@ object CotGenerator {
             append("</event>")
         }
     }
+
+    fun generateChatXml(
+        localUid: String,
+        callsign: String,
+        geoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
+        text: String,
+        messageId: String,
+        chatroom: String = "All Chat Rooms",
+        targetUid: String? = null,
+    ): String {
+        if (geoPoint == null) {
+            throw IllegalStateException("No GPS fix - cannot send message")
+        }
+
+        val now = System.currentTimeMillis()
+        val timeStr = formatIso8601(now)
+        val staleStr = formatIso8601(now + 30 * 60 * 1000L)
+
+        val chatroomToken = chatroom.replace(" ", "_")
+        val uid = "GeoChat.$localUid.$chatroomToken.$messageId"
+
+        val latStr = String.format(java.util.Locale.US, "%.7f", geoPoint.latitude)
+        val lonStr = String.format(java.util.Locale.US, "%.7f", geoPoint.longitude)
+        val haeStr = geoPoint.altitude?.let {
+            String.format(java.util.Locale.US, "%.3f", it)
+        } ?: "9999999"
+
+        val remarksTo = targetUid ?: chatroom
+
+        val safeText = escapeXml(text)
+        val safeCallsign = escapeXml(callsign)
+        val safeChatroom = escapeXml(chatroom)
+
+        return buildString {
+            append("<event version=\"2.0\" uid=\"").append(uid)
+                .append("\" type=\"b-t-f\" time=\"").append(timeStr)
+            append("\" start=\"").append(timeStr)
+                .append("\" stale=\"").append(staleStr)
+                .append("\" how=\"h-g-i-g-o\">")
+            append("<point lat=\"").append(latStr)
+                .append("\" lon=\"").append(lonStr)
+                .append("\" hae=\"").append(haeStr)
+                .append("\" ce=\"9999999\" le=\"9999999\"/>")
+            append("<detail>")
+            append("<__chat parent=\"RootContactGroup\" groupOwner=\"false\" messageId=\"")
+                .append(messageId)
+                .append("\" chatroom=\"").append(safeChatroom)
+                .append("\" id=\"").append(safeChatroom)
+                .append("\" senderCallsign=\"").append(safeCallsign).append("\">")
+            append("<chatgrp uid0=\"").append(localUid)
+                .append("\" uid1=\"").append(safeChatroom)
+                .append("\" id=\"").append(safeChatroom).append("\"/>")
+            append("</__chat>")
+            append("<link uid=\"").append(localUid)
+                .append("\" type=\"a-f-G-U-C\" relation=\"p-p\"/>")
+            append("<remarks source=\"BAO.F.ATAK.").append(localUid)
+                .append("\" to=\"").append(remarksTo)
+                .append("\" time=\"").append(timeStr).append("\">")
+            append(safeText).append("</remarks>")
+            append("</detail>")
+            append("</event>")
+        }
+    }
+
+    private fun formatIso8601(epochMillis: Long): String =
+        isoFormatter.format(java.time.Instant.ofEpochMilli(epochMillis))
 }

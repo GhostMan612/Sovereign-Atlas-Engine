@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas.android.comms
 
+import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
 import java.time.Instant
@@ -43,5 +44,41 @@ class AtakBroadcaster(
         withContext(Dispatchers.IO) {
             listener.sendMulticast(payload)
         }
+    }
+
+    suspend fun sendChatMessage(
+        text: String,
+        currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
+        targetUid: String? = null,
+    ): ChatMessage {
+        val callsign = callsignProvider()
+        val messageId = java.util.UUID.randomUUID().toString()
+        val chatroom = "All Chat Rooms"
+        val remarksTo = targetUid ?: chatroom
+
+        val xml = CotGenerator.generateChatXml(
+            localUid = localUid,
+            callsign = callsign,
+            geoPoint = currentGeoPoint,
+            text = text,
+            messageId = messageId,
+            chatroom = chatroom,
+            targetUid = targetUid,
+        )
+
+        val xmlBytes = xml.toByteArray(Charsets.UTF_8)
+        val header = byteArrayOf(0xBF.toByte(), 0x00.toByte(), 0xBF.toByte())
+        listener.sendMulticast(header + xmlBytes)
+
+        return ChatMessage(
+            messageId = messageId,
+            senderUid = localUid,
+            senderCallsign = callsign,
+            chatroom = chatroom,
+            remarksTo = remarksTo,
+            text = text,
+            timestampMillis = System.currentTimeMillis(),
+            isSelf = true,
+        )
     }
 }

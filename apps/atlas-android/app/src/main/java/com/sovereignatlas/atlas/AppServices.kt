@@ -15,6 +15,7 @@ import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
@@ -58,9 +59,12 @@ class AppServices(private val context: Context) {
 
     val pliStore = PliStore(localDeviceUid = localDeviceUid, ttlMillis = 15 * 60 * 1000L)
 
+    val messageStore = MessageStore(localDeviceUid = localDeviceUid)
+
     val multicastListener = AtakMulticastListener(
         context = appContext,
         pliStore = pliStore,
+        messageStore = messageStore,
         parser = AtakXmlParser(),
     )
 

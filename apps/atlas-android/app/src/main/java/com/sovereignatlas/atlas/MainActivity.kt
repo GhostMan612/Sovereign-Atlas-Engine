@@ -79,6 +79,7 @@ final class MainActivity : ComponentActivity() {
             losState = appServices.losState,
             routing = appServices.routing,
             pli = appServices.pliStore,
+            messages = appServices.messageStore,
             locationEngine = appServices.locationEngine,
             multicastListener = appServices.multicastListener,
             atakBroadcaster = appServices.atakBroadcaster,

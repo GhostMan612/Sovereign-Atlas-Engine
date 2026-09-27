@@ -8,6 +8,7 @@ package com.sovereignatlas.atlas.geo.cot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 data class CotPli(
     val uid: String,
@@ -19,7 +20,12 @@ data class CotPli(
 )
 
 interface CotParser {
-    fun parse(packetData: ByteArray): CotPli?
+    fun parse(packetData: ByteArray): ParsedCot?
+}
+
+sealed interface ParsedCot {
+    data class Pli(val pli: CotPli) : ParsedCot
+    data class Chat(val message: ChatMessage) : ParsedCot
 }
 
 class PliStore(private val localDeviceUid: String, private val ttlMillis: Long = 15 * 60 * 1000L) {

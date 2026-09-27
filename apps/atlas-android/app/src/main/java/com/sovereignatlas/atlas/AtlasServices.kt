@@ -10,6 +10,7 @@ import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.ImageDecoder
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
@@ -46,6 +47,7 @@ class AtlasServices(
     val losState: LoSState,
     val routing: RoutingState,
     val pli: PliStore,
+    val messages: MessageStore,
     val locationEngine: LocationEngine,
     val multicastListener: AtakMulticastListener,
     val atakBroadcaster: AtakBroadcaster,

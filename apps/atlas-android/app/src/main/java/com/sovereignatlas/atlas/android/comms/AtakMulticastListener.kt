@@ -13,6 +13,8 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
 import com.sovereignatlas.atlas.geo.cot.CotParser
+import com.sovereignatlas.atlas.geo.cot.MessageStore
+import com.sovereignatlas.atlas.geo.cot.ParsedCot
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import java.io.IOException
 import java.net.DatagramPacket
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 class AtakMulticastListener(
     context: Context,
     private val pliStore: PliStore,
+    private val messageStore: MessageStore,
     private val parser: CotParser,
 ) {
     private val appContext = context.applicationContext
@@ -113,7 +116,11 @@ class AtakMulticastListener(
                         try {
                             bound.receive(packet)
                             val data = packet.data.copyOf(packet.length)
-                            parser.parse(data)?.let { pliStore.update(it) }
+                            when (val parsed = parser.parse(data)) {
+                                is ParsedCot.Pli -> pliStore.update(parsed.pli)
+                                is ParsedCot.Chat -> messageStore.addMessage(parsed.message)
+                                null -> Unit
+                            }
                         } catch (error: SocketTimeoutException) {
                             Unit
                         }
