@@ -10,7 +10,7 @@ import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
-import com.sovereignatlas.atlas.android.comms.AtakXmlParser
+import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
@@ -65,7 +65,7 @@ class AppServices(private val context: Context) {
         context = appContext,
         pliStore = pliStore,
         messageStore = messageStore,
-        parser = AtakXmlParser(),
+        parser = AtakPayloadParser(),
     )
 
     val atakBroadcaster = AtakBroadcaster(

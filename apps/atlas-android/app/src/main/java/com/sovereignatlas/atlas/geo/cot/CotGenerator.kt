@@ -14,7 +14,7 @@ object CotGenerator {
         .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
         .withZone(ZoneOffset.UTC)
 
-    private fun escapeXml(input: String): String = buildString {
+    internal fun escapeXml(input: String): String = buildString {
         for (char in input) {
             when {
                 char.code < 0x20 && char !in "\t\n\r" -> append("?")

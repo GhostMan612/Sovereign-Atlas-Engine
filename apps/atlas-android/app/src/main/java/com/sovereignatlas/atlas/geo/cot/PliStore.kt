@@ -17,6 +17,7 @@ data class CotPli(
     val latitude: Double,
     val longitude: Double,
     val timestamp: Long,
+    val altitude: Double? = null,
 )
 
 interface CotParser {

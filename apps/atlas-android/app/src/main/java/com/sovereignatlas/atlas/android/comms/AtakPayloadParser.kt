@@ -5,35 +5,42 @@
 
 package com.sovereignatlas.atlas.android.comms
 
+import android.util.Log
 import android.util.Xml
+import atakmap.commoncommo.v1.TakMessage
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotParser
 import com.sovereignatlas.atlas.geo.cot.CotPli
 import com.sovereignatlas.atlas.geo.cot.ParsedCot
 import java.io.ByteArrayInputStream
-import java.time.Instant
-import java.time.format.DateTimeFormatter
+import java.io.StringReader
 import org.xmlpull.v1.XmlPullParser
 
-class AtakXmlParser : CotParser {
+class AtakPayloadParser : CotParser {
     override fun parse(packetData: ByteArray): ParsedCot? {
-        return runCatching {
-            var offset = 0
-            if (packetData.size >= 3 &&
-                packetData[0] == 0xBF.toByte() &&
-                packetData[2] == 0xBF.toByte()
-            ) {
-                when (packetData[1]) {
-                    0x00.toByte() -> offset = 3
-                    0x01.toByte() -> return null
-                    else -> return null
-                }
-            }
+        if (packetData.size < 3) return null
 
+        if (packetData[0] == 0xBF.toByte() && packetData[2] == 0xBF.toByte()) {
+            val version = packetData[1]
+            val data = packetData.copyOfRange(3, packetData.size)
+            return when (version) {
+                0x00.toByte() -> parseXml(String(data, Charsets.UTF_8))
+                0x01.toByte() -> parseProtobuf(data)
+                else -> null
+            }
+        }
+
+        return runCatching { parseXml(String(packetData, Charsets.UTF_8)) }.getOrNull()
+    }
+
+    fun parse(xml: String): ParsedCot? = parseXml(xml)
+
+    private fun parseXml(xml: String): ParsedCot? {
+        return runCatching {
             val parser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
             parser.setInput(
-                ByteArrayInputStream(packetData, offset, packetData.size - offset),
+                ByteArrayInputStream(xml.toByteArray(Charsets.UTF_8)),
                 null,
             )
 
@@ -133,10 +140,96 @@ class AtakXmlParser : CotParser {
         }.getOrNull()
     }
 
+    private fun parseProtobuf(data: ByteArray): ParsedCot? {
+        val takMsg = runCatching { TakMessage.ADAPTER.decode(data) }.getOrNull() ?: return null
+        val event = takMsg.cotEvent ?: return null
+        val type = event.type
+
+        return when {
+            type.startsWith("a-f-") -> {
+                val altitude = event.hae.takeIf {
+                    it.isFinite() && it < 9999999.0 && (it != 0.0 || event.detail?.precisionLocation != null)
+                }
+                val callsign = event.detail?.contact?.callsign?.takeIf { it.isNotBlank() } ?: "Unknown"
+
+                ParsedCot.Pli(
+                    CotPli(
+                        uid = event.uid,
+                        type = type,
+                        callsign = callsign,
+                        latitude = event.lat,
+                        longitude = event.lon,
+                        timestamp = event.sendTime.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                        altitude = altitude,
+                    ),
+                )
+            }
+            type == "b-t-f" -> {
+                val xmlDetail = event.detail?.xmlDetail ?: return null
+
+                var senderUid = ""
+                var senderCallsign = "Unknown"
+                var chatroom = "All Chat Rooms"
+                var remarksTo = "All Chat Rooms"
+                var text = ""
+                var timestampMillis = event.sendTime.takeIf { it > 0 } ?: System.currentTimeMillis()
+
+                runCatching {
+                    val parser = Xml.newPullParser()
+                    parser.setInput(StringReader("<root>$xmlDetail</root>"))
+
+                    while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                        if (parser.eventType == XmlPullParser.START_TAG) {
+                            when (parser.name) {
+                                "__chat" -> {
+                                    senderCallsign = parser.getAttributeValue(null, "senderCallsign") ?: senderCallsign
+                                    chatroom = parser.getAttributeValue(null, "chatroom") ?: chatroom
+                                }
+                                "chatgrp" -> {
+                                    val uid0 = parser.getAttributeValue(null, "uid0")
+                                    if (!uid0.isNullOrEmpty()) senderUid = uid0
+                                }
+                                "remarks" -> {
+                                    remarksTo = parser.getAttributeValue(null, "to") ?: remarksTo
+                                    parseIso8601(parser.getAttributeValue(null, "time"))?.let {
+                                        timestampMillis = it
+                                    }
+                                    text = parser.nextText()
+                                }
+                            }
+                        }
+                        parser.next()
+                    }
+                }
+
+                if (senderUid.isNotEmpty()) {
+                    val messageId = event.uid.substringAfterLast(".", "")
+                        .ifEmpty { java.util.UUID.randomUUID().toString() }
+
+                    ParsedCot.Chat(
+                        ChatMessage(
+                            messageId = messageId,
+                            senderUid = senderUid,
+                            senderCallsign = senderCallsign,
+                            chatroom = chatroom,
+                            remarksTo = remarksTo,
+                            text = text,
+                            timestampMillis = timestampMillis,
+                            isSelf = false,
+                        ),
+                    )
+                } else {
+                    null
+                }
+            }
+            else -> null
+        }
+    }
+
     private fun parseIso8601(value: String?): Long? {
         if (value == null) return null
         return runCatching {
-            Instant.from(DateTimeFormatter.ISO_INSTANT.parse(value)).toEpochMilli()
+            java.time.Instant.from(java.time.format.DateTimeFormatter.ISO_INSTANT.parse(value)).toEpochMilli()
         }.getOrNull()
     }
 }

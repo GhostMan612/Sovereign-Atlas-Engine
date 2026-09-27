@@ -6,11 +6,8 @@
 package com.sovereignatlas.atlas.android.comms
 
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
-import com.sovereignatlas.atlas.geo.cot.CotGenerator
+import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
-import java.time.Instant
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
@@ -22,28 +19,28 @@ class AtakBroadcaster(
         lat: Double,
         lon: Double,
         hae: Double?,
-        ce: Double,
-        fixTimeMillis: Long = System.currentTimeMillis(),
+        ce: Double?,
+        fixTimeMillis: Long,
     ) {
         if (lat == 0.0 && lon == 0.0) return
         if (!scheduler.shouldBroadcast(lat, lon)) return
-
-        val xml = CotGenerator.generatePliXml(
-            uid = localUid,
-            callsign = callsignProvider(),
-            latitude = lat,
-            longitude = lon,
-            altitude = hae ?: 0.0,
-            accuracyMeters = ce,
-            observedAt = Instant.ofEpochMilli(fixTimeMillis),
+        val callsign = callsignProvider()
+        val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(
+            lat,
+            lon,
+            hae,
+            null,
+            null,
+            fixTimeMillis,
         )
 
-        val header = byteArrayOf(0xBF.toByte(), 0x00.toByte(), 0xBF.toByte())
-        val payload = header + xml.toByteArray(Charsets.UTF_8)
-
-        withContext(Dispatchers.IO) {
-            listener.sendMulticast(payload)
-        }
+        val payload = CotProtobufGenerator.generatePliProto(
+            localUid = localUid,
+            callsign = callsign,
+            geoPoint = geoPoint,
+            ceFallback = ce,
+        )
+        listener.sendMulticast(payload)
     }
 
     suspend fun sendChatMessage(
@@ -51,12 +48,14 @@ class AtakBroadcaster(
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
         targetUid: String? = null,
     ): ChatMessage {
+        if (currentGeoPoint == null) throw IllegalStateException("No GPS fix")
+
         val callsign = callsignProvider()
         val messageId = java.util.UUID.randomUUID().toString()
         val chatroom = "All Chat Rooms"
         val remarksTo = targetUid ?: chatroom
 
-        val xml = CotGenerator.generateChatXml(
+        val payload = CotProtobufGenerator.generateChatProto(
             localUid = localUid,
             callsign = callsign,
             geoPoint = currentGeoPoint,
@@ -66,9 +65,7 @@ class AtakBroadcaster(
             targetUid = targetUid,
         )
 
-        val xmlBytes = xml.toByteArray(Charsets.UTF_8)
-        val header = byteArrayOf(0xBF.toByte(), 0x00.toByte(), 0xBF.toByte())
-        listener.sendMulticast(header + xmlBytes)
+        listener.sendMulticast(payload)
 
         return ChatMessage(
             messageId = messageId,
