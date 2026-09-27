@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sovereignatlas.atlas.ui.chat.GeoChatScreen
@@ -79,6 +83,7 @@ import com.sovereignatlas.atlas.geo.LoSMode
 import com.sovereignatlas.atlas.geo.LoSRequest
 import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
+import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
@@ -268,6 +273,7 @@ fun AtlasMapScreen(
             ),
         )
     }
+    val targetDropPoint = remember { MutableStateFlow<LatLng?>(null) }
     // Shared post-style content: re-installs the atlas layer stack after any
     // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
     // skips the online/pack base so the MBTiles source survives.
@@ -294,6 +300,7 @@ fun AtlasMapScreen(
         ensurePliMarker(style, context)
         pushScrubPoint(style, services.scrubState.activePoint.value)
         pushPli(style, services.pli.activePlis.value)
+        pushMarkers(style, services.markers.markerStream.value)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
@@ -413,19 +420,7 @@ fun AtlasMapScreen(
                 }
                 map.addOnMapLongClickListener { point ->
                     onHaptic()
-                    val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
-                    mapScope.launch {
-                        services.waypointRepository.saveWaypoint(
-                            Waypoint(
-                                id = UUID.randomUUID().toString(),
-                                name = "WP-$stamp",
-                                latitude = point.latitude,
-                                longitude = point.longitude,
-                                timestamp = System.currentTimeMillis(),
-                                notes = "",
-                            ),
-                        )
-                    }
+                    targetDropPoint.value = point
                     true
                 }
                 map.addOnCameraIdleListener {
@@ -597,6 +592,13 @@ fun AtlasMapScreen(
                 services.pli.activePlis.collect { plis ->
                     styleRef.value?.let { style ->
                         pushPli(style, plis)
+                    }
+                }
+            }
+            launch {
+                services.markers.markerStream.collect { markerMap ->
+                    styleRef.value?.let { style ->
+                        pushMarkers(style, markerMap)
                     }
                 }
             }
@@ -858,6 +860,70 @@ fun AtlasMapScreen(
                 sheetState = nodeSettingsSheetState,
             ) {
                 SettingsScreen(viewModel = nodeSettingsViewModel)
+            }
+        }
+        val targetDropPointState by targetDropPoint.collectAsStateWithLifecycle()
+        if (targetDropPointState != null) {
+            var errorMessage by remember { mutableStateOf<String?>(null) }
+            ModalBottomSheet(onDismissRequest = { targetDropPoint.value = null }) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        "Drop Tactical Marker",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
+                    errorMessage?.let { msg ->
+                        Text(
+                            msg,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    val types = listOf(
+                        Triple("Hostile", "a-h-G", MaterialTheme.colorScheme.error),
+                        Triple("Neutral", "a-n-G", androidx.compose.ui.graphics.Color.Green),
+                        Triple("Unknown", "a-u-G", androidx.compose.ui.graphics.Color.Yellow),
+                        Triple("Waypoint", "b-m-p-w", androidx.compose.ui.graphics.Color.White),
+                    )
+                    types.forEach { (label, type, color) ->
+                        Button(
+                            onClick = {
+                                mapScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            services.atakBroadcaster.sendMarker(
+                                                type = type,
+                                                callsign = label,
+                                                lat = targetDropPointState!!.latitude,
+                                                lon = targetDropPointState!!.longitude,
+                                            )
+                                        }
+                                        if (type == "b-m-p-w") {
+                                            val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
+                                            services.waypointRepository.saveWaypoint(
+                                                Waypoint(
+                                                    id = UUID.randomUUID().toString(),
+                                                    name = "WP-$stamp",
+                                                    latitude = targetDropPointState!!.latitude,
+                                                    longitude = targetDropPointState!!.longitude,
+                                                    timestamp = System.currentTimeMillis(),
+                                                    notes = "",
+                                                ),
+                                            )
+                                        }
+                                        targetDropPoint.value = null
+                                    } catch (e: Exception) {
+                                        errorMessage = e.message ?: "Failed to drop marker"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                        ) {
+                            Text(label, color = androidx.compose.ui.graphics.Color.Black)
+                        }
+                    }
+                }
             }
         }
         // MGRS HUD - only recompose when center changes AND isIdle is true
@@ -1279,6 +1345,32 @@ fun ensurePliMarker(style: Style, context: Context) {
         ) ?: return
         style.addImage("blue-force-marker", bitmap)
     }
+}
+
+fun markerColorHex(type: String): String {
+    return when {
+        type.startsWith("a-h-") -> "#ff0000"
+        type.startsWith("a-n-") -> "#00ff00"
+        type.startsWith("a-u-") -> "#ffff00"
+        else -> "#ffffff"
+    }
+}
+
+fun markersToFeatures(markers: Map<String, CotMarker>): FeatureCollection {
+    return FeatureCollection.fromFeatures(
+        markers.values.map { marker ->
+            Feature.fromGeometry(
+                Point.fromLngLat(marker.longitude, marker.latitude),
+            ).apply {
+                addStringProperty("color", markerColorHex(marker.type))
+                addStringProperty("callsign", marker.callsign)
+            }
+        },
+    )
+}
+
+fun pushMarkers(style: Style, markers: Map<String, CotMarker>) {
+    pushFeatures(style, AtlasLayerIds.MARKER_SOURCE, markersToFeatures(markers))
 }
 
 fun pushPli(style: Style, plis: Map<String, CotPli>) {

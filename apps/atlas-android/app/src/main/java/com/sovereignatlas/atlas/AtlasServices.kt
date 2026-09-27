@@ -17,6 +17,7 @@ import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
+import com.sovereignatlas.atlas.android.comms.MarkerStore
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
@@ -49,6 +50,7 @@ class AtlasServices(
     val routing: RoutingState,
     val pli: PliStore,
     val messages: MessageStore,
+    val markers: MarkerStore,
     val settingsRepository: SettingsRepository,
     val locationEngine: LocationEngine,
     val multicastListener: AtakMulticastListener,

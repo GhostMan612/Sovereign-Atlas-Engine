@@ -11,6 +11,7 @@ import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
+import com.sovereignatlas.atlas.android.comms.MarkerStore
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
@@ -68,10 +69,13 @@ class AppServices(private val context: Context) {
 
     val messageStore = MessageStore(localDeviceUid = localDeviceUid)
 
+    val markerStore = MarkerStore()
+
     val multicastListener = AtakMulticastListener(
         context = appContext,
         pliStore = pliStore,
         messageStore = messageStore,
+        markerStore = markerStore,
         parser = AtakPayloadParser(),
     )
 

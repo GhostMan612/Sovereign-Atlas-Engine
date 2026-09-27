@@ -27,6 +27,7 @@ interface CotParser {
 sealed interface ParsedCot {
     data class Pli(val pli: CotPli) : ParsedCot
     data class Chat(val message: ChatMessage) : ParsedCot
+    data class Marker(val marker: CotMarker) : ParsedCot
 }
 
 class PliStore(private val localDeviceUid: String, private val ttlMillis: Long = 15 * 60 * 1000L) {

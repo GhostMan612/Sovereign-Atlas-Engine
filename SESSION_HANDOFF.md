@@ -4,6 +4,39 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Tactical targeting & CoT markers (2026-09-27)
+
+- **Commit (local, unpushed):** `feat(android): tactical targeting
+  and CoT markers` (15 files). Scope: `geo/cot/CotMarker.kt` +
+  `android/comms/MarkerStore.kt` (uid-keyed StateFlow) +
+  `ParsedCot.Marker`; `generateMarkerProto` (24h stale,
+  `h-g-i-g-o`); parser branch `a-h-/a-n-/a-u-/b-m-`
+  (`a-f-G` untouched, still PLI); `sendMarker` mesh-gated
+  (`Mesh Transceiver is Offline` throw); listener routes
+  `Marker -> markerStore` (default-param ctor, no test breakage);
+  data-driven `CircleLayer` (`cot-marker-layer`,
+  `toColor(get("color"))` — verified present in the 13.3.1 AAR
+  via `javap`, no fallback needed) inside
+  `installAtlasLayers`/style-reload path + `pushMarkers` +
+  `markersToFeatures` (red/green/yellow/white); long-press now
+  sets adapter-owned `targetDropPoint` and opens the targeting
+  sheet (mesh-offline error surfaces inline red); Waypoint
+  additionally saves the local journal waypoint, preserving the
+  prior long-press creation path. `GeoPoint` used from
+  `geo/` (prompt's `core.GeoPoint` does not exist); zero
+  in-code comments per Directives.
+- **Gates here:** `:app:testPlayDebugUnitTest` +
+  `:app:testEnterpriseDebugUnitTest` **276/276 green each**
+  (incl. new `MarkerStoreTest` 3/3, `CotProtobufTest` +1 marker,
+  `AtakPayloadParserTest` +3 marker/waypoint/friendly-still-PLI);
+  `geo/core/track/offline/tactical` arch grep clean (no
+  android/androidx/maplibre). No assemble per build boundary.
+- **Device verification PENDING (human/Studio):** mesh-off
+  inline error on Hostile select; mesh-on red dot at touch
+  coordinate; marker sync across two devices.
+- **Accepted risks (in commit message):** no MarkerStore TTL;
+  `android/comms/` placement vs `geo/cot/`; `toColor` verified.
+
 ## Where we are (2026-09-11)
 
 - **Baseline:** `80ab42f` verified pre-flight; Slice 4D closure

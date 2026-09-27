@@ -36,6 +36,7 @@ class AtakMulticastListener(
     context: Context,
     private val pliStore: PliStore,
     private val messageStore: MessageStore,
+    private val markerStore: MarkerStore = MarkerStore(),
     private val parser: CotParser,
 ) {
     private val appContext = context.applicationContext
@@ -119,6 +120,7 @@ class AtakMulticastListener(
                             when (val parsed = parser.parse(data)) {
                                 is ParsedCot.Pli -> pliStore.update(parsed.pli)
                                 is ParsedCot.Chat -> messageStore.addMessage(parsed.message)
+                                is ParsedCot.Marker -> markerStore.addMarker(parsed.marker)
                                 null -> Unit
                             }
                         } catch (error: SocketTimeoutException) {

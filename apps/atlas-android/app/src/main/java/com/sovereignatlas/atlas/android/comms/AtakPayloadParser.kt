@@ -9,6 +9,7 @@ import android.util.Log
 import android.util.Xml
 import atakmap.commoncommo.v1.TakMessage
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
+import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotParser
 import com.sovereignatlas.atlas.geo.cot.CotPli
 import com.sovereignatlas.atlas.geo.cot.ParsedCot
@@ -162,6 +163,23 @@ class AtakPayloadParser : CotParser {
                         timestamp = event.sendTime.takeIf { it > 0 } ?: System.currentTimeMillis(),
                         altitude = altitude,
                     ),
+                )
+            }
+            type.startsWith("a-h-") || type.startsWith("a-n-") || type.startsWith("a-u-") || type.startsWith("b-m-") -> {
+                val altitude = event.hae.takeIf {
+                    it.isFinite() && it < 9999999.0 && (it != 0.0 || event.detail?.precisionLocation != null)
+                }
+                val callsign = event.detail?.contact?.callsign?.takeIf { it.isNotBlank() } ?: "Target"
+                ParsedCot.Marker(
+                    CotMarker(
+                        uid = event.uid,
+                        type = type,
+                        callsign = callsign,
+                        latitude = event.lat,
+                        longitude = event.lon,
+                        altitude = altitude,
+                        timestampMillis = event.sendTime.takeIf { it > 0 } ?: System.currentTimeMillis()
+                    )
                 )
             }
             type == "b-t-f" -> {

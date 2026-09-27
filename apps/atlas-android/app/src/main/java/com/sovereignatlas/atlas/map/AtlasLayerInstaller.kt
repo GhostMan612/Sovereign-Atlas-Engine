@@ -45,6 +45,8 @@ object AtlasLayerIds {
     const val ROUTE_LAYER = "atlas-tactical-route-layer"
     const val PLI_SOURCE = "atlas-tactical-pli"
     const val PLI_LAYER = "atlas-tactical-pli-layer"
+    const val MARKER_SOURCE = "cot-marker-source"
+    const val MARKER_LAYER = "cot-marker-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -75,6 +77,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LABEL_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.ROUTE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.PLI_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.MARKER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
@@ -188,6 +191,16 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.lineColor("#39FF14"),
                 PropertyFactory.lineWidth(4.0f),
                 PropertyFactory.lineOpacity(0.8f),
+            ),
+        AtlasLayerIds.WAYPOINTS_LAYER,
+    )
+    style.addLayerBelow(
+        CircleLayer(AtlasLayerIds.MARKER_LAYER, AtlasLayerIds.MARKER_SOURCE)
+            .withProperties(
+                PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
+                PropertyFactory.circleRadius(8f),
+                PropertyFactory.circleStrokeColor("#000000"),
+                PropertyFactory.circleStrokeWidth(2f),
             ),
         AtlasLayerIds.WAYPOINTS_LAYER,
     )

@@ -56,6 +56,18 @@ class AtakBroadcaster(
         listener.sendMulticast(payload)
     }
 
+    suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double) {
+        if (!settingsRepository.isMeshActive.value) throw IllegalStateException("Mesh Transceiver is Offline")
+        val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(lat, lon, null, null, null, System.currentTimeMillis())
+        val payload = CotProtobufGenerator.generateMarkerProto(
+            localUid = localUid,
+            type = type,
+            callsign = callsign,
+            geoPoint = geoPoint
+        )
+        listener.sendMulticast(payload)
+    }
+
     suspend fun sendChatMessage(
         text: String,
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,

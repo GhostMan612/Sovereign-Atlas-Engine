@@ -49,6 +49,35 @@ object CotProtobufGenerator {
         return byteArrayOf(0xBF.toByte(), 0x01.toByte(), 0xBF.toByte()) + TakMessage.ADAPTER.encode(msg)
     }
 
+    fun generateMarkerProto(
+        localUid: String,
+        type: String,
+        callsign: String,
+        geoPoint: com.sovereignatlas.atlas.geo.GeoPoint
+    ): ByteArray {
+        val now = System.currentTimeMillis()
+        val safeLocalUid = localUid.replace(" ", "_")
+        val markerUid = "$safeLocalUid-marker-${java.util.UUID.randomUUID()}"
+        val event = CotEvent(
+            type = type,
+            uid = markerUid,
+            sendTime = now,
+            startTime = now,
+            staleTime = now + 24 * 60 * 60 * 1000L,
+            how = "h-g-i-g-o",
+            lat = geoPoint.latitude,
+            lon = geoPoint.longitude,
+            hae = geoPoint.altitude ?: 9999999.0,
+            ce = 9999999.0,
+            le = 9999999.0,
+            detail = Detail(
+                contact = Contact(callsign = callsign)
+            )
+        )
+        val msg = TakMessage(cotEvent = event)
+        return byteArrayOf(0xBF.toByte(), 0x01.toByte(), 0xBF.toByte()) + TakMessage.ADAPTER.encode(msg)
+    }
+
     fun generateChatProto(
         localUid: String,
         callsign: String,

@@ -86,6 +86,43 @@ final class AtakPayloadParserTest {
     }
 
     @Test
+    fun protoMarkerRoundTrips() {
+        val payload = CotProtobufGenerator.generateMarkerProto(
+            localUid = "unit-1",
+            type = "a-h-G",
+            callsign = "Hostile",
+            geoPoint = GeoPoint(44.9, -93.1, null, null, null, 0L),
+        )
+        val parsed = parser.parse(payload)
+        assertTrue(parsed is ParsedCot.Marker)
+        val marker = (parsed as ParsedCot.Marker).marker
+        assertEquals("a-h-G", marker.type)
+        assertEquals("Hostile", marker.callsign)
+        assertEquals(44.9, marker.latitude, 0.0)
+        assertEquals(-93.1, marker.longitude, 0.0)
+        assertTrue(marker.uid.startsWith("unit-1-marker-"))
+    }
+
+    @Test
+    fun protoWaypointRoutesToMarker() {
+        val payload = CotProtobufGenerator.generateMarkerProto(
+            localUid = "unit-1",
+            type = "b-m-p-w",
+            callsign = "Waypoint",
+            geoPoint = GeoPoint(45.0, -93.0, null, null, null, 0L),
+        )
+        val parsed = parser.parse(payload)
+        assertTrue(parsed is ParsedCot.Marker)
+        assertEquals("b-m-p-w", (parsed as ParsedCot.Marker).marker.type)
+    }
+
+    @Test
+    fun friendlyStillRoutesToPli() {
+        val parsed = parser.parse(pliPayload())
+        assertTrue(parsed is ParsedCot.Pli)
+    }
+
+    @Test
     fun garbageProtoReturnsNull() {
         val header = byteArrayOf(0xBF.toByte(), 0x01.toByte(), 0xBF.toByte())
         assertNull(parser.parse(header + byteArrayOf(9, 9, 9, 9, 9)))

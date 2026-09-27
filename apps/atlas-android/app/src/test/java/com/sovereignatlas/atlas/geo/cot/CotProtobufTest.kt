@@ -63,6 +63,22 @@ final class CotProtobufTest {
     }
 
     @Test
+    fun markerEnvelopeRoundTrips() {
+        val payload = CotProtobufGenerator.generateMarkerProto(
+            localUid = "unit 1",
+            type = "a-h-G",
+            callsign = "Hostile",
+            geoPoint = fix(),
+        )
+        val event = TakMessage.ADAPTER.decode(stripHeader(payload)).cotEvent!!
+        assertEquals("a-h-G", event.type)
+        assertTrue(event.uid.startsWith("unit_1-marker-"))
+        assertEquals(44.9, event.lat, 0.0)
+        assertEquals(-93.1, event.lon, 0.0)
+        assertEquals("Hostile", event.detail?.contact?.callsign)
+    }
+
+    @Test
     fun garbageProtoDecodesNull() {
         val decoded = runCatching {
             TakMessage.ADAPTER.decode(byteArrayOf(9, 9, 9, 9, 9))
