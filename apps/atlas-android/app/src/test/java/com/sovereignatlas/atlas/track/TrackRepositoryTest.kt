@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -134,6 +135,20 @@ final class TrackRepositoryTest {
             val points = repository.bufferedPoints("sess-1")
             assertEquals(1, points.size)
             assertEquals(321.5, points[0].altitude!!, 0.0)
+        }
+    }
+
+    @Test
+    fun bufferMaxSequenceTracksHighest() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AtlasDatabase.Schema.create(driver)
+        val queries = AtlasDatabase(driver).atlasQueries
+        assertNull(queries.getMaxSequence("sess-1").executeAsOne().maxSequence)
+        runBlocking {
+            val repository = TrackRepository(AtlasDatabase(driver))
+            repository.insertBufferedPoint("sess-1", 0L, 45.0, -93.0, null, 1000L)
+            repository.insertBufferedPoint("sess-1", 2L, 46.0, -93.0, null, 2000L)
+            assertEquals(2L, queries.getMaxSequence("sess-1").executeAsOne().maxSequence)
         }
     }
 }

@@ -39,29 +39,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.sovereignatlas.atlas.android.TrackRecordingService
-import com.sovereignatlas.atlas.db.Track
+import com.sovereignatlas.atlas.android.services.AtlasTacticalService
 import com.sovereignatlas.atlas.field.WaypointRepository
-import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
 import com.sovereignatlas.atlas.location.LocationService
-import com.sovereignatlas.atlas.geo.DemEngine
-import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackProfile
 import com.sovereignatlas.atlas.track.TrackProfileGenerator
+import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackRecorder
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.track.exportAllGpx
 import com.sovereignatlas.atlas.track.formatTrackDistance
 import com.sovereignatlas.atlas.track.formatTrackStart
-import com.sovereignatlas.atlas.track.trackGeometryJson
-import com.sovereignatlas.atlas.track.trackLengthMeters
 import com.sovereignatlas.atlas.track.trackPointCount
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -116,7 +108,9 @@ fun TracksDialog(
                                             "recording continues without a visible notification."
                                     }
                                     context.startForegroundService(
-                                        Intent(context, TrackRecordingService::class.java),
+                                        Intent(context, AtlasTacticalService::class.java).apply {
+                                            action = AtlasTacticalService.ACTION_START_RECORDING
+                                        },
                                     )
                                     recorder.start()
                                 }
@@ -146,49 +140,13 @@ fun TracksDialog(
                         Spacer(modifier = Modifier.weight(1f))
                         Button(
                             onClick = {
-                                val fixes = recorder.stop()
-                                context.stopService(
-                                    Intent(context, TrackRecordingService::class.java),
+                                recorder.stop()
+                                context.startService(
+                                    Intent(context, AtlasTacticalService::class.java).apply {
+                                        action = AtlasTacticalService.ACTION_STOP_RECORDING
+                                    },
                                 )
-                                val sessionId = TrackRecordingService.currentTrackId
-                                scope.launch {
-                                    // Durable buffer first (survives backgrounding);
-                                    // in-memory fixes are the fallback.
-                                    val buffered = sessionId?.let { id ->
-                                        trackRepository.bufferedPoints(id)
-                                    } ?: emptyList()
-                                    val coords = if (buffered.size >= 2) {
-                                        buffered.map { point ->
-                                            AtlasCoordinate(
-                                                latitude = point.latitude,
-                                                longitude = point.longitude,
-                                            )
-                                        }
-                                    } else {
-                                        fixes.map { fix ->
-                                            AtlasCoordinate(
-                                                latitude = fix.position.latitude,
-                                                longitude = fix.position.longitude,
-                                            )
-                                        }
-                                    }
-                                    if (coords.size >= 2) {
-                                        val stamp = SimpleDateFormat("HHmmss", Locale.US)
-                                            .format(Date())
-                                        trackRepository.saveTrack(
-                                            Track(
-                                                id = UUID.randomUUID().toString(),
-                                                name = "TR-$stamp",
-                                                timestamp = System.currentTimeMillis(),
-                                                distance_meters = trackLengthMeters(coords),
-                                                geometry = trackGeometryJson(coords),
-                                            ),
-                                        )
-                                    }
-                                    sessionId?.let { id ->
-                                        trackRepository.clearBufferedPoints(id)
-                                    }
-                                }
+                                message.value = "Stop requested: track saves on flush."
                             },
                             modifier = Modifier.testTag("track-stop"),
                         ) {

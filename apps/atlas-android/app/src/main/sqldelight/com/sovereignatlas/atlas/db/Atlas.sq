@@ -57,3 +57,6 @@ DELETE FROM TrackPointBuffer WHERE track_id = ?;
 
 updateTrackPointAltitude:
 UPDATE TrackPointBuffer SET altitude = ? WHERE track_id = ? AND sequence = ?;
+
+getMaxSequence:
+SELECT MAX(sequence) AS maxSequence FROM TrackPointBuffer WHERE track_id = ?;

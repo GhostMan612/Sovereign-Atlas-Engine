@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
     private val localUid: String,
-    private val callsign: String,
+    private val callsignProvider: () -> String,
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
 ) {
     suspend fun broadcastPli(
@@ -29,7 +29,7 @@ class AtakBroadcaster(
 
         val xml = CotGenerator.generatePliXml(
             uid = localUid,
-            callsign = callsign,
+            callsign = callsignProvider(),
             latitude = lat,
             longitude = lon,
             altitude = hae ?: 0.0,

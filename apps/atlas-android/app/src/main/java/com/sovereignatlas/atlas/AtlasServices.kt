@@ -11,7 +11,10 @@ import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.ImageDecoder
 import com.sovereignatlas.atlas.geo.LoSState
 import com.sovereignatlas.atlas.geo.cot.PliStore
+import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
+import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
+import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
@@ -43,4 +46,7 @@ class AtlasServices(
     val losState: LoSState,
     val routing: RoutingState,
     val pli: PliStore,
+    val locationEngine: LocationEngine,
+    val multicastListener: AtakMulticastListener,
+    val atakBroadcaster: AtakBroadcaster,
 )

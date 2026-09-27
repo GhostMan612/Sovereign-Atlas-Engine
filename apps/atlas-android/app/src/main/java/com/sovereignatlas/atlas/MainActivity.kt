@@ -8,28 +8,13 @@ package com.sovereignatlas.atlas
 import android.content.pm.PackageManager
 import android.hardware.GeomagneticField
 import android.os.Bundle
-import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import app.cash.sqldelight.driver.android.AndroidSqliteDriver
-import com.sovereignatlas.atlas.android.AndroidImageDecoder
-import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
-import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
-import com.sovereignatlas.atlas.android.comms.AtakXmlParser
-import com.sovereignatlas.atlas.db.AtlasDatabase
-import com.sovereignatlas.atlas.field.WaypointRepository
-import com.sovereignatlas.atlas.geo.LoSState
-import com.sovereignatlas.atlas.geo.cot.PliStore
-import com.sovereignatlas.atlas.geo.routing.RoutingState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import com.sovereignatlas.atlas.track.TrackRepository
-import com.sovereignatlas.atlas.track.TrackScrubState
+import com.sovereignatlas.atlas.android.services.AtlasTacticalService
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.AndroidHeadingSource
 import com.sovereignatlas.atlas.heading.HeadingService
@@ -38,14 +23,13 @@ import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.AtlasMapScreen
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
-import com.sovereignatlas.atlas.offline.OfflineStore
-import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
-import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
 
 final class MainActivity : ComponentActivity() {
+    private val appServices get() = (application as AtlasApplication).services
+
     private val locationSource by lazy { AndroidLocationSource(this) }
     private val locationService by lazy { LocationService(locationSource) }
     private val recorder by lazy { TrackRecorder(locationService) }
@@ -69,71 +53,6 @@ final class MainActivity : ComponentActivity() {
             ),
         )
     }
-    private val offline by lazy {
-        OfflineStore(directoryProvider = { filesDir })
-    }
-    private val tileServer by lazy {
-        PackTileServer(packsDir = { File(filesDir, PACK_JOURNAL_DIR) })
-    }
-    private val keyProvider by lazy {
-        AndroidKeyProvider(this)
-    }
-    private val mapRepository by lazy {
-        AndroidOfflineMapRepository(applicationContext)
-    }
-    private val localDeviceUid: String by lazy {
-        android.provider.Settings.Secure.getString(
-            contentResolver,
-            android.provider.Settings.Secure.ANDROID_ID,
-        ) ?: java.util.UUID.randomUUID().toString()
-    }
-    private val operatorCallsign: String by lazy {
-        val prefs = getSharedPreferences("atlas_prefs", MODE_PRIVATE)
-        prefs.getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
-            ?: "User-${localDeviceUid.takeLast(6)}"
-    }
-    private val pliStore by lazy {
-        PliStore(localDeviceUid = localDeviceUid, ttlMillis = 15 * 60 * 1000L)
-    }
-    private val cotListener by lazy {
-        AtakMulticastListener(
-            applicationContext,
-            pliStore,
-            AtakXmlParser(),
-        )
-    }
-    private val cotBroadcaster by lazy {
-        AtakBroadcaster(
-            listener = cotListener,
-            localUid = localDeviceUid,
-            callsign = operatorCallsign,
-        )
-    }
-    private val commsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    private val broadcastTick: () -> Unit = {
-        val fix = locationService.latestFixOrNull()
-        if (fix != null) {
-            commsScope.launch {
-                cotBroadcaster.broadcastPli(
-                    lat = fix.position.latitude,
-                    lon = fix.position.longitude,
-                    hae = fix.altitudeM,
-                    ce = fix.accuracyM ?: 0.0,
-                    fixTimeMillis = fix.atMs,
-                )
-            }
-        }
-    }
-    private val sqlDriver by lazy {
-        AndroidSqliteDriver(AtlasDatabase.Schema, applicationContext, "atlas.db")
-    }
-    private val atlasDatabase by lazy {
-        // Idempotent (IF NOT EXISTS): backfills tables such as the track
-        // buffer on installs that predate them.
-        AtlasDatabase.Schema.create(sqlDriver)
-        AtlasDatabase(sqlDriver)
-    }
 
     // No ViewModel in this host: splash hold is a plain activity-owned flag.
     // Flipped once the MapLibre style is loaded; offline restore is
@@ -147,29 +66,72 @@ final class MainActivity : ComponentActivity() {
             goTo = goTo,
             measure = measure,
             behavior = behavior,
-            offline = offline,
+            offline = appServices.offline,
             heading = headingService,
-            tiles = tileServer,
-            keys = keyProvider,
-            maps = mapRepository,
-            database = atlasDatabase,
-            waypointRepository = WaypointRepository(atlasDatabase),
-            trackRepository = TrackRepository(atlasDatabase),
-            imageDecoder = AndroidImageDecoder(),
-            scrubState = TrackScrubState(),
-            losState = LoSState(),
-            routing = RoutingState(),
-            pli = pliStore,
+            tiles = appServices.tiles,
+            keys = appServices.keys,
+            maps = appServices.maps,
+            database = appServices.database,
+            waypointRepository = appServices.waypointRepository,
+            trackRepository = appServices.trackRepository,
+            imageDecoder = appServices.imageDecoder,
+            scrubState = appServices.scrubState,
+            losState = appServices.losState,
+            routing = appServices.routing,
+            pli = appServices.pliStore,
+            locationEngine = appServices.locationEngine,
+            multicastListener = appServices.multicastListener,
+            atakBroadcaster = appServices.atakBroadcaster,
         )
+    }
+
+    private val requestNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ -> requestBatteryExemptionAndStartService() }
+
+    fun initializeTacticalMesh() {
+        getSharedPreferences(
+            AtlasTacticalService.PREFS_SERVICE_NAME,
+            android.content.Context.MODE_PRIVATE,
+        ).edit().putBoolean(AtlasTacticalService.KEY_USER_STOPPED, false).apply()
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            requestBatteryExemptionAndStartService()
+        }
+    }
+
+    private fun requestBatteryExemptionAndStartService() {
+        val power = getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        if (!power.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            ).apply {
+                data = android.net.Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        }
+
+        try {
+            val serviceIntent = android.content.Intent(
+                this,
+                AtlasTacticalService::class.java,
+            )
+            ContextCompat.startForegroundService(this, serviceIntent)
+        } catch (error: Exception) {
+            android.util.Log.e("MainActivity", "Failed to start tactical service", error)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { !mapReady.value }
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
-        offline.restore()
-        tileServer.start()
-        locationService.addListener(broadcastTick)
+        initializeTacticalMesh()
         setContent {
             MaterialTheme {
                 AtlasMapScreen(
@@ -194,24 +156,10 @@ final class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        cotListener.startListening(commsScope)
-    }
-
-    override fun onStop() {
-        cotListener.stopListening()
-        super.onStop()
-    }
-
     override fun onDestroy() {
-        locationService.removeListener(broadcastTick)
         recorder.dispose()
         locationService.dispose()
         headingService.dispose()
-        tileServer.stop()
-        cotListener.stopListening()
-        commsScope.cancel()
         super.onDestroy()
     }
 }
