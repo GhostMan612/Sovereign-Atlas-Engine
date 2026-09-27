@@ -31,6 +31,7 @@ jobs:
       - name: Build Release APKs
         working-directory: apps/atlas-android
         env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -38,10 +39,12 @@ jobs:
         run: |
           set +x
           umask 077
+
           KEYSTORE_DIR=$(mktemp -d)
-          trap 'rm -rf $KEYSTORE_DIR' EXIT
-          
-          base64 -d <<< "$RELEASE_KEYSTORE_BASE64" > $KEYSTORE_DIR/upload.jks
-          export KEYSTORE_PATH=$KEYSTORE_DIR/upload.jks
-          
+          trap 'rm -rf "$KEYSTORE_DIR"; rm -f app/google-services.json' EXIT
+          base64 -d <<< "$RELEASE_KEYSTORE_BASE64" > "$KEYSTORE_DIR/upload.jks"
+          export KEYSTORE_PATH="$KEYSTORE_DIR/upload.jks"
+
+          base64 -d <<< "$GOOGLE_SERVICES_JSON_BASE64" > app/google-services.json
+
           ./gradlew :app:assemblePlayRelease :app:assembleEnterpriseRelease -PdisableBuildScans=true --no-daemon --no-configuration-cache

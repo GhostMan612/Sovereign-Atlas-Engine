@@ -8,13 +8,20 @@ package com.sovereignatlas.atlas.android.comms
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
+import com.sovereignatlas.atlas.geo.cot.SyncProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
     private val localUid: String,
     private val callsignProvider: () -> String,
+    private val syncProvider: SyncProvider? = null,
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
 ) {
+    private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     suspend fun broadcastPli(
         lat: Double,
         lon: Double,
@@ -67,7 +74,7 @@ class AtakBroadcaster(
 
         listener.sendMulticast(payload)
 
-        return ChatMessage(
+        val sent = ChatMessage(
             messageId = messageId,
             senderUid = localUid,
             senderCallsign = callsign,
@@ -77,5 +84,10 @@ class AtakBroadcaster(
             timestampMillis = System.currentTimeMillis(),
             isSelf = true,
         )
+        // Durable log is fire-and-forget: the mesh already carried the message.
+        pushScope.launch {
+            syncProvider?.pushChatMessage(sent)
+        }
+        return sent
     }
 }

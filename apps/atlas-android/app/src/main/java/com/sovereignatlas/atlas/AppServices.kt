@@ -12,11 +12,13 @@ import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
+import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
+import com.sovereignatlas.atlas.geo.cot.SyncProvider
 import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.offline.OfflineStore
@@ -26,6 +28,10 @@ import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AppServices(private val context: Context) {
     private val appContext: Context get() = context.applicationContext
@@ -68,6 +74,15 @@ class AppServices(private val context: Context) {
         parser = AtakPayloadParser(),
     )
 
+    val syncProvider: SyncProvider = FirestoreSyncProvider(
+        localDeviceUid = localDeviceUid,
+        callsignProvider = {
+            appContext.getSharedPreferences("atlas_prefs", Context.MODE_PRIVATE)
+                .getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
+                ?: "User-${localDeviceUid.takeLast(6)}"
+        },
+    )
+
     val atakBroadcaster = AtakBroadcaster(
         listener = multicastListener,
         localUid = localDeviceUid,
@@ -76,7 +91,14 @@ class AppServices(private val context: Context) {
                 .getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
                 ?: "User-${localDeviceUid.takeLast(6)}"
         },
+        syncProvider = syncProvider,
     )
+
+    init {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            syncProvider.ensureAuthenticated()
+        }
+    }
 
     val locationEngine: LocationEngine = AndroidLocationEngine(
         context = appContext,

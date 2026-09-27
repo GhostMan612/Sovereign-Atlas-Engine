@@ -122,6 +122,9 @@ dependencies {
     implementation 'androidx.datastore:datastore-tink:1.3.0-alpha11'
     implementation 'com.google.crypto.tink:tink-android:1.23.0'
     implementation 'com.squareup.wire:wire-runtime:6.4.7'
+    implementation platform('com.google.firebase:firebase-bom:33.16.0')
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-auth'
     implementation 'mil.nga:mgrs:2.1.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1'
     implementation 'org.maplibre.gl:android-sdk:13.3.1'
@@ -135,3 +138,5 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
+
+apply plugin: "com.google.gms.google-services"
