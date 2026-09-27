@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.sovereignatlas.atlas.android.AndroidImageDecoder
+import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakXmlParser
 import com.sovereignatlas.atlas.db.AtlasDatabase
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.goto.GoToState
@@ -79,8 +81,19 @@ final class MainActivity : ComponentActivity() {
     private val mapRepository by lazy {
         AndroidOfflineMapRepository(applicationContext)
     }
+    private val localDeviceUid: String by lazy {
+        android.provider.Settings.Secure.getString(
+            contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        ) ?: java.util.UUID.randomUUID().toString()
+    }
+    private val operatorCallsign: String by lazy {
+        val prefs = getSharedPreferences("atlas_prefs", MODE_PRIVATE)
+        prefs.getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
+            ?: "User-${localDeviceUid.takeLast(6)}"
+    }
     private val pliStore by lazy {
-        PliStore()
+        PliStore(localDeviceUid = localDeviceUid, ttlMillis = 15 * 60 * 1000L)
     }
     private val cotListener by lazy {
         AtakMulticastListener(
@@ -89,7 +102,29 @@ final class MainActivity : ComponentActivity() {
             AtakXmlParser(),
         )
     }
+    private val cotBroadcaster by lazy {
+        AtakBroadcaster(
+            listener = cotListener,
+            localUid = localDeviceUid,
+            callsign = operatorCallsign,
+        )
+    }
     private val commsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val broadcastTick: () -> Unit = {
+        val fix = locationService.latestFixOrNull()
+        if (fix != null) {
+            commsScope.launch {
+                cotBroadcaster.broadcastPli(
+                    lat = fix.position.latitude,
+                    lon = fix.position.longitude,
+                    hae = fix.altitudeM,
+                    ce = fix.accuracyM ?: 0.0,
+                    fixTimeMillis = fix.atMs,
+                )
+            }
+        }
+    }
     private val sqlDriver by lazy {
         AndroidSqliteDriver(AtlasDatabase.Schema, applicationContext, "atlas.db")
     }
@@ -134,6 +169,7 @@ final class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         offline.restore()
         tileServer.start()
+        locationService.addListener(broadcastTick)
         setContent {
             MaterialTheme {
                 AtlasMapScreen(
@@ -169,6 +205,7 @@ final class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        locationService.removeListener(broadcastTick)
         recorder.dispose()
         locationService.dispose()
         headingService.dispose()

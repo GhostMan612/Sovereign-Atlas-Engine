@@ -22,11 +22,12 @@ interface CotParser {
     fun parse(packetData: ByteArray): CotPli?
 }
 
-class PliStore(private val ttlMillis: Long = 15 * 60 * 1000L) {
+class PliStore(private val localDeviceUid: String, private val ttlMillis: Long = 15 * 60 * 1000L) {
     private val _activePlis = MutableStateFlow<Map<String, CotPli>>(emptyMap())
     val activePlis: StateFlow<Map<String, CotPli>> = _activePlis.asStateFlow()
 
     fun update(pli: CotPli) {
+        if (pli.uid == localDeviceUid) return
         val now = System.currentTimeMillis()
         _activePlis.value = _activePlis.value
             .filterValues { now - it.timestamp < ttlMillis }

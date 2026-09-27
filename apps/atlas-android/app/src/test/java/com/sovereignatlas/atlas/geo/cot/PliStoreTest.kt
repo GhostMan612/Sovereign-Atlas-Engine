@@ -23,7 +23,7 @@ final class PliStoreTest {
 
     @Test
     fun updatePrunesStaleEntries() {
-        val store = PliStore()
+        val store = PliStore(localDeviceUid = "local")
         store.update(pli("stale", 16 * 60 * 1000L))
         store.update(pli("fresh", 60 * 1000L))
         val active = store.activePlis.value
@@ -33,7 +33,7 @@ final class PliStoreTest {
 
     @Test
     fun pruneExpiredDropsOldMarkers() {
-        val store = PliStore(ttlMillis = 50L)
+        val store = PliStore(localDeviceUid = "local", ttlMillis = 50L)
         store.update(pli("ephemeral", 0L))
         assertEquals(1, store.activePlis.value.size)
         Thread.sleep(120L)
@@ -43,7 +43,7 @@ final class PliStoreTest {
 
     @Test
     fun pruneKeepsFreshWhenNothingExpired() {
-        val store = PliStore()
+        val store = PliStore(localDeviceUid = "local")
         store.update(pli("a", 0L))
         store.update(pli("b", 5 * 60 * 1000L))
         val before = store.activePlis.value
@@ -52,8 +52,15 @@ final class PliStoreTest {
     }
 
     @Test
+    fun localLoopbackIsFiltered() {
+        val store = PliStore(localDeviceUid = "local")
+        store.update(pli("local", 0L))
+        assertTrue(store.activePlis.value.isEmpty())
+    }
+
+    @Test
     fun sameUidOverwrites() {
-        val store = PliStore()
+        val store = PliStore(localDeviceUid = "local")
         store.update(pli("unit-1", 10 * 60 * 1000L))
         store.update(pli("unit-1", 0L).copy(callsign = "RENAMED"))
         val active = store.activePlis.value

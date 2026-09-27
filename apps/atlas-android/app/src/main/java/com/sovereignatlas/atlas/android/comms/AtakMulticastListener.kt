@@ -8,14 +8,18 @@ package com.sovereignatlas.atlas.android.comms
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.PowerManager
+import android.util.Log
 import com.sovereignatlas.atlas.geo.cot.CotParser
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.MulticastSocket
+import java.net.NetworkInterface
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +44,9 @@ class AtakMulticastListener(
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var listenJob: Job? = null
+
+    @Volatile
+    private var socket: MulticastSocket? = null
 
     private val restartSignal = MutableSharedFlow<Unit>(replay = 1)
 
@@ -73,18 +80,38 @@ class AtakMulticastListener(
                 }
 
                 val groupAddr = InetAddress.getByName("239.2.3.1")
-                var socket: MulticastSocket? = null
+                val wifiNetwork = connectivityManager.allNetworks.firstOrNull { network ->
+                    connectivityManager.getNetworkCapabilities(network)
+                        ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                }
+                if (wifiNetwork == null) {
+                    Log.w("AtakMulticastListener", "No WiFi network available — PLI broadcast skipped")
+                    return@collectLatest
+                }
+
+                var joinedInterface: NetworkInterface? = null
                 try {
-                    socket = MulticastSocket(6969).apply {
+                    val bound = MulticastSocket(6969).apply {
                         reuseAddress = true
-                        joinGroup(groupAddr)
-                        soTimeout = 5000
+                        setLoopbackMode(true)
+                        timeToLive = 1
+                        wifiNetwork.bindSocket(this)
                     }
+                    socket = bound
+                    val wifiInterface = NetworkInterface.getNetworkInterfaces().toList()
+                        .firstOrNull { it.name.startsWith("wlan") && it.isUp }
+                    if (wifiInterface != null) {
+                        bound.joinGroup(InetSocketAddress(groupAddr, 6969), wifiInterface)
+                        joinedInterface = wifiInterface
+                    } else {
+                        bound.joinGroup(groupAddr)
+                    }
+                    bound.soTimeout = 5000
                     val buffer = ByteArray(65507)
                     while (isActive) {
                         val packet = DatagramPacket(buffer, buffer.size)
                         try {
-                            socket.receive(packet)
+                            bound.receive(packet)
                             val data = packet.data.copyOf(packet.length)
                             parser.parse(data)?.let { pliStore.update(it) }
                         } catch (error: SocketTimeoutException) {
@@ -95,8 +122,16 @@ class AtakMulticastListener(
                     delay(2000L)
                     restartSignal.tryEmit(Unit)
                 } finally {
-                    runCatching { socket?.leaveGroup(groupAddr) }
-                    runCatching { socket?.close() }
+                    val closing = socket
+                    socket = null
+                    runCatching {
+                        if (joinedInterface != null) {
+                            closing?.leaveGroup(InetSocketAddress(groupAddr, 6969), joinedInterface)
+                        } else {
+                            closing?.leaveGroup(groupAddr)
+                        }
+                    }
+                    runCatching { closing?.close() }
                 }
             }
         }
@@ -114,6 +149,19 @@ class AtakMulticastListener(
         listenJob = null
         runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         releaseLocks()
+    }
+
+    fun sendMulticast(data: ByteArray) {
+        val current = socket ?: return
+        runCatching {
+            val packet = DatagramPacket(
+                data,
+                data.size,
+                InetAddress.getByName("239.2.3.1"),
+                6969,
+            )
+            current.send(packet)
+        }
     }
 
     private fun releaseLocks() {
