@@ -15,10 +15,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.sovereignatlas.atlas.android.AndroidImageDecoder
+import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
+import com.sovereignatlas.atlas.android.comms.AtakXmlParser
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.routing.RoutingState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.goto.GoToState
@@ -72,6 +79,17 @@ final class MainActivity : ComponentActivity() {
     private val mapRepository by lazy {
         AndroidOfflineMapRepository(applicationContext)
     }
+    private val pliStore by lazy {
+        PliStore()
+    }
+    private val cotListener by lazy {
+        AtakMulticastListener(
+            applicationContext,
+            pliStore,
+            AtakXmlParser(),
+        )
+    }
+    private val commsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sqlDriver by lazy {
         AndroidSqliteDriver(AtlasDatabase.Schema, applicationContext, "atlas.db")
     }
@@ -106,6 +124,7 @@ final class MainActivity : ComponentActivity() {
             scrubState = TrackScrubState(),
             losState = LoSState(),
             routing = RoutingState(),
+            pli = pliStore,
         )
     }
 
@@ -139,11 +158,23 @@ final class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        cotListener.startListening(commsScope)
+    }
+
+    override fun onStop() {
+        cotListener.stopListening()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         recorder.dispose()
         locationService.dispose()
         headingService.dispose()
         tileServer.stop()
+        cotListener.stopListening()
+        commsScope.cancel()
         super.onDestroy()
     }
 }

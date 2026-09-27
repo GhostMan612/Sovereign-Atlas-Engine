@@ -61,6 +61,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.gson.JsonObject
 import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.android.AndroidRoutingLoader
 import com.sovereignatlas.atlas.android.DemSession
@@ -75,6 +76,7 @@ import com.sovereignatlas.atlas.geo.LoSMode
 import com.sovereignatlas.atlas.geo.LoSRequest
 import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
+import com.sovereignatlas.atlas.geo.cot.CotPli
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
@@ -280,7 +282,9 @@ fun AtlasMapScreen(
         ensureWaypointIcon(style)
         ensureGpsPuck(style, context)
         ensureScrubIcon(style)
+        ensurePliMarker(style, context)
         pushScrubPoint(style, services.scrubState.activePoint.value)
+        pushPli(style, services.pli.activePlis.value)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
@@ -575,6 +579,13 @@ fun AtlasMapScreen(
                 services.scrubState.activePoint.collect { point ->
                     styleRef.value?.let { style ->
                         pushScrubPoint(style, point)
+                    }
+                }
+            }
+            launch {
+                services.pli.activePlis.collect { plis ->
+                    styleRef.value?.let { style ->
+                        pushPli(style, plis)
                     }
                 }
             }
@@ -1211,6 +1222,34 @@ fun ensureGpsPuck(style: Style, context: Context) {
         ) ?: return
         style.addImage("gps-puck-icon", bitmap, true)
     }
+}
+
+fun ensurePliMarker(style: Style, context: Context) {
+    if (style.getImage("blue-force-marker") == null) {
+        val bitmap = BitmapFactory.decodeResource(
+            context.resources,
+            com.sovereignatlas.atlas.R.drawable.ic_blue_force_marker,
+        ) ?: return
+        style.addImage("blue-force-marker", bitmap)
+    }
+}
+
+fun pushPli(style: Style, plis: Map<String, CotPli>) {
+    pushFeatures(
+        style,
+        AtlasLayerIds.PLI_SOURCE,
+        FeatureCollection.fromFeatures(
+            plis.values.map { pli ->
+                val properties = JsonObject()
+                properties.addProperty("callsign", pli.callsign)
+                properties.addProperty("uid", pli.uid)
+                Feature.fromGeometry(
+                    Point.fromLngLat(pli.longitude, pli.latitude),
+                    properties,
+                )
+            },
+        ),
+    )
 }
 
 private val scrubIconBitmap: Bitmap by lazy {

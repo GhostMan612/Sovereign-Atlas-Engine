@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Blue-force marker: tactical blue disc, white ring, white pivot. -->
+    <path
+        android:fillColor="#4287F5"
+        android:pathData="M24,4a20,20 0 1,1 -0.1,0z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:pathData="M24,4a20,20 0 1,1 -0.1,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M22,22h4v4h-4z" />
+</vector>
