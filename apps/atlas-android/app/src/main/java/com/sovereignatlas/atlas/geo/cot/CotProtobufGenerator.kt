@@ -23,6 +23,7 @@ object CotProtobufGenerator {
     fun generatePliProto(
         localUid: String,
         callsign: String,
+        teamColor: String,
         geoPoint: com.sovereignatlas.atlas.geo.GeoPoint,
         ceFallback: Double?,
     ): ByteArray {
@@ -41,7 +42,7 @@ object CotProtobufGenerator {
             le = 9999999.0,
             detail = Detail(
                 contact = Contact(callsign = callsign),
-                group = Group(name = "Cyan", role = "Team Member"),
+                group = Group(name = teamColor, role = "Team Member"),
             ),
         )
         val msg = TakMessage(cotEvent = event)

@@ -23,6 +23,7 @@ final class AtakPayloadParserTest {
         return CotProtobufGenerator.generatePliProto(
             localUid = "unit-1",
             callsign = "ALPHA",
+            teamColor = "Cyan",
             geoPoint = GeoPoint(44.9, -93.1, altitude, null, null, 0L),
             ceFallback = ce,
         )

@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas.android.comms
 
+import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
@@ -17,11 +18,12 @@ import kotlinx.coroutines.launch
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
     private val localUid: String,
-    private val callsignProvider: () -> String,
+    private val settingsRepository: SettingsRepository,
     private val syncProvider: SyncProvider? = null,
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
 ) {
     private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     suspend fun broadcastPli(
         lat: Double,
         lon: Double,
@@ -29,9 +31,12 @@ class AtakBroadcaster(
         ce: Double?,
         fixTimeMillis: Long,
     ) {
+        if (!settingsRepository.isMeshActive.value) return
         if (lat == 0.0 && lon == 0.0) return
         if (!scheduler.shouldBroadcast(lat, lon)) return
-        val callsign = callsignProvider()
+
+        val callsign = settingsRepository.callsign.value
+        val teamColor = settingsRepository.teamColor.value
         val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(
             lat,
             lon,
@@ -44,6 +49,7 @@ class AtakBroadcaster(
         val payload = CotProtobufGenerator.generatePliProto(
             localUid = localUid,
             callsign = callsign,
+            teamColor = teamColor,
             geoPoint = geoPoint,
             ceFallback = ce,
         )
@@ -55,9 +61,10 @@ class AtakBroadcaster(
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
         targetUid: String? = null,
     ): ChatMessage {
+        if (!settingsRepository.isMeshActive.value) throw IllegalStateException("Mesh Transceiver is Offline")
         if (currentGeoPoint == null) throw IllegalStateException("No GPS fix")
 
-        val callsign = callsignProvider()
+        val callsign = settingsRepository.callsign.value
         val messageId = java.util.UUID.randomUUID().toString()
         val chatroom = "All Chat Rooms"
         val remarksTo = targetUid ?: chatroom
@@ -84,7 +91,6 @@ class AtakBroadcaster(
             timestampMillis = System.currentTimeMillis(),
             isSelf = true,
         )
-        // Durable log is fire-and-forget: the mesh already carried the message.
         pushScope.launch {
             syncProvider?.pushChatMessage(sent)
         }

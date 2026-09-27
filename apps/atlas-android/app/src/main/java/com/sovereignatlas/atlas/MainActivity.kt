@@ -81,6 +81,7 @@ final class MainActivity : ComponentActivity() {
             routing = appServices.routing,
             pli = appServices.pliStore,
             messages = appServices.messageStore,
+            settingsRepository = appServices.settingsRepository,
             locationEngine = appServices.locationEngine,
             multicastListener = appServices.multicastListener,
             atakBroadcaster = appServices.atakBroadcaster,

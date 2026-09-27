@@ -108,6 +108,8 @@ import com.sovereignatlas.atlas.ui.MeasurePanel
 import com.sovereignatlas.atlas.ui.OfflineDialog
 import com.sovereignatlas.atlas.ui.ScaleBar
 import com.sovereignatlas.atlas.ui.SettingsDialog
+import com.sovereignatlas.atlas.ui.settings.SettingsScreen
+import com.sovereignatlas.atlas.ui.settings.SettingsViewModel
 import com.sovereignatlas.atlas.ui.TacticalCrosshair
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
@@ -169,6 +171,10 @@ fun AtlasMapScreen(
     val showLink = remember { mutableStateOf(false) }
     val showFence = remember { mutableStateOf(false) }
     val showSettings = remember { mutableStateOf(false) }
+    val showNodeSettings = remember { mutableStateOf(false) }
+    val nodeSettingsViewModel: SettingsViewModel = viewModel {
+        SettingsViewModel(services.settingsRepository)
+    }
     val cartoKey by services.keys.cartoKey.collectAsState()
     val losMode by services.losState.mode.collectAsStateWithLifecycle(initialValue = LoSMode.Inactive)
     val losResult by services.losState.result.collectAsStateWithLifecycle(initialValue = null)
@@ -620,6 +626,8 @@ fun AtlasMapScreen(
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val chatSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val nodeSettingsSheetState =
+        rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val onToggleFollow: () -> Unit = {
         following.value = !following.value
     }
@@ -781,7 +789,8 @@ fun AtlasMapScreen(
                 ToolRow("Layers", "Open layers", openTool(showLayers))
                 ToolRow("Link", "Open radio link", openTool(showLink))
                 ToolRow("Fence", "Open geofence", openTool(showFence))
-                ToolRow("Settings", "Open settings", openTool(showSettings))
+                ToolRow("API Keys", "Open API keys", openTool(showSettings))
+                ToolRow("Settings", "Open node settings", openTool(showNodeSettings))
                 ToolRow(
                     "Chat",
                     "Open tactical chat",
@@ -841,6 +850,14 @@ fun AtlasMapScreen(
                 sheetState = chatSheetState,
             ) {
                 GeoChatScreen(viewModel = chatViewModel)
+            }
+        }
+        if (showNodeSettings.value) {
+            ModalBottomSheet(
+                onDismissRequest = { showNodeSettings.value = false },
+                sheetState = nodeSettingsSheetState,
+            ) {
+                SettingsScreen(viewModel = nodeSettingsViewModel)
             }
         }
         // MGRS HUD - only recompose when center changes AND isIdle is true

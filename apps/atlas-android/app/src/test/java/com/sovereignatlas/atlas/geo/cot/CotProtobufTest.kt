@@ -29,6 +29,7 @@ final class CotProtobufTest {
         val payload = CotProtobufGenerator.generatePliProto(
             localUid = "unit-1",
             callsign = "ALPHA",
+            teamColor = "Cyan",
             geoPoint = fix(),
             ceFallback = 5.0,
         )

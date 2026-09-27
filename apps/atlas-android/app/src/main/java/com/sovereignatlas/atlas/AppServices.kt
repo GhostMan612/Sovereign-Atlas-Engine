@@ -12,6 +12,7 @@ import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
+import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
@@ -83,14 +84,12 @@ class AppServices(private val context: Context) {
         },
     )
 
+    val settingsRepository = SettingsRepository(appContext)
+
     val atakBroadcaster = AtakBroadcaster(
         listener = multicastListener,
         localUid = localDeviceUid,
-        callsignProvider = {
-            appContext.getSharedPreferences("atlas_prefs", Context.MODE_PRIVATE)
-                .getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
-                ?: "User-${localDeviceUid.takeLast(6)}"
-        },
+        settingsRepository = settingsRepository,
         syncProvider = syncProvider,
     )
 

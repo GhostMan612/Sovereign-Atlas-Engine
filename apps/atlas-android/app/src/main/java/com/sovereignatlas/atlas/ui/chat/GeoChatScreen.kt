@@ -55,6 +55,7 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val inputText by viewModel.inputText.collectAsStateWithLifecycle()
     val hasGps by viewModel.hasGpsFix.collectAsStateWithLifecycle()
+    val isMeshActive by viewModel.isMeshActive.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -109,7 +110,13 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
             onValueChange = { viewModel.setInputText(it) },
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
-                Text(if (hasGps) "Message All Chat Rooms..." else "Waiting for GPS Fix...")
+                Text(
+                    when {
+                        !isMeshActive -> "Mesh Transceiver Offline"
+                        !hasGps -> "Waiting for GPS Fix..."
+                        else -> "Message All Chat Rooms..."
+                    },
+                )
             },
             enabled = true,
             maxLines = 5,
@@ -117,7 +124,7 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
             trailingIcon = {
                 IconButton(
                     onClick = { viewModel.sendMessage() },
-                    enabled = hasGps && inputText.isNotBlank(),
+                    enabled = isMeshActive && hasGps && inputText.isNotBlank(),
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
