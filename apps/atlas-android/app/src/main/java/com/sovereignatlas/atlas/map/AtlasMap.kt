@@ -40,6 +40,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sovereignatlas.atlas.ui.chat.GeoChatScreen
+import com.sovereignatlas.atlas.ui.chat.GeoChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -549,6 +552,8 @@ fun AtlasMapScreen(
         }
     }
     val showTools = remember { mutableStateOf(false) }
+    val showChat = remember { mutableStateOf(false) }
+    val chatViewModel: GeoChatViewModel = viewModel { GeoChatViewModel(services) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             launch {
@@ -611,7 +616,10 @@ fun AtlasMapScreen(
         }
     }
     val toolsScope = rememberCoroutineScope()
-    val toolsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val toolsSheetState =
+        rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val chatSheetState =
+        rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val onToggleFollow: () -> Unit = {
         following.value = !following.value
     }
@@ -775,6 +783,20 @@ fun AtlasMapScreen(
                 ToolRow("Fence", "Open geofence", openTool(showFence))
                 ToolRow("Settings", "Open settings", openTool(showSettings))
                 ToolRow(
+                    "Chat",
+                    "Open tactical chat",
+                    {
+                        toolsScope.launch {
+                            try {
+                                toolsSheetState.hide()
+                            } finally {
+                                showTools.value = false
+                                showChat.value = true
+                            }
+                        }
+                    },
+                )
+                ToolRow(
                     if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
                     if (losMode != LoSMode.Inactive) {
                         "Cancel line-of-sight"
@@ -811,6 +833,14 @@ fun AtlasMapScreen(
                         }
                     },
                 )
+            }
+        }
+        if (showChat.value) {
+            ModalBottomSheet(
+                onDismissRequest = { showChat.value = false },
+                sheetState = chatSheetState,
+            ) {
+                GeoChatScreen(viewModel = chatViewModel)
             }
         }
         // MGRS HUD - only recompose when center changes AND isIdle is true
