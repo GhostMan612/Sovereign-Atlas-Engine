@@ -4,6 +4,45 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## HUD mutual exclusivity — drawing vs measurement (2026-09-27)
+
+- **Commit (pushed):** `fix(android): enforce drawing and
+  measurement HUD exclusivity` (1 file). Toolbar is gated on
+  `!measureActive.value`; the MeasurePanel block is gated on
+  `measureActive.value && drawingMode == DrawingMode.NONE`.
+  Choosing a drawing mode calls `services.measure.clear()`;
+  the Measure FAB resets `drawingModeFlow` to NONE and drops
+  `inProgressPointsFlow`. Both directions verified against the
+  real accessors, not placeholders.
+- **Audit (Task 0 pinned before writing):** measure state is
+  the Compose holder `measureActive: MutableState<Boolean>`
+  (AtlasMap.kt:285), refreshed by a listener that reads
+  `services.measure.isActive()`; the measurement UI is a
+  PLAIN composable `MeasurePanel(snapshot, units,
+  onUnitSelected, onClose, onClear, modifier)` rendered
+  inline inside a BottomCenter `Surface` (not a sheet or
+  dialog), so the gate was applied at the state-gated call
+  site and its `onClose`/`onClear` semantics (both
+  `services.measure.clear()`) are untouched. Note two
+  `onMeasure` lambdas exist: the listener refresher (:578)
+  and the FAB activator (:749) — the exclusivity write went
+  into the activator, since only it changes mode.
+- **Store is authoritative:** `MeasureState.clear()` calls
+  `notifyListeners()`, so writing the store (not the Compose
+  boolean) keeps `measureActive` truthful — the listener
+  refreshes it, and the panel clears on the next frame.
+- **Deadlock analysis:** gating BOTH surfaces the other way
+  would strand the operator with neither visible, so the two
+  state writes are the invariant that prevents it (any
+  activation of one clears the other). Recorded, not assumed.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **322/322 green each**. No new test —
+  Compose UI state exclusivity only (per sprint note).
+- **Device verification PENDING (human/Studio):** activate
+  drawing → measure panel disappears; activate measure →
+  toolbar disappears AND the draft is discarded; then confirm
+  the bottom band no longer collides.
+
 ## Tactical drawing UI + click interception (2026-09-27)
 
 - **Commit (pushed):** `feat(android): tactical drawing UI and

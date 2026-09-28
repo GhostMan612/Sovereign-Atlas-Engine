@@ -763,6 +763,12 @@ fun AtlasMapScreen(
                     longitude = target.longitude,
                 ),
             )
+            // Exclusivity: measurement wins the bottom-center band, so any
+            // in-progress drawing draft is discarded on activation.
+            if (services.measure.isActive()) {
+                drawingModeFlow.value = DrawingMode.NONE
+                inProgressPointsFlow.value = emptyList()
+            }
         }
     }
     val openTool: (androidx.compose.runtime.MutableState<Boolean>) -> () -> Unit = { flag ->
@@ -895,47 +901,54 @@ fun AtlasMapScreen(
                 Text("Tools")
             }
         }
-        TacticalDrawingToolbar(
-            currentMode = drawingMode,
-            pointCount = inProgressPoints.size,
-            onModeSelected = { mode ->
-                drawingModeFlow.value = mode
-                inProgressPointsFlow.value = emptyList()
-            },
-            onUndo = {
-                val current = inProgressPointsFlow.value
-                if (current.isNotEmpty()) {
-                    inProgressPointsFlow.value = current.dropLast(1)
-                }
-            },
-            onCommit = {
-                val points = inProgressPointsFlow.value
-                val mode = drawingModeFlow.value
-                val committed: OperationalGraphic? = when (mode) {
-                    DrawingMode.TACTICAL_LINE ->
-                        OperationalGraphic.TacticalLine(UUID.randomUUID().toString(), points)
-                    DrawingMode.MEDEVAC_ZONE ->
-                        OperationalGraphic.TacticalZone(
-                            UUID.randomUUID().toString(),
-                            points,
-                            ZoneType.MEDEVAC,
-                        )
-                    DrawingMode.RESTRICTED_ZONE ->
-                        OperationalGraphic.TacticalZone(
-                            UUID.randomUUID().toString(),
-                            points,
-                            ZoneType.RESTRICTED,
-                        )
-                    DrawingMode.NONE -> null
-                }
-                if (committed != null) {
-                    opsGraphics.value = opsGraphics.value + committed
-                }
-                drawingModeFlow.value = DrawingMode.NONE
-                inProgressPointsFlow.value = emptyList()
-            },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
-        )
+        if (!measureActive.value) {
+            TacticalDrawingToolbar(
+                currentMode = drawingMode,
+                pointCount = inProgressPoints.size,
+                onModeSelected = { mode ->
+                    drawingModeFlow.value = mode
+                    inProgressPointsFlow.value = emptyList()
+                    // Exclusivity: taking the glass for drawing releases the
+                    // measurement session (and vice versa via the Measure FAB).
+                    if (mode != DrawingMode.NONE && services.measure.isActive()) {
+                        services.measure.clear()
+                    }
+                },
+                onUndo = {
+                    val current = inProgressPointsFlow.value
+                    if (current.isNotEmpty()) {
+                        inProgressPointsFlow.value = current.dropLast(1)
+                    }
+                },
+                onCommit = {
+                    val points = inProgressPointsFlow.value
+                    val mode = drawingModeFlow.value
+                    val committed: OperationalGraphic? = when (mode) {
+                        DrawingMode.TACTICAL_LINE ->
+                            OperationalGraphic.TacticalLine(UUID.randomUUID().toString(), points)
+                        DrawingMode.MEDEVAC_ZONE ->
+                            OperationalGraphic.TacticalZone(
+                                UUID.randomUUID().toString(),
+                                points,
+                                ZoneType.MEDEVAC,
+                            )
+                        DrawingMode.RESTRICTED_ZONE ->
+                            OperationalGraphic.TacticalZone(
+                                UUID.randomUUID().toString(),
+                                points,
+                                ZoneType.RESTRICTED,
+                            )
+                        DrawingMode.NONE -> null
+                    }
+                    if (committed != null) {
+                        opsGraphics.value = opsGraphics.value + committed
+                    }
+                    drawingModeFlow.value = DrawingMode.NONE
+                    inProgressPointsFlow.value = emptyList()
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
+            )
+        }
         if (showTools.value) {
             ModalBottomSheet(
                 onDismissRequest = { showTools.value = false },
@@ -1305,7 +1318,7 @@ fun AtlasMapScreen(
                 }
             }
         }
-        if (measureActive.value) {            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
+        if (measureActive.value && drawingMode == DrawingMode.NONE) {            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
                 MeasurePanel(
                     snapshot = measureSnapshot.value,
                     units = MeasureUnit.values().toList(),
