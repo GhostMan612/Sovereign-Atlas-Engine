@@ -87,7 +87,9 @@ import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
+import com.sovereignatlas.atlas.geo.graphics.OperationalGraphic
 import com.sovereignatlas.atlas.geo.los.TerrainProfile
+import com.sovereignatlas.atlas.map.graphics.GraphicsGeoJsonMapper
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesPack
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesLayerId
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesSafeId
@@ -306,6 +308,9 @@ fun AtlasMapScreen(
     }
     val scannedPacks = remember { mutableStateOf<List<MbtilesPack>>(emptyList()) }
     val showLayerManager = remember { mutableStateOf(false) }
+    // Placeholder until the drawing tools UI ships: the operational-graphics
+    // plumbing is live, the authored graphic list is not populated yet.
+    val opsGraphics = remember { mutableStateOf<List<OperationalGraphic>>(emptyList()) }
     val layerManagerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Shared post-style content: re-installs the atlas layer stack after any
     // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
@@ -336,6 +341,7 @@ fun AtlasMapScreen(
         pushPli(style, services.pli.activePlis.value)
         pushMarkers(style, services.markers.markerStream.value)
         pushMeshTracks(style, services.markers.markerStream.value)
+        pushOpsGraphics(style, opsGraphics.value)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
@@ -786,6 +792,10 @@ fun AtlasMapScreen(
     // sensor only when head-up mode was toggled. Start it for the HUD too.
     LaunchedEffect(services) {
         services.heading.ensureStarted()
+    }
+    LaunchedEffect(opsGraphics.value) {
+        val style = styleRef.value ?: return@LaunchedEffect
+        pushOpsGraphics(style, opsGraphics.value)
     }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -1558,6 +1568,11 @@ fun markersToFeatures(markers: Map<String, CotMarker>): FeatureCollection {
 
 fun pushMarkers(style: Style, markers: Map<String, CotMarker>) {
     pushFeatures(style, AtlasLayerIds.MARKER_SOURCE, markersToFeatures(markers))
+}
+
+fun pushOpsGraphics(style: Style, graphics: List<OperationalGraphic>) {
+    val source = style.getSourceAs<GeoJsonSource>(AtlasLayerIds.OPS_GRAPHICS_SOURCE) ?: return
+    source.setGeoJson(GraphicsGeoJsonMapper.toFeatureCollection(graphics))
 }
 
 fun ensureCotTrackIcons(style: Style, context: Context) {

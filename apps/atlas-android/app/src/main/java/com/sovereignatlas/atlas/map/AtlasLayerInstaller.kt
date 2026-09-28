@@ -8,6 +8,7 @@ package com.sovereignatlas.atlas.map
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -51,6 +52,9 @@ object AtlasLayerIds {
     const val MBTILES_SOURCE_ID_PREFIX = "mbtiles-source-"
     const val MESH_TRACK_SOURCE = "mesh-track-source"
     const val MESH_TRACK_LAYER = "mesh-track-layer"
+    const val OPS_GRAPHICS_SOURCE = "ops-graphics-source"
+    const val OPS_ZONE_LAYER = "ops-zone-layer"
+    const val OPS_LINE_LAYER = "ops-line-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -83,6 +87,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.PLI_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MARKER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MESH_TRACK_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.OPS_GRAPHICS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
@@ -223,6 +228,33 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.textHaloWidth(1f),
             ),
         AtlasLayerIds.WAYPOINTS_LAYER,
+    )
+    // Operational graphics sit directly below the CoT track layer so drawn
+    // shapes never obscure track icons or their callsign labels. Geometry
+    // filters split one source into zone fills and tactical lines.
+    style.addLayerBelow(
+        FillLayer(AtlasLayerIds.OPS_ZONE_LAYER, AtlasLayerIds.OPS_GRAPHICS_SOURCE)
+            .withProperties(
+                PropertyFactory.fillColor(Expression.get("fillColor")),
+                PropertyFactory.fillOpacity(Expression.get("fillOpacity")),
+            )
+            .withFilter(
+                Expression.eq(Expression.geometryType(), Expression.literal("Polygon")),
+            ),
+        AtlasLayerIds.MESH_TRACK_LAYER,
+    )
+    style.addLayerBelow(
+        LineLayer(AtlasLayerIds.OPS_LINE_LAYER, AtlasLayerIds.OPS_GRAPHICS_SOURCE)
+            .withProperties(
+                PropertyFactory.lineColor(Expression.get("color")),
+                PropertyFactory.lineWidth(Expression.get("width")),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            )
+            .withFilter(
+                Expression.eq(Expression.geometryType(), Expression.literal("LineString")),
+            ),
+        AtlasLayerIds.MESH_TRACK_LAYER,
     )
     style.addLayerBelow(
         SymbolLayer(AtlasLayerIds.PLI_LAYER, AtlasLayerIds.PLI_SOURCE)

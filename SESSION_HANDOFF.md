@@ -4,6 +4,59 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Operational graphics domain + layers (2026-09-27)
+
+- **Commit (pushed):** `feat(android): operational graphics
+  domain and layers` (2 new + 2 modified + handoff). New pure
+  `geo/graphics` (`ZoneType` MEDEVAC/RESTRICTED/OBJECTIVE with
+  hex+alpha, sealed `OperationalGraphic.TacticalLine` /
+  `.TacticalZone`) over the existing `geo.AtlasCoordinate`.
+  New `map/graphics/GraphicsGeoJsonMapper` (degenerate
+  geometry dropped, rings closed by value comparison).
+  `ops-graphics-source` + `ops-zone-layer` (FillLayer) +
+  `ops-line-layer` (LineLayer) installed in
+  `installAtlasLayers`, both `addLayerBelow(MESH_TRACK_LAYER)`
+  with `geometryType()` filters, fully data-driven.
+  `pushOpsGraphics` wired into `onStyleLoaded` and a
+  `LaunchedEffect` over an empty placeholder list.
+- **Audit substitutions (no halt needed):** coordinate class
+  is `com.sovereignatlas.atlas.geo.AtlasCoordinate` (non-null
+  `latitude`/`longitude` Double — the same type the existing
+  measure/position/ring mappers already use; `geo.GeoPoint` is
+  the richer GPS type and was deliberately not used here). No
+  new coordinate class invented, no null guards needed.
+  Anchor is `mesh-track-layer` (the CoT track layer added
+  last sprint), so drawings render below track icons and
+  their callsign labels.
+- **MapLibre API verified by javap BEFORE writing** (13.3.1
+  AAR): `Expression.geometryType()`, `Expression.literal
+  (String)`, and **`Expression.eq(Expression, Expression)` all
+  exist** — so the preferred Expression/Expression form was
+  used, not the String overload and never `.toString()` on an
+  Expression. All four data-driven `PropertyFactory`
+  overloads (`lineWidth`, `lineColor`, `fillColor`,
+  `fillOpacity` taking Expression) plus `lineJoin`/`lineCap`
+  exist, so no uniform-color fallback was needed.
+  `addLayerBelow` with a not-yet-created anchor would fail, so
+  the ops layers are added AFTER the mesh-track block in the
+  same function.
+- **Repo pattern used instead of the prompt's adapter class:**
+  no `mapAdapter` exists; state is a composable-owned
+  `mutableStateOf` holder read via `.value` at style-load time
+  (the mbtiles staleness fix pattern), so no `latestGraphics`
+  cache field is needed — style reloads re-read current state.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL
+  (no placeholder identifiers remain; grep clean); Play +
+  Enterprise **322/322 green each** (new
+  `GraphicsGeoJsonMapperTest` 8/8: line properties, zone
+  closing, no double-close, degenerate drop, per-zone
+  palette, defaults, lon/lat, ring start); `geo/graphics` arch
+  grep clean.
+- **Not yet shippable as a user feature:** the graphic list is
+  an empty placeholder until the drawing-tools UI sprint
+  authors points. Device verification PENDING for the
+  drawing UI itself.
+
 ## PLI blue-force vector hotfix (2026-09-27)
 
 - **Commit (pushed):** `fix(android): load blue-force PLI marker
