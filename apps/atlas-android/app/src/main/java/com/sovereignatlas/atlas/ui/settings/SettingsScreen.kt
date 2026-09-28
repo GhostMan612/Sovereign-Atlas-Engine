@@ -7,14 +7,11 @@ package com.sovereignatlas.atlas.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -23,14 +20,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,7 +39,7 @@ private val ATAK_TEAM_COLORS = listOf(
 fun SettingsScreen(viewModel: SettingsViewModel) {
     val callsign by viewModel.callsign.collectAsStateWithLifecycle()
     val teamColor by viewModel.teamColor.collectAsStateWithLifecycle()
-    val isMeshActive by viewModel.isMeshActive.collectAsStateWithLifecycle()
+    val networkProfile by viewModel.networkProfile.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -55,30 +50,34 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     ) {
         Text("Tactical Node Configuration", style = MaterialTheme.typography.titleLarge)
 
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if (isMeshActive) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-            ),
+        var profileExpanded by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = profileExpanded,
+            onExpandedChange = { profileExpanded = it }
         ) {
-            Row(
+            OutlinedTextField(
+                value = networkProfile.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Network Profile") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
                 modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            )
+            ExposedDropdownMenu(
+                expanded = profileExpanded,
+                onDismissRequest = { profileExpanded = false }
             ) {
-                Text(
-                    text = if (isMeshActive) "Mesh Transceiver: ONLINE" else "Mesh Transceiver: OFFLINE",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Switch(
-                    checked = isMeshActive,
-                    onCheckedChange = { viewModel.toggleMeshActive(it) },
-                )
+                com.sovereignatlas.atlas.android.settings.NetworkProfile.entries.forEach { profile ->
+                    DropdownMenuItem(
+                        text = { Text(profile.displayName) },
+                        onClick = {
+                            viewModel.updateNetworkProfile(profile)
+                            profileExpanded = false
+                        }
+                    )
+                }
             }
         }
 

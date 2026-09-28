@@ -11,9 +11,10 @@ import com.sovereignatlas.atlas.android.settings.SettingsRepository
 class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
     val callsign = repository.callsign
     val teamColor = repository.teamColor
-    val isMeshActive = repository.isMeshActive
+    val networkProfile = repository.networkProfile
 
     fun updateCallsign(newCallsign: String) = repository.setCallsign(newCallsign)
     fun updateTeamColor(newColor: String) = repository.setTeamColor(newColor)
-    fun toggleMeshActive(isActive: Boolean) = repository.setMeshActive(isActive)
+    fun updateNetworkProfile(profile: com.sovereignatlas.atlas.android.settings.NetworkProfile) =
+        repository.setNetworkProfile(profile)
 }

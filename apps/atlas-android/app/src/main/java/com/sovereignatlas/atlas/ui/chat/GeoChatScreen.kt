@@ -55,7 +55,7 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val inputText by viewModel.inputText.collectAsStateWithLifecycle()
     val hasGps by viewModel.hasGpsFix.collectAsStateWithLifecycle()
-    val isMeshActive by viewModel.isMeshActive.collectAsStateWithLifecycle()
+    val networkProfile by viewModel.networkProfile.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -112,10 +112,13 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
             placeholder = {
                 Text(
                     when {
-                        !isMeshActive -> "Mesh Transceiver Offline"
+                        networkProfile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ->
+                            "Radio Silence (EMCON) Active"
+                        networkProfile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY ->
+                            "Cloud Chat Only..."
                         !hasGps -> "Waiting for GPS Fix..."
                         else -> "Message All Chat Rooms..."
-                    },
+                    }
                 )
             },
             enabled = true,
@@ -124,7 +127,9 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
             trailingIcon = {
                 IconButton(
                     onClick = { viewModel.sendMessage() },
-                    enabled = isMeshActive && hasGps && inputText.isNotBlank(),
+                    enabled = networkProfile != com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE
+                        && hasGps
+                        && inputText.isNotBlank(),
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),

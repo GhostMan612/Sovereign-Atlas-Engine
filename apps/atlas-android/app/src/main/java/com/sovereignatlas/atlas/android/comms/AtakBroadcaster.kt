@@ -31,7 +31,11 @@ class AtakBroadcaster(
         ce: Double?,
         fixTimeMillis: Long,
     ) {
-        if (!settingsRepository.isMeshActive.value) return
+        val profile = settingsRepository.networkProfile.value
+        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ||
+            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY) {
+            return
+        }
         if (lat == 0.0 && lon == 0.0) return
         if (!scheduler.shouldBroadcast(lat, lon)) return
 
@@ -57,7 +61,11 @@ class AtakBroadcaster(
     }
 
     suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double) {
-        if (!settingsRepository.isMeshActive.value) throw IllegalStateException("Mesh Transceiver is Offline")
+        val profile = settingsRepository.networkProfile.value
+        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ||
+            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY) {
+            throw IllegalStateException("Markers require an active mesh profile")
+        }
         val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(lat, lon, null, null, null, System.currentTimeMillis())
         val payload = CotProtobufGenerator.generateMarkerProto(
             localUid = localUid,
@@ -73,7 +81,10 @@ class AtakBroadcaster(
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
         targetUid: String? = null,
     ): ChatMessage {
-        if (!settingsRepository.isMeshActive.value) throw IllegalStateException("Mesh Transceiver is Offline")
+        val profile = settingsRepository.networkProfile.value
+        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
+            throw IllegalStateException("Radio Silence (EMCON) is Active")
+        }
         if (currentGeoPoint == null) throw IllegalStateException("No GPS fix")
 
         val callsign = settingsRepository.callsign.value
@@ -91,7 +102,10 @@ class AtakBroadcaster(
             targetUid = targetUid,
         )
 
-        listener.sendMulticast(payload)
+        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.MESH_ONLY ||
+            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
+            listener.sendMulticast(payload)
+        }
 
         val sent = ChatMessage(
             messageId = messageId,
@@ -103,8 +117,11 @@ class AtakBroadcaster(
             timestampMillis = System.currentTimeMillis(),
             isSelf = true,
         )
-        pushScope.launch {
-            syncProvider?.pushChatMessage(sent)
+        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY ||
+            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
+            pushScope.launch {
+                syncProvider?.pushChatMessage(sent)
+            }
         }
         return sent
     }

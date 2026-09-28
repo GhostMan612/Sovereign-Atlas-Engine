@@ -4,6 +4,31 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Comms strategy router — hybrid mesh (2026-09-27)
+
+- **Commit (pushed):** `feat(android): comms strategy router
+  (hybrid mesh)` (6 files + handoff). `NetworkProfile`
+  (RADIO_SILENCE/MESH_ONLY/CLOUD_ONLY/HYBRID_BRIDGE) replaces
+  the `isMeshActive` boolean; legacy pref migrates via
+  `runCatching` (prior active→MESH_ONLY, prior offline→
+  RADIO_SILENCE; key removed on first profile write).
+  Broadcaster: PLI + markers mesh-only (silent return / throw
+  `Markers require an active mesh profile`); chat master-gated
+  on EMCON, UDP iff MESH_ONLY/HYBRID, Firestore iff
+  CLOUD_ONLY/HYBRID. Chat UI shows EMCON/CLOUD_ONLY
+  placeholders, send disabled only under EMCON. Settings shows
+  a profile dropdown (mesh switch removed). Marker sheet
+  surfaces the new marker error string inline via existing
+  `e.message` path — no edit needed there.
+- **Gates here:** Play + Enterprise **276/276 green each**;
+  `isMeshActive` field/method/consumers at zero (only the two
+  legacy pref-key strings inside the migration itself remain,
+  as prescribed); all edits in `android/` + `ui/`, pure-logic
+  boundary untouched. No assemble per build boundary.
+- **Device verification PENDING (human/Studio):** migration
+  default, per-profile UDP/Firestore routing (sniffer +
+  console), EMCON chat + marker errors.
+
 ## Tactical targeting & CoT markers (2026-09-27)
 
 - **Commit (local, unpushed):** `feat(android): tactical targeting

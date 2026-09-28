@@ -38,7 +38,7 @@ class GeoChatViewModel(private val services: AtlasServices) : ViewModel() {
             initialValue = services.locationEngine.currentLocation.value != null,
         )
 
-    val isMeshActive: StateFlow<Boolean> = services.settingsRepository.isMeshActive
+    val networkProfile = services.settingsRepository.networkProfile
 
     fun setInputText(text: String) {
         _inputText.value = text
@@ -52,8 +52,8 @@ class GeoChatViewModel(private val services: AtlasServices) : ViewModel() {
         val text = _inputText.value.trim()
         if (text.isEmpty()) return
 
-        if (!isMeshActive.value) {
-            _errorMessage.value = "Mesh transceiver is offline."
+        if (networkProfile.value == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
+            _errorMessage.value = "Radio Silence is active. Transmission blocked."
             return
         }
 
