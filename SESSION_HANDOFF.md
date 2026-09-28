@@ -4,6 +4,57 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Routing sprint CLOSED — audit only, no code (2026-09-27)
+
+- **No code changed.** The "Offline Routing Engine (pipeline +
+  domain)" sprint was audited and closed because its
+  prescribed type names collide with shipping code and its
+  premise (an unwired pipeline awaiting a stub) is false.
+- **Blocking collisions (all verified with file:line):**
+  `class RoutingEngine` already exists at
+  `geo/routing/RoutingEngine.kt:19` in the same package the
+  prompt asked for an `interface RoutingEngine` — a
+  redeclaration, i.e. a compile error; `Route` would
+  duplicate the richer existing `RoutingResult`
+  (`geo/routing/RoutingModels.kt:24`, carries path, hours,
+  distance, gain, descent); a new `tactical-route-layer`
+  would double-render the existing `atlas-tactical-route` +
+  `atlas-tactical-route-layer`
+  (`map/AtlasLayerInstaller.kt:45-46`); the anchor is
+  `atlas-waypoints-layer`
+  (`map/AtlasLayerInstaller.kt:22`), created inside
+  `installAtlasLayers` and called from `onStyleLoaded`
+  (`map/AtlasMap.kt:363`) — this repo has NO
+  `addOnStyleLoadedListener` at all; and
+  `com.sovereignatlas.atlas.core.GeoPoint` does not exist
+  (it is `geo.GeoPoint`, `geo/LineOfSight.kt:12`, 6-arg,
+  non-null lat/lon).
+- **Task 0.3 dependency answer:** GraphHopper is **ABSENT**
+  from `apps/atlas-android/app/build.gradle` — grep for
+  `graphhopper` returns zero hits, so there is no version to
+  audit and nothing to remove. No dependency was added (per
+  sprint instruction and RULES 1.3 / 2.4). If GraphHopper is
+  wanted later it is a packaging decision (custom JAR, dex
+  limits, ProGuard, offline licensing), not a code sprint.
+- **Why the premise was false:** routing is already
+  end-to-end. A terrain-aware graph A* engine exists
+  (`LoadProfile`, `TrailType`, ascent/descent penalties),
+  is exposed as `RoutingState.result`, is pushed to the glass
+  by `pushRouteResult` (`map/AtlasMap.kt:1761`) via
+  `refreshFootRoute` (`:1740`), and is covered by 11 passing
+  tests (`geo/routing/RoutingEngineTest` 11/11 green). A
+  Haversine stub would have tested a working pipeline while
+  colliding with its type names.
+- **Operator decision:** close with this audit record; a
+  genuine interface extraction (fold `RoutingResult` and a
+  future `Route` into one model, make the graph engine
+  implement an interface) is deferred as its own ADR-backed
+  refactor, since it would rewrite load-bearing code behind
+  11 green tests.
+- **Device verification unchanged:** route rendering from the
+  existing `atlas-tactical-route` layer still needs a real
+  routing graph loaded before it can be proven on device.
+
 ## HUD mutual exclusivity — drawing vs measurement (2026-09-27)
 
 - **Commit (pushed):** `fix(android): enforce drawing and
