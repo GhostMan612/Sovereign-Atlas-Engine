@@ -115,6 +115,7 @@ import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import androidx.core.content.ContextCompat
 import com.sovereignatlas.atlas.map.cot.CotGeoJsonMapper
 import com.sovereignatlas.atlas.ui.CompassOverlay
+import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
@@ -300,6 +301,12 @@ fun AtlasMapScreen(
     }
     val targetDropPoint = remember { MutableStateFlow<LatLng?>(null) }
     val activeTerrainProfile = remember { MutableStateFlow<TerrainProfile?>(null) }
+    // Compass - only recompose when camera bearing changes. cameraState already
+    // carries the bearing written by the existing addOnCameraMoveListener, so no
+    // second listener or parallel flow is introduced.
+    val bearingHud by remember {
+        cameraState.map { it.bearing }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = 0.0)
     // State holder (not a by-delegated value): the MapView and its listeners are
     // remembered once, so long-lived callbacks must read a current .value rather
     // than capture an immutable snapshot from the first composition.
@@ -853,6 +860,13 @@ fun AtlasMapScreen(
             hudColor = hudAccent,
             frameLabel = currentHeadingFrame,
         )
+        // Compass tape: device heading when the sensor has a sample, otherwise
+        // map orientation. Declared before the MGRS/LoS column so the existing
+        // top-band chips keep their current z-order on top of the band.
+        CompassTape(
+            bearing = currentBearing?.toDouble() ?: bearingHud,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
         Column(
             modifier = Modifier.align(Alignment.BottomEnd)
                 .windowInsetsPadding(WindowInsets.navigationBars)
@@ -1216,10 +1230,6 @@ fun AtlasMapScreen(
                 .map { it.center }
                 .distinctUntilChanged()
         }.collectAsStateWithLifecycle(initialValue = null)
-        // Compass - only recompose when bearing changes
-        val bearingHud by remember {
-            cameraState.map { it.bearing }.distinctUntilChanged()
-        }.collectAsStateWithLifecycle(initialValue = 0.0)
         // Scale Bar - only recompose when zoom or latitude changes
         val scaleInput by remember {
             cameraState.map { it.zoom to it.center.latitude }.distinctUntilChanged()

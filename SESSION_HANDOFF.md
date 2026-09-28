@@ -4,6 +4,63 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Compass tape HUD (2026-09-27)
+
+- **Commit (pushed):** `feat(android): compass tape HUD`
+  (2 new + 1 modified + handoff). New pure
+  `core/CompassMath` (normalize + cardinal/ordinal labels) and
+  `ui/hud/CompassTape` (90-degree FOV Canvas, 15-degree
+  ticks, 45-degree labels, red lubber triangle). Tape
+  mounted at TopCenter in the map Box. No new MapLibre
+  listener was added.
+- **Audit: two of the prompt's tasks were already satisfied
+  by shipping code.** Bearing state ALREADY exists as
+  `cameraState: MutableStateFlow<CameraState>` with a
+  `bearing` field, and an `addOnCameraMoveListener` already
+  exists at `map/AtlasMap.kt:429` that writes
+  `bearing = map.cameraPosition.bearing`. So no
+  `_cameraBearingFlow` was created and the listener was not
+  re-registered or overwritten — a parallel flow would have
+  been a second source of truth for the same value. The
+  existing `bearingHud` derivation was HOISTED from inside
+  the Box to the top scope (one subscription, not two) so
+  the tape can read it before the Box.
+- **Bearing SOURCE judgment call (please confirm):** the
+  tape is fed `currentBearing?.toDouble() ?: bearingHud`
+  — the DEVICE heading when the sensor has a sample, and map
+  orientation only as a fallback. A camera-bearing tape on a
+  north-up map would read "N" while the device faces east,
+  which is a misleading reading in a tactical tool and sits
+  directly under the TacNav device-heading readout. Flipping
+  to camera-bearing-only is a one-line change if the literal
+  spec is preferred.
+- **Deviation:** `core/math/` does not exist and this repo's
+  packages are flat, so CompassMath lives at
+  `com.sovereignatlas.atlas.core` (same convention as
+  `MapNameFormatter`). It intentionally does not reuse
+  `geo.AtlasAngles.normalizeBearingDeg` because that is
+  Double-based and lives in `geo/`, which imports `core/` —
+  reusing it would invert the layering; CompassMath is
+  Int-based and label-bearing for tape ticks. That overlap is
+  noted, not silently duplicated.
+- **KNOWN COLLISION — top band is now three-deep:** (1) the
+  new full-width 40dp tape at TopCenter, (2) the TacNav
+  bearing readout at ~32dp, (3) the MGRS/LoS chip at 16dp.
+  The tape is declared first so the existing chips keep
+  their z-order on top, but the overlap is real and this is
+  now the third element fighting for ~40dp of screen top.
+  No offset was guessed without a device; this needs an
+  operator layout decision.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL
+  (one caught compile: the hoist initially landed above
+  `cameraState` and was moved below it); Play + Enterprise
+  **336/336 green each** (new `CompassMathTest` 5/5);
+  `core/` arch grep clean; CompassTape has no
+  `android.*` imports and no pointer input.
+- **Device verification PENDING (human/Studio):** tape
+  scrolls while rotating, lubber line stays centered, and
+  the three-way top-band layout decision.
+
 ## MBTiles manager polish — sanitizer + empty state (2026-09-27)
 
 - **Commit (pushed):** `feat(android): mbtiles name sanitizer
