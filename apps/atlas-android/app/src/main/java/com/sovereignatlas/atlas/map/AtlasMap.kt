@@ -107,6 +107,8 @@ import com.sovereignatlas.atlas.measure.MeasureSnapshot
 import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.offline.DemTileStore
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
+import androidx.core.content.ContextCompat
+import com.sovereignatlas.atlas.map.cot.CotGeoJsonMapper
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
 import com.sovereignatlas.atlas.tactical.RadialFence
@@ -143,6 +145,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.RasterDemSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
@@ -328,9 +331,11 @@ fun AtlasMapScreen(
         ensureGpsPuck(style, context)
         ensureScrubIcon(style)
         ensurePliMarker(style, context)
+        ensureCotTrackIcons(style, context)
         pushScrubPoint(style, services.scrubState.activePoint.value)
         pushPli(style, services.pli.activePlis.value)
         pushMarkers(style, services.markers.markerStream.value)
+        pushMeshTracks(style, services.markers.markerStream.value)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
@@ -631,6 +636,7 @@ fun AtlasMapScreen(
                 services.markers.markerStream.collect { markerMap ->
                     styleRef.value?.let { style ->
                         pushMarkers(style, markerMap)
+                        pushMeshTracks(style, markerMap)
                     }
                 }
             }
@@ -1546,6 +1552,25 @@ fun markersToFeatures(markers: Map<String, CotMarker>): FeatureCollection {
 
 fun pushMarkers(style: Style, markers: Map<String, CotMarker>) {
     pushFeatures(style, AtlasLayerIds.MARKER_SOURCE, markersToFeatures(markers))
+}
+
+fun ensureCotTrackIcons(style: Style, context: Context) {
+    val icons = listOf(
+        "friendly" to com.sovereignatlas.atlas.R.drawable.ic_friendly,
+        "hostile" to com.sovereignatlas.atlas.R.drawable.ic_hostile,
+        "neutral" to com.sovereignatlas.atlas.R.drawable.ic_neutral,
+        "unknown" to com.sovereignatlas.atlas.R.drawable.ic_unknown,
+    )
+    for ((name, resId) in icons) {
+        if (style.getImage(name) != null) continue
+        val drawable = ContextCompat.getDrawable(context, resId) ?: continue
+        style.addImage(name, drawable)
+    }
+}
+
+fun pushMeshTracks(style: Style, markers: Map<String, CotMarker>) {
+    val source = style.getSourceAs<GeoJsonSource>(AtlasLayerIds.MESH_TRACK_SOURCE) ?: return
+    source.setGeoJson(CotGeoJsonMapper.toFeatureCollection(markers.values.toList()))
 }
 
 fun pushPli(style: Style, plis: Map<String, CotPli>) {

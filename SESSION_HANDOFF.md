@@ -4,6 +4,51 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## CoT mesh-track glass layer (2026-09-27)
+
+- **Commit (pushed):** `feat(android): CoT mesh-track glass
+  layer` (4 drawables + 2 files + handoff). Operator supplied
+  the four MIL-STD-2525-inspired vectors (ic_friendly cyan
+  rectangle, ic_hostile red diamond, ic_neutral green
+  square, ic_unknown yellow circle) after the halt, so Task
+  3.2 was unblocked. `mesh-track-source` +
+  `mesh-track-layer` (SymbolLayer) added in
+  `installAtlasLayers` via `addLayerAbove(WAYPOINTS_LAYER)`
+  so tracks sit above the static stack; data-driven
+  `iconImage(Expression.get("affiliation"))` + `{callsign}`
+  labels with halo; `ensureCotTrackIcons` + `pushMeshTracks`
+  wired into `onStyleLoaded` and the existing
+  `markerStream` collector (survives style reloads).
+- **VECTOR BUG FOUND (would have broken the icons):** the
+  prompt's `BitmapFactory.decodeResource` cannot decode a
+  VectorDrawable — it returns null, and the prescribed
+  `?: return`-style flow would have silently shipped with no
+  icons. Used the verified `Style.addImage(String, Drawable)`
+  overload with `ContextCompat.getDrawable(context, resId)`
+  instead. javap-verified before use (also confirmed
+  `addLayerAbove` and the PropertyFactory overloads).
+- **PRE-EXISTING BUG REPORTED, NOT FIXED:** the sibling
+  `ensurePliMarker` has the same defect — it calls
+  `BitmapFactory.decodeResource` on
+  `ic_blue_force_marker.xml`, which is a **vector**, so the
+  PLI icon is most likely never added and blue-force PLI
+  markers may not render on device today. Deliberately left
+  untouched (unrequested behavior change); the fix is the
+  same `addImage(String, Drawable)` path. This is the top
+  device question for the next smoke.
+- **Deliberate non-duplication:** `cot-marker-layer` (the
+  data-driven CircleLayer from the tactical targeting sprint)
+  is intentionally KEPT alongside; the new layer adds icon
+  art plus visible callsign labels. Merging them was
+  explicitly rejected by the operator.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **314/314 green each** (mapper 5/5 from
+  the prior commit). MapLibre confined to `map/`; mapper is
+  pure and JVM-tested.
+- **Device verification PENDING (human/Studio):** all four
+  icon shapes + colors, callsign labels, tracks above the
+  static stack, and the PLI icon question above.
+
 ## CoT mapper (HALTED before icon injection) (2026-09-27)
 
 - **Commit (pushed):** `feat(android): CoT geojson mapper`

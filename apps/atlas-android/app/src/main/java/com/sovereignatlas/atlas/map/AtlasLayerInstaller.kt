@@ -49,6 +49,8 @@ object AtlasLayerIds {
     const val MARKER_LAYER = "cot-marker-layer"
     const val MBTILES_LAYER_ID_PREFIX = "mbtiles-layer-"
     const val MBTILES_SOURCE_ID_PREFIX = "mbtiles-source-"
+    const val MESH_TRACK_SOURCE = "mesh-track-source"
+    const val MESH_TRACK_LAYER = "mesh-track-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -80,6 +82,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.ROUTE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.PLI_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MARKER_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.MESH_TRACK_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_OBSERVER_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
@@ -203,6 +206,21 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.circleRadius(8f),
                 PropertyFactory.circleStrokeColor("#000000"),
                 PropertyFactory.circleStrokeWidth(2f),
+            ),
+        AtlasLayerIds.WAYPOINTS_LAYER,
+    )
+    style.addLayerAbove(
+        SymbolLayer(AtlasLayerIds.MESH_TRACK_LAYER, AtlasLayerIds.MESH_TRACK_SOURCE)
+            .withProperties(
+                PropertyFactory.iconImage(Expression.get("affiliation")),
+                PropertyFactory.iconSize(0.75f),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.textField("{callsign}"),
+                PropertyFactory.textOffset(arrayOf(0f, 1.5f)),
+                PropertyFactory.textSize(11.0f),
+                PropertyFactory.textColor("#FFFFFF"),
+                PropertyFactory.textHaloColor("#000000"),
+                PropertyFactory.textHaloWidth(1f),
             ),
         AtlasLayerIds.WAYPOINTS_LAYER,
     )
