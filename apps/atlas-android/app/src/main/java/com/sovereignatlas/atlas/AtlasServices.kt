@@ -15,9 +15,12 @@ import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
+import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.MarkerStore
+import com.sovereignatlas.atlas.geo.los.ElevationProvider
+import com.sovereignatlas.atlas.geo.los.LineOfSightEngine
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
@@ -55,4 +58,12 @@ class AtlasServices(
     val locationEngine: LocationEngine,
     val multicastListener: AtakMulticastListener,
     val atakBroadcaster: AtakBroadcaster,
-)
+) {
+    val lineOfSightEngine = LineOfSightEngine(
+        elevationProvider = object : ElevationProvider {
+            override suspend fun getElevation(latitude: Double, longitude: Double): Double? {
+                return DemSession.engine?.getElevation(latitude, longitude)
+            }
+        },
+    )
+}

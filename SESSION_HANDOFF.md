@@ -4,6 +4,40 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## LoS analysis in targeting sheet (2026-09-27)
+
+- **Commit (pushed):** `feat(android): line-of-sight analysis in
+  targeting sheet` (2 modified + 4 new). New `geo/los/`
+  package (per architect directive, no separate ADR):
+  `TerrainProfile`/`ProfilePoint`/`ElevationProvider` +
+  `LineOfSightEngine.calculateProfile` (100-sample raycast,
+  4/3 refraction, great-circle interpolation, sequential DEM
+  sampling per accepted risk). New `ui/los/
+  TerrainProfileChart` Canvas component (green/red terrain +
+  dashed sightline, CLEAR/BLOCKED banner). `AtlasServices.
+  lineOfSightEngine` wired to `DemSession.engine`; targeting
+  sheet gains Analyze action above the CoT buttons, profile
+  cleared on each new long-press, GPS-gated with waiting text.
+- **Audit adaptations (reported, not silent):**
+  `interpolateGreatCircle` arity/types/order identical
+  (param names `fraction`/`totalMeters` vs `f`/`d` — not a
+  signature difference); `core.GeoPoint` nonexistent →
+  `geo.GeoPoint`; no `demEngine` in DI → `DemSession.engine`
+  (nullable session); no adapter object → composable-owned
+  `activeTerrainProfile` StateFlow (established pattern);
+  calculation dispatched on `Dispatchers.IO` (provider does
+  blocking SQLite reads). Pre-existing `geo/
+  LineOfSightEngine` (LoS tool ray layer) untouched — the two
+  engines coexist pending architect consolidation call.
+- **Gates here:** Play + Enterprise **282/282 green each**
+  (new `geo.los.LineOfSightEngineTest` 6/6: flat clear,
+  coincident, endpoint/mid-path gaps, altitude fallback,
+  ridge block); `geo/los` arch grep clean; Compose stays in
+  `ui/`. No assemble per build boundary.
+- **Device verification PENDING (human/Studio):** sheet
+  button with GPS fix, chart render + banner on real DEM,
+  profile reset on re-long-press.
+
 ## Comms strategy router — hybrid mesh (2026-09-27)
 
 - **Commit (pushed):** `feat(android): comms strategy router

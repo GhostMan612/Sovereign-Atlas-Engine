@@ -85,6 +85,8 @@ import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
+import com.sovereignatlas.atlas.geo.los.TerrainProfile
+import com.sovereignatlas.atlas.ui.los.TerrainProfileChart
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
@@ -274,6 +276,7 @@ fun AtlasMapScreen(
         )
     }
     val targetDropPoint = remember { MutableStateFlow<LatLng?>(null) }
+    val activeTerrainProfile = remember { MutableStateFlow<TerrainProfile?>(null) }
     // Shared post-style content: re-installs the atlas layer stack after any
     // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
     // skips the online/pack base so the MBTiles source survives.
@@ -421,6 +424,7 @@ fun AtlasMapScreen(
                 map.addOnMapLongClickListener { point ->
                     onHaptic()
                     targetDropPoint.value = point
+                    activeTerrainProfile.value = null
                     true
                 }
                 map.addOnCameraIdleListener {
@@ -863,6 +867,8 @@ fun AtlasMapScreen(
             }
         }
         val targetDropPointState by targetDropPoint.collectAsStateWithLifecycle()
+        val activeProfileState by activeTerrainProfile.collectAsStateWithLifecycle()
+        val currentLocationFix = services.locationEngine.currentLocation.collectAsStateWithLifecycle().value
         if (targetDropPointState != null) {
             var errorMessage by remember { mutableStateOf<String?>(null) }
             ModalBottomSheet(onDismissRequest = { targetDropPoint.value = null }) {
@@ -877,6 +883,67 @@ fun AtlasMapScreen(
                             msg,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    val losProfile = activeProfileState
+                    if (losProfile != null) {
+                        Text(
+                            "Line of Sight Analysis",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        val losError = losProfile.errorMessage
+                        if (losError != null) {
+                            Text(
+                                text = losError,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(bottom = 16.dp),
+                            )
+                        } else {
+                            TerrainProfileChart(profile = losProfile)
+                            Text(
+                                text = if (losProfile.hasLineOfSight) "CLEAR LINE OF SIGHT" else "LINE OF SIGHT BLOCKED",
+                                color = if (losProfile.hasLineOfSight) {
+                                    androidx.compose.ui.graphics.Color.Green
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                                modifier = Modifier.padding(bottom = 16.dp),
+                            )
+                        }
+                    } else if (currentLocationFix != null && targetDropPointState != null) {
+                        Button(
+                            onClick = {
+                                mapScope.launch {
+                                    val drop = targetDropPointState ?: return@launch
+                                    val origin = currentLocationFix ?: return@launch
+                                    val profile = withContext(Dispatchers.IO) {
+                                        services.lineOfSightEngine.calculateProfile(
+                                            start = origin,
+                                            end = GeoPoint(
+                                                drop.latitude,
+                                                drop.longitude,
+                                                null,
+                                                null,
+                                                null,
+                                                origin.timestamp,
+                                            ),
+                                        )
+                                    }
+                                    activeTerrainProfile.value = profile
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                            ),
+                        ) {
+                            Text("Analyze Line of Sight")
+                        }
+                    } else {
+                        Text(
+                            "Waiting for GPS to enable LoS...",
+                            color = androidx.compose.ui.graphics.Color.Gray,
+                            modifier = Modifier.padding(bottom = 16.dp),
                         )
                     }
                     val types = listOf(
