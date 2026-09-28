@@ -277,6 +277,7 @@ fun AtlasMapScreen(
     }
     val targetDropPoint = remember { MutableStateFlow<LatLng?>(null) }
     val activeTerrainProfile = remember { MutableStateFlow<TerrainProfile?>(null) }
+    val showMbtilesTest = remember { mutableStateOf(false) }
     // Shared post-style content: re-installs the atlas layer stack after any
     // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
     // skips the online/pack base so the MBTiles source survives.
@@ -327,6 +328,7 @@ fun AtlasMapScreen(
         pushMeasure(style, services)
         pushGoTo(style, services)
         pushRings(style, services)
+        if (showMbtilesTest.value) ensureMbtilesTestLayer(style, services)
         if (showGraticule.value) pushGraticule(map, style)
         attribution.value = if (applyOnlineBase) {
             applyBaseSource(
@@ -744,6 +746,14 @@ fun AtlasMapScreen(
             }
         }
     }
+    LaunchedEffect(showMbtilesTest.value) {
+        val style = styleRef.value ?: return@LaunchedEffect
+        if (showMbtilesTest.value) {
+            ensureMbtilesTestLayer(style, services)
+        } else {
+            removeMbtilesTestLayer(style)
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
@@ -776,6 +786,14 @@ fun AtlasMapScreen(
                 },
             ) {
                 Text("Measure")
+            }
+            FloatingActionButton(
+                onClick = { showMbtilesTest.value = !showMbtilesTest.value },
+                modifier = Modifier.semantics {
+                    stateDescription = if (showMbtilesTest.value) "MBTiles layer on" else "MBTiles layer off"
+                },
+            ) {
+                Text(if (showMbtilesTest.value) "MBTiles on" else "MBTiles")
             }
             FloatingActionButton(
                 onClick = { showTools.value = true },
@@ -1811,6 +1829,28 @@ fun removeBaseLayer(style: Style) {
     }
     if (style.getSource(BASE_SOURCE_ID) != null) {
         style.removeSource(BASE_SOURCE_ID)
+    }
+}
+
+fun ensureMbtilesTestLayer(style: Style, services: AtlasServices) {
+    if (style.getSource(AtlasLayerIds.MBTILES_TEST_SOURCE) != null) return
+    val url = services.tiles.tileUrl("test.mbtiles") ?: return
+    val tileSet = TileSet("2.2.0", url)
+    style.addSource(RasterSource(AtlasLayerIds.MBTILES_TEST_SOURCE, tileSet))
+    val layer = RasterLayer(AtlasLayerIds.MBTILES_TEST_LAYER, AtlasLayerIds.MBTILES_TEST_SOURCE)
+    if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+        style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
+    } else {
+        style.addLayer(layer)
+    }
+}
+
+fun removeMbtilesTestLayer(style: Style) {
+    if (style.getLayer(AtlasLayerIds.MBTILES_TEST_LAYER) != null) {
+        style.removeLayer(AtlasLayerIds.MBTILES_TEST_LAYER)
+    }
+    if (style.getSource(AtlasLayerIds.MBTILES_TEST_SOURCE) != null) {
+        style.removeSource(AtlasLayerIds.MBTILES_TEST_SOURCE)
     }
 }
 

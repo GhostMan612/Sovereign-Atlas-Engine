@@ -47,6 +47,8 @@ object AtlasLayerIds {
     const val PLI_LAYER = "atlas-tactical-pli-layer"
     const val MARKER_SOURCE = "cot-marker-source"
     const val MARKER_LAYER = "cot-marker-layer"
+    const val MBTILES_TEST_SOURCE = "mbtiles-test-source"
+    const val MBTILES_TEST_LAYER = "mbtiles-test-layer"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"

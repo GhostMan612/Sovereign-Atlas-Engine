@@ -201,6 +201,20 @@ final class PackTileServerTest {
     }
 
     @Test
+    fun tileUrlPinsTestMbtilesRoute() {
+        val server = PackTileServer(packsDir = { seededDir() })
+        val port = server.start()
+        try {
+            assertEquals(
+                "http://127.0.0.1:$port/test.mbtiles/{z}/{x}/{y}.png",
+                server.tileUrl("test.mbtiles"),
+            )
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun tileUrlNeedsRunningServer() {
         val server = PackTileServer(packsDir = { seededDir() })
         assertNull(server.tileUrl("pack-000001"))

@@ -4,6 +4,37 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## MapLibre glass integration (2026-09-27)
+
+- **Commit (pushed):** `feat(android): MBTiles test layer
+  toggle on map glass` (5 files + handoff). Loopback
+  cleartext extended to `localhost` (127.0.0.1 already
+  present; manifest ref pre-existing). Right-rail MBTiles
+  FAB toggles `mbtiles-test-source/layer`
+  (`RasterSource(TileSet("2.2.0", url))` below
+  `atlas-waypoints-layer`); URL comes live from
+  `tiles.tileUrl("test.mbtiles")`; split lifecycle =
+  `onStyleLoaded` reinstall + toggle `LaunchedEffect`
+  (add/remove with null-guards).
+- **Audit substitutions (both defaults differed, gate
+  satisfied):** anchor is `atlas-waypoints-layer` (not
+  `waypoints-layer`); no `listeningPort`/`pack/` — port
+  via `tiles.port()`, route via `tiles.tileUrl(packId)`;
+  no adapter class — composable-owned state (established
+  pattern); style hook is central `onStyleLoaded`, not a
+  style-loaded listener. `TileSet(String, String...)` +
+  `RasterSource(String, TileSet)` verified via javap on
+  the 13.3.1 AAR. One caught-then-fixed compile: toggle
+  state must be declared above `onStyleLoaded`.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **292/292 green each** (new
+  `tileUrlPinsTestMbtilesRoute`); MapLibre confined to
+  `map/` + `ui/`.
+- **Device verification PENDING (human/Studio):** needs a
+  real `test.mbtiles` in the packs dir — toggle ON mounts
+  and tiles render (else silent 404s); toggle OFF unmounts
+  source + layer; `dumpsys` net-config check on failure.
+
 ## Offline MBTiles tile server (2026-09-27)
 
 - **Commit (local, unpushed):** `feat(android): serve
