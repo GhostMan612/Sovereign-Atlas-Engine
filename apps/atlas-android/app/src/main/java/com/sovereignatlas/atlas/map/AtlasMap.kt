@@ -87,9 +87,12 @@ import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
+import com.sovereignatlas.atlas.geo.graphics.DrawingMode
 import com.sovereignatlas.atlas.geo.graphics.OperationalGraphic
+import com.sovereignatlas.atlas.geo.graphics.ZoneType
 import com.sovereignatlas.atlas.geo.los.TerrainProfile
 import com.sovereignatlas.atlas.map.graphics.GraphicsGeoJsonMapper
+import com.sovereignatlas.atlas.ui.hud.TacticalDrawingToolbar
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesPack
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesLayerId
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesSafeId
@@ -308,9 +311,35 @@ fun AtlasMapScreen(
     }
     val scannedPacks = remember { mutableStateOf<List<MbtilesPack>>(emptyList()) }
     val showLayerManager = remember { mutableStateOf(false) }
+    // Drawing state is held in flows that outlive the map instance so the single
+    // click listener (registered once inside getMapAsync) always reads the current
+    // value instead of a snapshot from the first composition.
+    val drawingModeFlow = remember { MutableStateFlow(DrawingMode.NONE) }
+    val inProgressPointsFlow = remember { MutableStateFlow<List<AtlasCoordinate>>(emptyList()) }
+    val drawingMode by drawingModeFlow.collectAsStateWithLifecycle()
+    val inProgressPoints by inProgressPointsFlow.collectAsStateWithLifecycle()
     // Placeholder until the drawing tools UI ships: the operational-graphics
     // plumbing is live, the authored graphic list is not populated yet.
     val opsGraphics = remember { mutableStateOf<List<OperationalGraphic>>(emptyList()) }
+    // Committed graphics plus a transient preview. The committed list is never
+    // mutated by the preview, so the style-reload cache stays authoritative.
+    val displayGraphics = remember(opsGraphics.value, drawingMode, inProgressPoints) {
+        val list = opsGraphics.value.toMutableList()
+        if (drawingMode != DrawingMode.NONE && inProgressPoints.isNotEmpty()) {
+            val previewId = "preview-graphic"
+            val preview: OperationalGraphic? = when (drawingMode) {
+                DrawingMode.TACTICAL_LINE ->
+                    OperationalGraphic.TacticalLine(previewId, inProgressPoints)
+                DrawingMode.MEDEVAC_ZONE ->
+                    OperationalGraphic.TacticalZone(previewId, inProgressPoints, ZoneType.MEDEVAC)
+                DrawingMode.RESTRICTED_ZONE ->
+                    OperationalGraphic.TacticalZone(previewId, inProgressPoints, ZoneType.RESTRICTED)
+                DrawingMode.NONE -> null
+            }
+            if (preview != null) list.add(preview)
+        }
+        list
+    }
     val layerManagerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Shared post-style content: re-installs the atlas layer stack after any
     // full setStyle (initial load or MBTiles swap). applyOnlineBase=false
@@ -341,7 +370,7 @@ fun AtlasMapScreen(
         pushPli(style, services.pli.activePlis.value)
         pushMarkers(style, services.markers.markerStream.value)
         pushMeshTracks(style, services.markers.markerStream.value)
-        pushOpsGraphics(style, opsGraphics.value)
+        pushOpsGraphics(style, displayGraphics)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
@@ -406,6 +435,15 @@ fun AtlasMapScreen(
                     )
                 }
                 map.addOnMapClickListener { point ->
+                    // Drawing intercept runs first and consumes the tap while a
+                    // mode is active; every other tap behavior below is unchanged.
+                    if (drawingModeFlow.value != DrawingMode.NONE) {
+                        inProgressPointsFlow.value = inProgressPointsFlow.value + AtlasCoordinate(
+                            latitude = point.latitude,
+                            longitude = point.longitude,
+                        )
+                        return@addOnMapClickListener true
+                    }
                     val losMode = services.losState.mode.value
                     if (losMode != LoSMode.Inactive) {
                         val tapped = GeoPoint(
@@ -793,9 +831,9 @@ fun AtlasMapScreen(
     LaunchedEffect(services) {
         services.heading.ensureStarted()
     }
-    LaunchedEffect(opsGraphics.value) {
+    LaunchedEffect(displayGraphics) {
         val style = styleRef.value ?: return@LaunchedEffect
-        pushOpsGraphics(style, opsGraphics.value)
+        pushOpsGraphics(style, displayGraphics)
     }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -857,6 +895,47 @@ fun AtlasMapScreen(
                 Text("Tools")
             }
         }
+        TacticalDrawingToolbar(
+            currentMode = drawingMode,
+            pointCount = inProgressPoints.size,
+            onModeSelected = { mode ->
+                drawingModeFlow.value = mode
+                inProgressPointsFlow.value = emptyList()
+            },
+            onUndo = {
+                val current = inProgressPointsFlow.value
+                if (current.isNotEmpty()) {
+                    inProgressPointsFlow.value = current.dropLast(1)
+                }
+            },
+            onCommit = {
+                val points = inProgressPointsFlow.value
+                val mode = drawingModeFlow.value
+                val committed: OperationalGraphic? = when (mode) {
+                    DrawingMode.TACTICAL_LINE ->
+                        OperationalGraphic.TacticalLine(UUID.randomUUID().toString(), points)
+                    DrawingMode.MEDEVAC_ZONE ->
+                        OperationalGraphic.TacticalZone(
+                            UUID.randomUUID().toString(),
+                            points,
+                            ZoneType.MEDEVAC,
+                        )
+                    DrawingMode.RESTRICTED_ZONE ->
+                        OperationalGraphic.TacticalZone(
+                            UUID.randomUUID().toString(),
+                            points,
+                            ZoneType.RESTRICTED,
+                        )
+                    DrawingMode.NONE -> null
+                }
+                if (committed != null) {
+                    opsGraphics.value = opsGraphics.value + committed
+                }
+                drawingModeFlow.value = DrawingMode.NONE
+                inProgressPointsFlow.value = emptyList()
+            },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
+        )
         if (showTools.value) {
             ModalBottomSheet(
                 onDismissRequest = { showTools.value = false },

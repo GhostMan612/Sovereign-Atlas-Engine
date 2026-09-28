@@ -4,6 +4,51 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Tactical drawing UI + click interception (2026-09-27)
+
+- **Commit (pushed):** `feat(android): tactical drawing UI and
+  click interception` (2 new + 1 modified + handoff). New pure
+  `geo/graphics/DrawingMode`; new
+  `ui/hud/TacticalDrawingToolbar` (LINE / MEDEVAC / RESTRICT +
+  Pts + UNDO + COMMIT, Terminal Green accent, explicit
+  imports per repo style); toolbar mounted BottomCenter in
+  the map Box; `displayGraphics` = committed + transient
+  preview drives the ops source; commit appends a real
+  `OperationalGraphic` to the committed list.
+- **CRITICAL correction to the prompt's premise:** this repo
+  has NO adapter class and NO `addOnStyleLoadedListener`.
+  The map click listener is registered exactly ONCE inside
+  `getMapAsync` (AtlasMap.kt:435) and already carries three
+  behaviors (LoS observer/target, measure point-B, waypoint
+  hit-selection) with an explicit in-code warning that a
+  second registration would REPLACE it. Registering a
+  separate drawing listener — as the prompt's snippet would
+  have — would have destroyed waypoint selection. The drawing
+  intercept is therefore merged at the TOP of the existing
+  single registration and returns early; all existing tap
+  behavior is byte-identical below it.
+- **Staleness fix carried over:** drawing state lives in
+  `remember { MutableStateFlow(...) }` created BEFORE the
+  `remember`ed MapView, so the long-lived listener closure
+  reads current values (same reasoning as the mbtiles
+  `activeMbtilesPacks` holder fix). No `mapAdapter.latestGraphics`
+  field exists because `onStyleLoaded` now re-reads
+  `displayGraphics` directly.
+- **Preview is never cached:** `displayGraphics` is derived in
+  a `remember`; only COMMIT mutates `opsGraphics`. Style
+  reloads push `displayGraphics`, so an in-progress shape
+  also survives a reload without corrupting the committed
+  cache.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **322/322 green each** (no new pure-logic
+  surface this sprint; DrawingMode is a 4-value enum).
+- **Device verification PENDING (human/Studio):** tap-to-
+  append, undo, commit persistence, live preview color per
+  mode, waypoint selection intact while idle, pan/zoom/
+  double-tap while a mode is active, and toolbar overlap
+  against the BottomCenter MeasurePanel (both use that
+  band — not guessed without a device).
+
 ## Operational graphics domain + layers (2026-09-27)
 
 - **Commit (pushed):** `feat(android): operational graphics
