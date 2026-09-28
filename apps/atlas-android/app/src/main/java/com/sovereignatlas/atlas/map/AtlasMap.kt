@@ -1520,11 +1520,17 @@ fun ensureGpsPuck(style: Style, context: Context) {
 
 fun ensurePliMarker(style: Style, context: Context) {
     if (style.getImage("blue-force-marker") == null) {
-        val bitmap = BitmapFactory.decodeResource(
-            context.resources,
+        // ic_blue_force_marker is a VectorDrawable; BitmapFactory cannot decode it
+        // and returns null, so the Drawable overload is required here.
+        val pliDrawable = ContextCompat.getDrawable(
+            context,
             com.sovereignatlas.atlas.R.drawable.ic_blue_force_marker,
-        ) ?: return
-        style.addImage("blue-force-marker", bitmap)
+        )
+        if (pliDrawable == null) {
+            Log.e("AtlasMap", "Failed to load PLI marker drawable")
+            return
+        }
+        style.addImage("blue-force-marker", pliDrawable)
     }
 }
 

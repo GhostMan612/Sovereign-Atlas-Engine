@@ -4,6 +4,38 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## PLI blue-force vector hotfix (2026-09-27)
+
+- **Commit (pushed):** `fix(android): load blue-force PLI marker
+  as a Drawable` (1 file, +10/-4). `ensurePliMarker` now uses
+  `ContextCompat.getDrawable(context, R.drawable.
+  ic_blue_force_marker)` + `Style.addImage("blue-force-
+  marker", drawable)` (Path A) with an explicit
+  `Log.e("AtlasMap", ...)` on load failure, replacing the
+  silent `BitmapFactory.decodeResource(...)?: return`. Image
+  ID unchanged (`"blue-force-marker"`, consumed by
+  `iconImage(...)` in the PLI SymbolLayer). Call site
+  unchanged (`onStyleLoaded`), so the icon re-registers on
+  every style reload.
+- **Path A confirmed by javap** on the 13.3.1 AAR:
+  `addImage(String, Drawable)` exists, so no manual
+  rasterization was needed. `ensureGpsPuck` deliberately
+  left on `BitmapFactory` — `ic_gps_puck_sdf` is a real PNG
+  in `drawable-nodpi`, so that path is correct.
+- **No new test** — this is a runtime asset-loading fix
+  relying on minSdk >= 21, verified manually on emulator.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **314/314 green each**. The single
+  intermediate failure was the already-recorded
+  `AndroidKeyProviderTest.keySurvivesNewInstance` 10 s
+  `TimeoutCancellationException` (second observed
+  occurrence, Tink/IO timing, unrelated to this change):
+  it passed on isolated re-run and on the full re-run.
+  Still an unresolved flake, not proven stable.
+- **Device verification PENDING (human/Studio):** blue-force
+  PLI markers now actually appearing on the glass for remote
+  peers — this is the confirming evidence for the fix.
+
 ## CoT mesh-track glass layer (2026-09-27)
 
 - **Commit (pushed):** `feat(android): CoT mesh-track glass
