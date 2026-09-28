@@ -4,6 +4,36 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Offline MBTiles tile server (2026-09-27)
+
+- **Commit (local, unpushed):** `feat(android): serve
+  MBTiles packs from PackTileServer` (5 files + handoff).
+  New pure `offline/MbtilesTileSource` iface (+ `xyzToTmsY`)
+  and `android.map.mbtiles.MbtilesCache` (SQLite, canonical
+  traversal guard, double-checked handles, metadata MIME,
+  TMS flip, shutdown). Server intercepts `.mbtiles`
+  packIds (strict `.png` + digit + `0..28` validation),
+  200 + `baseHits` on hit, 404 on miss/parse/store-null;
+  quota via the existing head-check (BASEMAP + global →
+  404, same status as /dem/ exhaustion); `stop()` shuts
+  the store down. `AppServices` attaches the cache over
+  the packs dir.
+- **Lawful adaptation (recorded):** prompt placed SQLite
+  inside `offline/` + assumed NanoHTTPD — actual stack is
+  raw ServerSocket in pure-logic `offline/`, so the cache
+  lives in `android/` behind the iface (mirrors the
+  `DemTileStore` precedent); new `android.map.mbtiles`
+  package per directive, no separate ADR. One caught-then-
+  fixed test: server passes XYZ through, flip lives in the
+  cache — extracted pure `xyzToTmsY`, covered directly.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **291/291 green each** (7 new fake-
+  store tests); `offline/` arch grep clean (zero
+  android/androidx/maplibre imports).
+- **Device verification PENDING (human/Studio):** real
+  `.mbtiles` pack render via `tileUrl`, MIME per format,
+  miss/empty-pack 404s.
+
 ## FGS field readiness audit (2026-09-27)
 
 - **Commit (local, unpushed):** `fix(android): gate FGS cascade

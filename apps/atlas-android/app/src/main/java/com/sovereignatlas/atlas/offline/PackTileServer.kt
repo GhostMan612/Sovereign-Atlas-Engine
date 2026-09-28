@@ -28,6 +28,9 @@ class PackTileServer(
     @Volatile
     var demStore: DemTileStore? = null
 
+    @Volatile
+    var mbtilesStore: MbtilesTileSource? = null
+
     fun port(): Int = socket?.localPort ?: -1
 
     fun isRunning(): Boolean = running.get()
@@ -64,6 +67,7 @@ class PackTileServer(
             Unit
         }
         socket = null
+        mbtilesStore?.shutdown()
     }
 
     fun tileUrl(packId: String): String? {
@@ -107,6 +111,16 @@ class PackTileServer(
                         writeTile(output, tile.first, tile.second)
                         return
                     }
+                }
+                val mbtilesTile = mbtilesTile(path)
+                if (mbtilesTile != null) {
+                    baseHits += 1
+                    writeTile(output, mbtilesTile.data, mbtilesTile.mimeType)
+                    return
+                }
+                if (isMbtilesPack(path)) {
+                    writeStatus(output, "HTTP/1.1 404 Not Found")
+                    return
                 }
                 val body = fileFor(path, route.bucket)
                 if (body == null || !body.isFile) {
@@ -174,6 +188,24 @@ class PackTileServer(
         val bytes = store.tileBytes(z, x, y) ?: return null
         val mime = if (store.tileFormat() == "webp") "image/webp" else "image/png"
         return bytes to mime
+    }
+
+    private fun isMbtilesPack(path: String): Boolean {
+        val parts = path.trimStart('/').split("/")
+        return parts.size == 4 && parts[0].endsWith(".mbtiles")
+    }
+
+    private fun mbtilesTile(path: String): MbtilesTile? {
+        val store = mbtilesStore ?: return null
+        val parts = path.trimStart('/').split("/")
+        if (parts.size != 4 || !parts[0].endsWith(".mbtiles")) return null
+        val rawY = parts[3]
+        if (!rawY.endsWith(".png")) return null
+        val z = parts[1].toIntOrNull() ?: return null
+        val x = parts[2].toIntOrNull() ?: return null
+        val y = rawY.removeSuffix(".png").toIntOrNull() ?: return null
+        if (z !in 0..28 || !isTileRef(parts[1]) || !isTileRef(parts[2])) return null
+        return store.getTile(parts[0], z, x, y)
     }
 
     private fun fileFor(path: String, bucket: TileBucket): File? {
