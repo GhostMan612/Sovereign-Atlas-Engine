@@ -108,6 +108,7 @@ import com.sovereignatlas.atlas.measure.MeasureUnit
 import com.sovereignatlas.atlas.offline.DemTileStore
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.ui.CompassOverlay
+import com.sovereignatlas.atlas.ui.hud.TacNavHud
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
@@ -123,7 +124,6 @@ import com.sovereignatlas.atlas.ui.ScaleBar
 import com.sovereignatlas.atlas.ui.SettingsDialog
 import com.sovereignatlas.atlas.ui.settings.SettingsScreen
 import com.sovereignatlas.atlas.ui.settings.SettingsViewModel
-import com.sovereignatlas.atlas.ui.TacticalCrosshair
 import com.sovereignatlas.atlas.ui.TrackDetailDialog
 import com.sovereignatlas.atlas.ui.TracksDialog
 import com.sovereignatlas.atlas.track.TrackRecorder
@@ -179,6 +179,15 @@ fun AtlasMapScreen(
     val headingUp = remember { mutableStateOf(false) }
     val pendingHeadingUp = remember { mutableStateOf(false) }
     val headingTick = remember { mutableStateOf(0) }
+    // TacNav-X reads the same heading source the compass dial uses: the heading
+    // service is listener-driven (no flow), so the tick is the recomposition key.
+    // A null bearing means no sample yet - the HUD draws no readout rather than
+    // inventing a heading.
+    val currentBearing = remember(headingTick.value) { services.heading.displayDeg()?.toFloat() }
+    val currentHeadingFrame = remember(headingTick.value) {
+        if (services.heading.displayDeg() == null) null else services.heading.frameLabel()
+    }
+    val hudAccent = androidx.compose.ui.graphics.Color(0xFF39FF14)
     val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val showLink = remember { mutableStateOf(false) }
@@ -767,10 +776,22 @@ fun AtlasMapScreen(
         val style = styleRef.value ?: return@LaunchedEffect
         syncMbtilesPackLayers(style, services, activeMbtilesPacks.value)
     }
+    // The TacNav readout needs a live heading; the dial previously started the
+    // sensor only when head-up mode was toggled. Start it for the HUD too.
+    LaunchedEffect(services) {
+        services.heading.ensureStarted()
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
+        )
+        // TacNav-X overlay: draws above the map, below the FAB rail. It carries no
+        // pointer input, so map gestures pass straight through the reticle.
+        TacNavHud(
+            bearing = currentBearing,
+            hudColor = hudAccent,
+            frameLabel = currentHeadingFrame,
         )
         Column(
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -1102,7 +1123,7 @@ fun AtlasMapScreen(
         }
         val metersPerPixel = mapRef.value?.projection
             ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
-        TacticalCrosshair(modifier = Modifier.align(Alignment.Center))
+        // Center reticle now lives in the TacNav overlay (single reticle, no double draw).
         Column(
             modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

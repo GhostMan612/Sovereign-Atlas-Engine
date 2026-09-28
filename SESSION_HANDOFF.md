@@ -4,6 +4,52 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## TacNav-X compass HUD (2026-09-27)
+
+- **Commit (pushed):** `feat(android): TacNav-X compass HUD`
+  (4 files + handoff). Pure `geo/TacticalMath`
+  (degreesToMils, formatBearing); new `ui/hud/TacNavHud`
+  Canvas (open-center reticle + top bearing + mils, no
+  pointer input); mounted in the map Box directly after
+  `AndroidView` (above map, below FAB rail).
+- **Audit:** accent confirmed `#39FF14` (Terminal Green, used
+  literally across `ui/` — not MaterialTheme). Bearing has NO
+  flow: `services.heading.displayDeg(): Double?` is
+  listener-driven, so the HUD follows the existing
+  `headingTick` key (`remember(headingTick.value)`), same
+  source as the compass dial (TRUE-preferred, MAG fallback).
+- **Deviations (reported, not silent):** bearing is
+  `Float?` — the ordered `mutableFloatStateOf(0f)` fallback
+  would have rendered a permanent fake "000 / 0 mils"
+  (no heading service in the DI graph as a flow), which
+  violates unknown>invented; instead the reticle always draws
+  and the readout appears only on a real sample. Added
+  optional `frameLabel` (TRUE/MAG provenance) and
+  `ensureStarted()` on mount (the sensor previously started
+  only when head-up was toggled, so the readout would have
+  been dead on launch).
+- **DEFECT FOUND IN ORDERED SPEC + FIXED:** the spec's
+  `degreesToMils` returns **6400** for inputs just under 360
+  (e.g. 359.99 -> 6399.82 -> 6400), which is outside the NATO
+  circle. Clamped to wrap to 0; all specified vectors
+  (0/1600/3200/4800, 360->0, 359.9->6398) still hold.
+- **Visual change:** the old `TacticalCrosshair` "+" call site
+  was removed (same center, would double-draw); the
+  composable itself is untouched in `ui/TacticalHud.kt` and is
+  one line to restore. **Device risk to check:** the top
+  bearing readout (32 dp) sits in the same top-center band as
+  the MGRS/LoS strip (16 dp) — expect overlap; offset was NOT
+  guessed without a device.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **309/309 green each** (new
+  `TacticalMathTest` 7/7 incl. the range check that caught the
+  6400 bug); `geo/` arch grep clean; `TacNavHud.kt` grep for
+  `clickable|pointerInput` = zero hits (touch pass-through by
+  construction).
+- **Device verification PENDING (human/Studio):** reticle +
+  live bearing on device, TRUE/MAG label, pan/zoom through the
+  reticle, top-center overlap appearance.
+
 ## Encyclopedia layer manager (2026-09-27)
 
 - **Commit (pushed):** `feat(android): encyclopedia layer
