@@ -44,6 +44,11 @@ class SettingsRepository(context: Context) {
     )
     val networkProfile: StateFlow<NetworkProfile> = _networkProfile.asStateFlow()
 
+    private val _activeMbtilesPacks = MutableStateFlow(
+        prefs.getStringSet("activeMbtilesPacks", emptySet())?.toSet() ?: emptySet()
+    )
+    val activeMbtilesPacks: StateFlow<Set<String>> = _activeMbtilesPacks.asStateFlow()
+
     fun setCallsign(newCallsign: String) {
         val trimmed = newCallsign.trim()
         if (trimmed.isEmpty()) return
@@ -62,5 +67,10 @@ class SettingsRepository(context: Context) {
             .remove("isMeshActive")
             .apply()
         _networkProfile.value = profile
+    }
+
+    fun setActiveMbtilesPacks(packs: Set<String>) {
+        prefs.edit().putStringSet("activeMbtilesPacks", packs.toSet()).apply()
+        _activeMbtilesPacks.value = packs.toSet()
     }
 }

@@ -13,6 +13,7 @@ import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
 import com.sovereignatlas.atlas.android.comms.MarkerStore
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
+import com.sovereignatlas.atlas.android.map.mbtiles.AndroidMetadataReader
 import com.sovereignatlas.atlas.android.map.mbtiles.MbtilesCache
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
@@ -27,6 +28,8 @@ import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
 import com.sovereignatlas.atlas.offline.PackTileServer
+import com.sovereignatlas.atlas.offline.mbtiles.DefaultMbtilesScanner
+import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import java.io.File
@@ -50,6 +53,11 @@ class AppServices(private val context: Context) {
     val tiles = PackTileServer(packsDir = { File(appContext.filesDir, PACK_JOURNAL_DIR) }).also { server ->
         server.mbtilesStore = MbtilesCache(File(appContext.filesDir, PACK_JOURNAL_DIR))
     }
+
+    val mbtilesScanner: MbtilesScanner = DefaultMbtilesScanner(
+        packsDir = { File(appContext.filesDir, PACK_JOURNAL_DIR) },
+        metadataReader = AndroidMetadataReader(),
+    )
 
     val keys = AndroidKeyProvider(appContext)
 

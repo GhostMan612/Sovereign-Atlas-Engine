@@ -22,6 +22,7 @@ import com.sovereignatlas.atlas.android.comms.MarkerStore
 import com.sovereignatlas.atlas.geo.los.ElevationProvider
 import com.sovereignatlas.atlas.geo.los.LineOfSightEngine
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
+import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.goto.GoToState
@@ -58,6 +59,7 @@ class AtlasServices(
     val locationEngine: LocationEngine,
     val multicastListener: AtakMulticastListener,
     val atakBroadcaster: AtakBroadcaster,
+    val mbtilesScanner: MbtilesScanner,
 ) {
     val lineOfSightEngine = LineOfSightEngine(
         elevationProvider = object : ElevationProvider {

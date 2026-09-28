@@ -86,6 +86,7 @@ final class MainActivity : ComponentActivity() {
             locationEngine = appServices.locationEngine,
             multicastListener = appServices.multicastListener,
             atakBroadcaster = appServices.atakBroadcaster,
+            mbtilesScanner = appServices.mbtilesScanner,
         )
     }
 

@@ -4,6 +4,58 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Encyclopedia layer manager (2026-09-27)
+
+- **Commit (pushed):** `feat(android): encyclopedia layer
+  manager` (9 files + handoff). New pure
+  `offline/mbtiles/` (`MbtilesPack`, `MetadataReader`,
+  `MbtilesScanner`, `DefaultMbtilesScanner` + pure
+  `mbtilesSafeId`/`mbtilesSourceId`/`mbtilesLayerId`);
+  new `android.map.mbtiles.AndroidMetadataReader` (read-only
+  SQLite, closed in `finally`); `AppServices` owns the
+  scanner, `AtlasServices` exposes `mbtilesScanner`.
+  `SettingsRepository.activeMbtilesPacks` StateFlow persists
+  the selection (`toSet()` on read AND write). The FAB is now
+  a Layer Manager sheet: scan on open, per-pack Switch
+  (name + description), dismiss preserves selection. Style
+  sync mounts/unmounts per-pack raster layers by diffing
+  `style.layers` against the active set.
+- **Audit (no halt needed):** anchor is
+  `atlas-waypoints-layer` (written as a verified constant,
+  no placeholders); `historicalLayerEnabled` did NOT exist —
+  the real prior-sprint name was `showMbtilesTest` (replaced,
+  zero refs remain); `tileUrl` was ALREADY a function
+  (`fun tileUrl(packId: String): String?`, kept nullable —
+  null when the server is not bound, so no layer mounts);
+  SettingsRepository field is `settingsRepository`; `offline/`
+  is a source dir inside `:app` (coroutines available);
+  `packsDir` is a `() -> File` lambda so it is passed as-is.
+  `Style.getLayers()`/`Layer.getId()` javap-verified.
+- **Self-caught defects (fixed before commit):** delegated
+  `by` value would have been captured STALE by the
+  `remember`ed MapView closure (packs toggled after first
+  composition would not reinstall on style reload) — now a
+  `mutableStateOf` holder read via `.value`, matching the
+  file's existing idiom; two of my own new tests asserted
+  wrong expectations (safeId also normalizes `.`; a valid
+  pack *is* read) — tests corrected, implementation unchanged
+  per RULES 4.5.
+- **Known limits (not invented away):** scanner regex hides
+  packs with spaces/odd chars from the manager (they cannot
+  be requested safely over the URL path — rename them);
+  `AndroidKeyProviderTest.keySurvivesNewInstance` failed
+  ONCE with a 10 s timeout under parallel-flavor load, then
+  passed isolated and on two full re-runs — recorded as
+  observed flake, not proven stable, not "fixed".
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **302/302 green each** (new
+  `MbtilesScannerTest` 10/10: mapping, fallbacks, regex
+  exclusion, ordering, missing dir, cancellation guard,
+  charset + id helpers); `offline/` arch grep clean.
+- **Device verification PENDING (human/Studio):** multi-pack
+  mount/unmount, tiles rendering from a real pack, selection
+  surviving restart, sheet empty-state.
+
 ## MapLibre glass integration (2026-09-27)
 
 - **Commit (pushed):** `feat(android): MBTiles test layer
