@@ -4,6 +4,56 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## MBTiles manager polish — sanitizer + empty state (2026-09-27)
+
+- **Commit (pushed):** `feat(android): mbtiles name sanitizer
+  and empty state` (2 new + 1 modified + handoff). New pure
+  `core/MapNameFormatter` (strips a trailing `.mbtiles`
+  case-insensitively, `-`/`_` to spaces, collapses repeats,
+  uppercases the first char per word). `ui/OfflineDialog.kt`
+  `MapsTab` now renders `MapNameFormatter.format(map.name)`
+  in the list headline and shows a tactical empty state
+  (Terminal Green warning glyph + "NO OFFLINE MAPS FOUND"
+  + the pre-existing ADB path guidance, preserved).
+- **Audit pinned before writing (no placeholders left):**
+  the raw-filename Text is `ui/OfflineDialog.kt:378`
+  `Text(map.name)`, and `OfflineMap.name` is fed straight
+  from `file.name` (`AndroidOfflineMapRepository.kt:79,88`),
+  so it genuinely needed sanitizing. The list state is
+  `available by maps.availableMaps.collectAsState()`, typed
+  `List<OfflineMap>` NON-nullable in
+  `offline/OfflineMapRepository.kt:29` — so `.isNullOrEmpty()`
+  was rejected in favor of the existing `.isEmpty()`. Parent
+  container: `MapsTab` is a plain composable whose empty
+  branch returns early, so `fillMaxSize()` is NOT inside a
+  scrollable (the LazyColumn only exists in the non-empty
+  branch) — no `fillParentMaxSize` downgrade needed. The
+  Layer Manager sheet in `map/AtlasMap.kt` was deliberately
+  left alone: it renders `MbtilesPack.name` (scanner
+  metadata), not a filename, so sanitizing it would corrupt
+  metadata titles.
+- **Two deviations (reported):** `core/utils/` does not
+  exist and every package in this repo is flat, so the
+  formatter lives at `com.sovereignatlas.atlas.core`
+  ("nearest pure-logic equivalent", no new package needed).
+  Tests live in the single-module `:app` test source set
+  (`app/src/test/java/com/sovereignatlas/atlas/core/`), not
+  a `core/src/test` module. `material-icons-extended` is a
+  declared dependency (`app/build.gradle:117`), verified
+  before using `Icons.Default.Warning`.
+- **Self-caught:** two of my own new assertions were wrong
+  (the spec uppercases only the FIRST char, so `MAP` stays
+  `MAP`; inner dots survive) — tests corrected, formatter
+  unchanged per RULES 4.5.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **331/331 green each** (new
+  `MapNameFormatterTest` 9/9 incl. acronym preservation,
+  delimiter collapsing, and idempotence); `core/` arch grep
+  clean; zero `ACTUAL_` tokens remain.
+- **Device verification PENDING (human/Studio):** empty
+  directory shows the glyph + path hint, and a real pack
+  displays its title-cased name.
+
 ## Routing sprint CLOSED — audit only, no code (2026-09-27)
 
 - **No code changed.** The "Offline Routing Engine (pipeline +
