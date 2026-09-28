@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
@@ -853,19 +854,15 @@ fun AtlasMapScreen(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
         )
-        // TacNav-X overlay: draws above the map, below the FAB rail. It carries no
-        // pointer input, so map gestures pass straight through the reticle.
+        // TacNav-X overlay: full-screen so the center reticle stays on the map
+        // center. Only the reticle is drawn here; the bearing readout is stacked
+        // below the compass tape in the top Column. No pointer input, so map
+        // gestures pass straight through.
         TacNavHud(
             bearing = currentBearing,
             hudColor = hudAccent,
             frameLabel = currentHeadingFrame,
-        )
-        // Compass tape: device heading when the sensor has a sample, otherwise
-        // map orientation. Declared before the MGRS/LoS column so the existing
-        // top-band chips keep their current z-order on top of the band.
-        CompassTape(
-            bearing = currentBearing?.toDouble() ?: bearingHud,
-            modifier = Modifier.align(Alignment.TopCenter)
+            showReadout = false,
         )
         Column(
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -1241,11 +1238,28 @@ fun AtlasMapScreen(
         }
         val metersPerPixel = mapRef.value?.projection
             ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
-        // Center reticle now lives in the TacNav overlay (single reticle, no double draw).
+        // Top band stack: compass tape, then the TacNav bearing readout, then the
+        // MGRS chip and LoS status. The Column carries no pointer input, so taps
+        // and drags in the gaps pass straight through to the map.
         Column(
-            modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            CompassTape(
+                bearing = currentBearing?.toDouble() ?: bearingHud,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TacNavHud(
+                bearing = currentBearing,
+                hudColor = hudAccent,
+                frameLabel = currentHeadingFrame,
+                showReticle = false,
+                fillScreen = false,
+                topPadding = 0.dp,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+            )
             MgrsHud(mgrsText = mgrsText)
             when (losMode) {
                 LoSMode.AwaitingObserver -> Text(

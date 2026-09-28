@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sovereignatlas.atlas.geo.TacticalMath
@@ -24,43 +25,50 @@ fun TacNavHud(
     bearing: Float?,
     hudColor: Color,
     frameLabel: String? = null,
+    showReticle: Boolean = true,
+    showReadout: Boolean = true,
+    fillScreen: Boolean = true,
+    topPadding: Dp = 32.dp,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
 
-    Canvas(modifier = modifier.fillMaxSize()) {
+    Canvas(modifier = if (fillScreen) modifier.fillMaxSize() else modifier) {
         val centerX = size.width / 2f
-        val centerY = size.height / 2f
-        val crosshairSize = 40.dp.toPx()
+        if (showReticle) {
+            val centerY = size.height / 2f
+            val crosshairSize = 40.dp.toPx()
 
-        drawLine(
-            color = hudColor,
-            start = Offset(centerX - crosshairSize, centerY),
-            end = Offset(centerX - crosshairSize * 0.3f, centerY),
-            strokeWidth = 2.dp.toPx()
-        )
-        drawLine(
-            color = hudColor,
-            start = Offset(centerX + crosshairSize * 0.3f, centerY),
-            end = Offset(centerX + crosshairSize, centerY),
-            strokeWidth = 2.dp.toPx()
-        )
-        drawLine(
-            color = hudColor,
-            start = Offset(centerX, centerY - crosshairSize),
-            end = Offset(centerX, centerY - crosshairSize * 0.3f),
-            strokeWidth = 2.dp.toPx()
-        )
-        drawLine(
-            color = hudColor,
-            start = Offset(centerX, centerY + crosshairSize * 0.3f),
-            end = Offset(centerX, centerY + crosshairSize),
-            strokeWidth = 2.dp.toPx()
-        )
+            drawLine(
+                color = hudColor,
+                start = Offset(centerX - crosshairSize, centerY),
+                end = Offset(centerX - crosshairSize * 0.3f, centerY),
+                strokeWidth = 2.dp.toPx()
+            )
+            drawLine(
+                color = hudColor,
+                start = Offset(centerX + crosshairSize * 0.3f, centerY),
+                end = Offset(centerX + crosshairSize, centerY),
+                strokeWidth = 2.dp.toPx()
+            )
+            drawLine(
+                color = hudColor,
+                start = Offset(centerX, centerY - crosshairSize),
+                end = Offset(centerX, centerY - crosshairSize * 0.3f),
+                strokeWidth = 2.dp.toPx()
+            )
+            drawLine(
+                color = hudColor,
+                start = Offset(centerX, centerY + crosshairSize * 0.3f),
+                end = Offset(centerX, centerY + crosshairSize),
+                strokeWidth = 2.dp.toPx()
+            )
+        }
 
+        if (!showReadout) return@Canvas
         if (bearing == null) return@Canvas
 
-        val topPadding = 32.dp.toPx()
+        val readoutTopPadding = topPadding.toPx()
 
         val bearingLayout = textMeasurer.measure(
             text = TacticalMath.formatBearing(bearing),
@@ -68,7 +76,7 @@ fun TacNavHud(
         )
         drawText(
             textLayoutResult = bearingLayout,
-            topLeft = Offset(centerX - (bearingLayout.size.width / 2f), topPadding)
+            topLeft = Offset(centerX - (bearingLayout.size.width / 2f), readoutTopPadding)
         )
 
         val milsText = if (frameLabel == null) {
@@ -84,7 +92,7 @@ fun TacNavHud(
             textLayoutResult = milsLayout,
             topLeft = Offset(
                 centerX - (milsLayout.size.width / 2f),
-                topPadding + bearingLayout.size.height + 4.dp.toPx()
+                readoutTopPadding + bearingLayout.size.height + 4.dp.toPx()
             )
         )
     }

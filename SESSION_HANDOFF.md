@@ -4,6 +4,50 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Top-band HUD deconfliction (2026-09-27)
+
+- **Commit (pushed):** `fix(android): stack top HUD band in one
+  Column` (2 files). The three colliding top elements are now
+  one TopCenter Column in stack order: CompassTape, TacNav
+  bearing readout, MGRS chip, LoS status. The old standalone
+  TopCenter tape and the old 16dp MGRS/LoS Column were
+  removed, so exactly one tape exists.
+- **Audit correction that changed the approach:** TacNavHud
+  is NOT a TopCenter element — it is a FULL-SCREEN overlay
+  that also hosts the center reticle. Moving it into a Column
+  (as the prompt's snippet implies) would have broken the
+  reticle, since the reticle needs screen-center constraints.
+  It was split instead via new params `showReticle`,
+  `showReadout`, `fillScreen`, `topPadding`: the full-screen
+  instance now draws the reticle only (`showReadout = false`)
+  and a second instance in the Column draws the readout.
+- **Task 0.3 premise did not hold:** no child hardcodes
+  `Modifier.align(TopCenter)`. `TacNavHud` and `CompassTape`
+  both already accept a `modifier` and do not self-align;
+  `MgrsHud` takes no modifier at all and relies on its
+  call-site Column. So the BoxScope/ColumnScope compile
+  error the prompt anticipated could not occur and no
+  signature refactor was needed.
+- **LAYOUT BUG caught in my own first pass:** `TacNavHud`
+  ended with `modifier.fillMaxSize()`, so a Column child
+  using it would have expanded to the full remaining height
+  and shoved MGRS/LoS to the bottom of the screen. Added the
+  `fillScreen` opt-out and gave the stacked instance a bounded
+  56dp height. Also caught and reverted an intermediate
+  attempt that placed the Column before `mgrsText` was
+  declared (forward reference).
+- **Touch pass-through is structural, not assumed:** the
+  Column and every child carry no pointer input, and a
+  `Canvas` without pointer modifiers does not participate in
+  hit testing. Precedent already proves it on device paths:
+  map tap/long-press intercepts work today beneath the
+  full-screen TacNavHud canvas.
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **336/336 green each** (no pure-logic
+  change this sprint). Device verification PENDING: stack
+  order, no overlap, and dragging between the elements still
+  pans the map.
+
 ## Compass tape HUD (2026-09-27)
 
 - **Commit (pushed):** `feat(android): compass tape HUD`
