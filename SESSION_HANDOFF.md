@@ -4,6 +4,41 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## CoT mapper (HALTED before icon injection) (2026-09-27)
+
+- **Commit (pushed):** `feat(android): CoT geojson mapper`
+  (2 new files + handoff). `map/cot/CotGeoJsonMapper` with
+  `deriveAffiliation` (a-f/a-h/a-n else unknown) and
+  `toFeatureCollection` (lon=X, lat=Y; uid/callsign/
+  affiliation properties). No map/AtlasMap change.
+- **HALTED per the prompt's own Task 3.2 gate:** none of the
+  four tactical drawables exist. Full `res/drawable`
+  inventory = `ic_splash_compass`,
+  `ic_launcher_monochrome`, `ic_launcher_foreground`,
+  `ic_launcher_background`, `ic_compass_overlay`,
+  `ic_blue_force_marker`, plus `drawable-nodpi/
+  ic_gps_puck_sdf.png`. The prompt forbids Android
+  system-drawable fallbacks, so the SymbolLayer icon
+  injection was NOT shipped and no icons were invented.
+  Awaiting an operator asset decision.
+- **Audit notes for whoever finishes it:** mesh flow is
+  `services.markers.markerStream: StateFlow<Map<String,
+  CotMarker>>` (a MAP, not `List<CotMarker>` — convert with
+  `.values.toList()`); the composable already holds
+  `context` (LocalContext) so no adapter ctor change is
+  needed; existing markers are ALREADY rendered by
+  `cot-marker-layer` (data-driven CircleLayer, colors via
+  `markerColorHex`, callsign carried as a property but not
+  drawn), so an icon SymbolLayer is additive — its real
+  delta would be icon art plus visible callsign labels.
+  `installAtlasLayers` currently `addLayerBelow(
+  WAYPOINTS_LAYER)`; "on top" would be `addLayerAbove`
+  (verify against the AAR before use).
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL;
+  Play + Enterprise **314/314 green each** (new
+  `CotGeoJsonMapperTest` 5/5: affiliation, unknown
+  fallback, lon/lat ordering, properties, empty).
+
 ## TacNav-X compass HUD (2026-09-27)
 
 - **Commit (pushed):** `feat(android): TacNav-X compass HUD`
