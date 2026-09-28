@@ -99,6 +99,21 @@ final class MainActivity : ComponentActivity() {
             android.content.Context.MODE_PRIVATE,
         ).edit().putBoolean(AtlasTacticalService.KEY_USER_STOPPED, false).apply()
 
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            locationService.requestPermission()
+            return
+        }
+        requestNotificationStep()
+    }
+
+    private fun requestNotificationStep() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -158,6 +173,7 @@ final class MainActivity : ComponentActivity() {
                 grantResults.any { it == PackageManager.PERMISSION_GRANTED },
             )
             locationService.refreshStatus()
+            requestNotificationStep()
         }
     }
 

@@ -4,6 +4,28 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## FGS field readiness audit (2026-09-27)
+
+- **Commit (local, unpushed):** `fix(android): gate FGS cascade
+  on location grant` (MainActivity + handoff). Audit found
+  Manifest fully compliant (location|connectedDevice,
+  stopWithTask=false, exported=false, all 5 permissions) and
+  service healthy (ServiceCompat bitwise start, tactical
+  icon, DI names current, STICKY + alarm restart, live ally
+  count) — zero repairs there. One real wart repaired:
+  FGS started before location was granted (API 34+
+  throws on location-type start → silent stopSelf, mesh
+  dead until restart). Cascade is now location →
+  notifications → battery → FGS; grant continuation resumes
+  via the existing permission-result path; denial blocks FGS
+  (location-type cannot legally run).
+- **Gates here:** `:app:assemblePlayDebug` BUILD SUCCESSFUL
+  (explicitly ordered; only pre-existing deprecation
+  warning); Play + Enterprise **284/284 green each**.
+- **Device verification PENDING (human/Studio):** fresh-
+  install order (location dialog → notification → battery →
+  service), denial path, task-swipe restart.
+
 ## Tech debt & engine consolidation (2026-09-27)
 
 - **Commit (pushed):** `refactor(android): batched LoS sampling
