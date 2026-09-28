@@ -25,5 +25,5 @@ data class TerrainProfile(
 )
 
 interface ElevationProvider {
-    suspend fun getElevation(latitude: Double, longitude: Double): Double?
+    suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?>
 }

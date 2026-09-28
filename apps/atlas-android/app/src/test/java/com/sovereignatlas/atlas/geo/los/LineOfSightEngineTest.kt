@@ -14,7 +14,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private class FakeElevation(private val fn: (Double, Double) -> Double?) : ElevationProvider {
-    override suspend fun getElevation(latitude: Double, longitude: Double): Double? = fn(latitude, longitude)
+    override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> =
+        points.map { (latitude, longitude) -> fn(latitude, longitude) }
+}
+
+private class FakeBatch(private val fn: (Int, Double, Double) -> Double?) : ElevationProvider {
+    override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> =
+        points.mapIndexed { index, (latitude, longitude) -> fn(index, latitude, longitude) }
 }
 
 private fun point(latitude: Double, longitude: Double, altitude: Double? = null): GeoPoint {
@@ -53,10 +59,8 @@ final class LineOfSightEngineTest {
 
     @Test
     fun endpointAltitudeFallbackUsedWhenDemMissing() = runBlocking {
-        var calls = 0
-        val engine = LineOfSightEngine(FakeElevation { _, _ ->
-            calls += 1
-            if (calls <= 2) null else 100.0
+        val engine = LineOfSightEngine(FakeBatch { index, _, _ ->
+            if (index == 0 || index == 100) null else 100.0
         })
         val profile = engine.calculateProfile(
             point(44.9, -93.1, altitude = 120.0),
@@ -81,13 +85,22 @@ final class LineOfSightEngineTest {
 
     @Test
     fun missingMidPathDemReportsError() = runBlocking {
-        var calls = 0
-        val engine = LineOfSightEngine(FakeElevation { _, _ ->
-            calls += 1
-            if (calls <= 2) 100.0 else null
+        val engine = LineOfSightEngine(FakeBatch { index, _, _ ->
+            if (index == 0 || index == 100) 100.0 else null
         })
         val profile = engine.calculateProfile(point(44.9, -93.1), point(44.91, -93.09))
         assertFalse(profile.hasLineOfSight)
         assertEquals("Missing DEM data along path", profile.errorMessage)
+    }
+
+    @Test
+    fun batchSizeMismatchReportsError() = runBlocking {
+        val engine = LineOfSightEngine(object : ElevationProvider {
+            override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> =
+                listOf(100.0)
+        })
+        val profile = engine.calculateProfile(point(44.9, -93.1), point(44.91, -93.09))
+        assertFalse(profile.hasLineOfSight)
+        assertEquals("Elevation batch size mismatch", profile.errorMessage)
     }
 }

@@ -4,6 +4,33 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Tech debt & engine consolidation (2026-09-27)
+
+- **Commit (pushed):** `refactor(android): batched LoS sampling
+  plus marker TTL pruning` (8 files + handoff).
+  `ElevationProvider` is now batch-only (`getElevations`,
+  singular dropped — its only consumers were the los engine,
+  the DI anon object, and the los test fake, all updated);
+  `geo.los` engine pre-computes 101 coords, single batch
+  fetch, size-mismatch guard, endpoint altitude fallbacks
+  preserved; DI maps to `DemSession.engine?.
+  getElevationsBatch` (null engine → all-null → existing
+  endpoint/path errors). `MarkerStore(scope)` gains a
+  60 s prune ticker (24 h TTL) + `shutdown()`; `AppServices`
+  owns `markerScope`, listener takes required `markerStore`;
+  tests use `TestScope()` + new ticker-prune and
+  batch-mismatch tests.
+- **Task 1 SKIPPED with cause:** `geo/LineOfSightEngine.kt`
+  is load-bearing, not deprecated — `runLosCalculation`
+  (LoS tool observer/target flow, ray + block layers, HUD)
+  and 4 `LineOfSightTest` cases depend on it. Deleting the
+  file alone would break compile and gut the LoS tool.
+  Consolidation needs a follow-up directive covering the
+  tool flow (rewire tool to `geo.los` or remove tool).
+- **Gates here:** Play + Enterprise **284/284 green each**
+  (los 7/7, markers 4/4); `geo/los` arch grep clean.
+  No assemble per build boundary.
+
 ## LoS analysis in targeting sheet (2026-09-27)
 
 - **Commit (pushed):** `feat(android): line-of-sight analysis in

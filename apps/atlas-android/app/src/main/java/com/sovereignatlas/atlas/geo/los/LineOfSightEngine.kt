@@ -27,20 +27,27 @@ class LineOfSightEngine(private val elevationProvider: ElevationProvider) {
         )
 
         if (distanceTotal <= 0.0) {
-            return TerrainProfile(
-                start, end, 0.0, 0.0, emptyList(), false,
-                "Observer and target are at the same location"
-            )
+            return TerrainProfile(start, end, 0.0, 0.0, emptyList(), false, "Observer and target are at the same location")
         }
 
-        val startTerrain = elevationProvider.getElevation(start.latitude, start.longitude) ?: start.altitude
-        val endTerrain = elevationProvider.getElevation(end.latitude, end.longitude) ?: end.altitude
+        val coords = (0..SAMPLES).map { i ->
+            val fraction = i.toDouble() / SAMPLES
+            val interp = AtlasGeoMath.interpolateGreatCircle(
+                start.latitude, start.longitude, end.latitude, end.longitude, fraction, distanceTotal
+            )
+            Pair(interp.first, interp.second)
+        }
+
+        val elevations = elevationProvider.getElevations(coords)
+        if (elevations.size != coords.size) {
+            return TerrainProfile(start, end, 0.0, 0.0, emptyList(), false, "Elevation batch size mismatch")
+        }
+
+        val startTerrain = elevations.first() ?: start.altitude
+        val endTerrain = elevations.last() ?: end.altitude
 
         if (startTerrain == null || endTerrain == null) {
-            return TerrainProfile(
-                start, end, 0.0, 0.0, emptyList(), false,
-                "Missing DEM data at endpoints"
-            )
+            return TerrainProfile(start, end, 0.0, 0.0, emptyList(), false, "Missing DEM data at endpoints")
         }
 
         val startElev = startTerrain + observerHeightM
@@ -53,18 +60,13 @@ class LineOfSightEngine(private val elevationProvider: ElevationProvider) {
 
         for (i in 0..SAMPLES) {
             val fraction = i.toDouble() / SAMPLES
-
-            val interp = AtlasGeoMath.interpolateGreatCircle(
-                start.latitude, start.longitude, end.latitude, end.longitude, fraction, distanceTotal
-            )
-            val lat = interp.first
-            val lon = interp.second
-
+            val lat = coords[i].first
+            val lon = coords[i].second
             val dist = distanceTotal * fraction
 
             val terrainElev = if (i == 0) startTerrain
                               else if (i == SAMPLES) endTerrain
-                              else elevationProvider.getElevation(lat, lon)
+                              else elevations[i]
 
             if (terrainElev == null) {
                 return TerrainProfile(

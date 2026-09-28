@@ -69,7 +69,9 @@ class AppServices(private val context: Context) {
 
     val messageStore = MessageStore(localDeviceUid = localDeviceUid)
 
-    val markerStore = MarkerStore()
+    private val markerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    val markerStore = MarkerStore(markerScope)
 
     val multicastListener = AtakMulticastListener(
         context = appContext,

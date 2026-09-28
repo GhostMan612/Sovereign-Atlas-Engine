@@ -61,8 +61,9 @@ class AtlasServices(
 ) {
     val lineOfSightEngine = LineOfSightEngine(
         elevationProvider = object : ElevationProvider {
-            override suspend fun getElevation(latitude: Double, longitude: Double): Double? {
-                return DemSession.engine?.getElevation(latitude, longitude)
+            override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> {
+                val engine = DemSession.engine
+                return engine?.getElevationsBatch(points) ?: List(points.size) { null }
             }
         },
     )

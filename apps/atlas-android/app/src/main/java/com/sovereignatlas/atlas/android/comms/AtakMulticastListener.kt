@@ -36,7 +36,7 @@ class AtakMulticastListener(
     context: Context,
     private val pliStore: PliStore,
     private val messageStore: MessageStore,
-    private val markerStore: MarkerStore = MarkerStore(),
+    private val markerStore: MarkerStore,
     private val parser: CotParser,
 ) {
     private val appContext = context.applicationContext
