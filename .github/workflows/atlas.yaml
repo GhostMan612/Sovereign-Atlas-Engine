@@ -1,6 +1,6 @@
 # Sovereign Atlas CI.
-# NOTE: UNEXECUTED-ON-CI — first green run on GitHub Actions is itself a
-# tracked acceptance item, not assumed.
+# NOTE: CI was failing at android-actions/setup-android on 60/60 runs; that
+# step is now pinned. First green run is still a tracked acceptance item.
 name: atlas
 'on':
   push:
@@ -9,12 +9,26 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
+      # setup-android's unpinned defaults stopped resolving: 60/60 runs died in
+      # this step and never reached the tests. Pin the last known-good
+      # cmdline-tools build and ask for exactly what this module needs so the
+      # step cannot drift with whatever Google currently publishes.
       - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: yes
+      - name: Report toolchain
+        run: |
+          java -version
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          sdkmanager --list_installed
       - name: Unit tests
         working-directory: apps/atlas-android
         run: ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
@@ -22,12 +36,16 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: yes
       - name: Build Release APKs
         working-directory: apps/atlas-android
         env:
