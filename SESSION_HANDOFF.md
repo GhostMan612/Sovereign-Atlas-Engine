@@ -4,6 +4,111 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## HUD declutter, CoT marker rendering fix, LoS message (2026-09-29) — UNCOMMITTED, device-verified
+
+- **Gates green here:** `compilePlayDebugKotlin` BUILD SUCCESSFUL;
+  `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`
+  **352/352 green each**; `:app:assemblePlayDebug` +
+  `:app:assembleEnterpriseDebug` BUILD SUCCESSFUL. LoS
+  assertions were re-run (new strings), not cached.
+- **Toolchain note:** `C:\Program Files\Android\Android Studio\jbr`
+  is a *stripped* JBR — `lib/jvm.cfg` is missing, so any
+  `JAVA_HOME` pointing at it fails with ``could not open ... jvm.cfg``.
+  Working JDK 21: `C:\Users\612co\.jdks\jbr-21.0.11`.
+- **Marker drop was a silent no-op end to end:** tapping a
+  targeting-sheet option closed the sheet and threw nothing,
+  because `AtakMulticastListener.sendMulticast` returned early
+  on a null socket and swallowed `send` failures inside
+  `runCatching` — a dead radio looked exactly like success, and
+  nothing ever wrote a local copy. Fixes: `sendMulticast` now
+  returns `Boolean` and logs failures under tag
+  `AtakMulticastListener`; `sendMarker` returns
+  `MarkerSendResult(uid, transmitted)`; `CotProtobufGenerator.buildMarkerUid`
+  mints the wire uid; `AtlasMap.kt` echoes a `CotMarker` under
+  that SAME uid (so a later mesh round-trip overwrites the key
+  instead of duplicating), and surfaces "Radio offline — marker
+  saved locally only" when the send did not go out. Loopback
+  delivery is still unproven — the local echo is the fix, not
+  the diagnosis of why the radio drops it.
+- **LoS error was truthful but useless:** the engine said
+  "Missing DEM data at endpoints" with no DEM engine present.
+  Now actionable: "No DEM elevation at the endpoints — activate
+  a relief (.mbtiles DEM) map, then retry." / "No DEM elevation
+  along the path — the relief map may not cover this area."
+  Tests updated to assert the new copy.
+- **HUD declutter (user-requested, all in `AtlasMap.kt` +
+  `TacticalHud.kt`):** top band is now opaque `Color.Black` so
+  the system status bar (clock/date/battery) reads against it
+  and `MainActivity` explicitly `show()`s both bar types after
+  `enableEdgeToEdge()` with light-on-dark icons. MGRS moved to a
+  top-START column with a translucent 0.45-alpha scrim, 11sp,
+  6x3dp padding (was an opaque 12sp white panel). The TacNav
+  bearing/mils readout moved out of the center stack to sit
+  under the compass rose in a top-END column, which also lowers
+  the rose to clear the band (48dp offset > 40dp tape). The
+  `Locate` FAB is gone: the rose taps to locate and
+  long-presses to face north (`combinedClickable`), removing a
+  duplicate control. Attribution dropped its `Surface` for 9sp
+  white text at 0.85 alpha with a 6dp black shadow, nav-bar
+  inset — it was covering the lower-left glass.
+- **Drawing toolbar collapsed:** LINE/MEDEVAC/RESTRICT were three
+  permanent buttons for mutually exclusive choices. Now one
+  current-mode button (`DRAW`/`LINE`/`MEDEVAC`/`RESTRICT`, ▲/▼)
+  that expands a small vertical menu; Pts/UNDO/COMMIT appear
+  only while a mode is active. `horizontalScroll` and the black
+  `Surface` are gone, so the row no longer needs to scroll.
+- **ROOT CAUSE of invisible CoT markers (the real bug, found on
+  device after 5 rebuilds):** `style.addLayerBelow(MARKER_LAYER,
+  WAYPOINTS_LAYER)` in `AtlasLayerInstaller` produced a layer that
+  is present in the style (it showed up in `style.layers` at an
+  index *not* directly below its anchor) but **never paints**.
+  With `style.addLayer(...)` the identical CircleLayer/GeoJsonSource
+  renders instantly. Proof: 24px magenta constant-colour circle
+  stayed invisible via `addLayerBelow` and appeared the moment the
+  add call changed — so it was never the data, the expression, the
+  coordinates, or the mesh. Diagnosed by elimination: source push
+  logged `1 features`, style dump showed `cot-marker-layer`, draw
+  order showed it ABOVE `atlas-base-layer`, and the measure line +
+  measure dot circles (same GeoJSON source mechanism, plain
+  `addLayer`) rendered fine on the same screen.
+  **Suspect the same latent bug in every other
+  `addLayerBelow(..., WAYPOINTS_LAYER)` call** — `MGRS_LINE_LAYER`,
+  `MGRS_LABEL_LAYER`, `TACTICAL_ROUTE_LAYER` — those layers have
+  never been seen rendering on device either. Not touched here
+  (out of scope for this fix); the MGRS grid toggle is the cheap way
+  to confirm.
+- **Second, separate cause found while testing:** the device's
+  Network Profile was **Radio Silence (EMCON)**, so `sendMarker`
+  correctly threw "Markers require an active mesh profile" and no
+  marker was ever created. That error *is* now visible in the sheet
+  (it was previously swallowed into a no-op). Tests must set
+  Off-Grid Mesh Only or Hybrid first or every drop is refused.
+- **Device-verified after the fix (Moto G, screenshots):** red
+  hostile circle and green neutral circle both render at the long
+  -press point; LoS with no DEM shows the new actionable copy
+  ("No DEM elevation at the endpoints — activate a relief
+  (.mbtiles DEM) map, then retry."); black top band carries the
+  system status bar (clock, battery); MGRS top-left on a
+  translucent scrim; bearing/mils under the compass rose; one
+  collapsed `DRAW ▼` button; no Locate FAB; attribution is shadowed
+  text with no panel.
+- **CI IS RED FOR AN INFRASTRUCTURE REASON, NOT OUR CODE:** Actions
+  run #61 on `49bf4f3` failed in 18s. Step-level: `checkout` ok,
+  `setup-java` ok, **`android-actions/setup-android@v3` FAILED**,
+  `Unit tests` SKIPPED. **60/60 recent runs failed the same way;
+  zero green.** The workflow's own header admitted "first green run
+  is a tracked acceptance item". Fixed locally by pinning
+  `cmdline-tools-version: 11076708`, an explicit `packages` list
+  (`platform-tools platforms;android-35 build-tools;35.0.0`),
+  `accept-android-sdk-licenses: yes`, bumping
+  `checkout@v4`→`@v5` and `setup-java@v4`→`@v5`, and adding a
+  `Report toolchain` step so the next failure is diagnosable. NOT
+  yet pushed, so CI has not re-run against it.
+- **Device ADB keeps dropping off-LAN** (mDNS vanishes, `5555`
+  refused). Recovery that works: wait for mDNS to re-advertise, then
+  `adb connect <ip>:<port>` from the mdns line — the long
+  `._adb-tls-connect._tcp` hostname does NOT resolve, so use the IP.
+
 ## Layout defects 1 & 2 fixed and device-verified (2026-09-28)
 
 - **Commit (pushed):** `fix(android): clear camera cutout and FAB

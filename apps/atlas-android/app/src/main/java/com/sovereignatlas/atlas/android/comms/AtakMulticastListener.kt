@@ -160,9 +160,9 @@ class AtakMulticastListener(
         releaseLocks()
     }
 
-    fun sendMulticast(data: ByteArray) {
-        val current = socket ?: return
-        runCatching {
+    fun sendMulticast(data: ByteArray): Boolean {
+        val current = socket ?: return false
+        return runCatching {
             val packet = DatagramPacket(
                 data,
                 data.size,
@@ -170,7 +170,13 @@ class AtakMulticastListener(
                 6969,
             )
             current.send(packet)
-        }
+            true
+        }.onFailure { error ->
+            // Previously swallowed by runCatching, which made a dead radio look
+            // identical to a successful send. Logged, never thrown: a mesh
+            // failure must not crash the foreground service.
+            Log.w("AtakMulticastListener", "CoT send failed", error)
+        }.getOrDefault(false)
     }
 
     private fun releaseLocks() {

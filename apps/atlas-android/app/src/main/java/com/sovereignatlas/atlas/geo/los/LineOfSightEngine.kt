@@ -47,7 +47,10 @@ class LineOfSightEngine(private val elevationProvider: ElevationProvider) {
         val endTerrain = elevations.last() ?: end.altitude
 
         if (startTerrain == null || endTerrain == null) {
-            return TerrainProfile(start, end, 0.0, 0.0, emptyList(), false, "Missing DEM data at endpoints")
+            return TerrainProfile(
+                start, end, 0.0, 0.0, emptyList(), false,
+                "No DEM elevation at the endpoints — activate a relief (.mbtiles DEM) map, then retry."
+            )
         }
 
         val startElev = startTerrain + observerHeightM
@@ -71,7 +74,7 @@ class LineOfSightEngine(private val elevationProvider: ElevationProvider) {
             if (terrainElev == null) {
                 return TerrainProfile(
                     start, end, startElev, endElev, emptyList(), false,
-                    "Missing DEM data along path"
+                    "No DEM elevation along the path — the relief map may not cover this area."
                 )
             }
 

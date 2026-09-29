@@ -60,20 +60,26 @@ class AtakBroadcaster(
         listener.sendMulticast(payload)
     }
 
-    suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double) {
+    suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double): MarkerSendResult {
         val profile = settingsRepository.networkProfile.value
         if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ||
             profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY) {
             throw IllegalStateException("Markers require an active mesh profile")
         }
         val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(lat, lon, null, null, null, System.currentTimeMillis())
+        // The uid is minted here and returned so the caller can echo the marker
+        // into the local store under the SAME uid the wire carries, keeping the
+        // mesh round-trip idempotent instead of duplicating the marker.
+        val markerUid = CotProtobufGenerator.buildMarkerUid(localUid)
         val payload = CotProtobufGenerator.generateMarkerProto(
             localUid = localUid,
             type = type,
             callsign = callsign,
-            geoPoint = geoPoint
+            geoPoint = geoPoint,
+            markerUid = markerUid
         )
-        listener.sendMulticast(payload)
+        val sent = listener.sendMulticast(payload)
+        return MarkerSendResult(markerUid, sent)
     }
 
     suspend fun sendChatMessage(
@@ -126,3 +132,6 @@ class AtakBroadcaster(
         return sent
     }
 }
+
+/** Outcome of a marker drop: the wire uid plus whether the radio actually sent. */
+data class MarkerSendResult(val uid: String, val transmitted: Boolean)

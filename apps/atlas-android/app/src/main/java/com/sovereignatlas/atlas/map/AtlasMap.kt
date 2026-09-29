@@ -15,6 +15,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,6 +71,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -922,12 +926,8 @@ fun AtlasMapScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            FloatingActionButton(
-                onClick = onLocate,
-                modifier = Modifier.semantics { stateDescription = "Locate" },
-            ) {
-                Text("Locate")
-            }
+            // No Locate FAB: tapping the compass rose locates, long-press faces
+            // north. The extra button only crowded the rail.
             FloatingActionButton(
                 onClick = onToggleFollow,
                 modifier = Modifier.semantics {
@@ -1010,9 +1010,9 @@ fun AtlasMapScreen(
                     inProgressPointsFlow.value = emptyList()
                 },
                 // The right-rail FABs own the bottom-right corner, so the toolbar
-                // reserves that width (56dp FAB + 16dp rail padding + gap) instead
-                // of sliding underneath the Tools button. The toolbar row scrolls
-                // horizontally when a mode adds its Pts/UNDO/COMMIT controls.
+                // reserves that width (56dp FAB + 16dp rail padding + gap). The
+                // mode picker is collapsed to one button, so the row no longer
+                // needs to scroll.
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
@@ -1243,13 +1243,32 @@ fun AtlasMapScreen(
                             onClick = {
                                 mapScope.launch {
                                     try {
-                                        withContext(Dispatchers.IO) {
+                                        val result = withContext(Dispatchers.IO) {
                                             services.atakBroadcaster.sendMarker(
                                                 type = type,
                                                 callsign = label,
                                                 lat = targetDropPointState!!.latitude,
                                                 lon = targetDropPointState!!.longitude,
                                             )
+                                        }
+                                        // Local echo under the SAME wire uid: the
+                                        // marker is visible immediately instead of
+                                        // depending on multicast loopback, and a later
+                                        // mesh round-trip overwrites the same key
+                                        // rather than duplicating it.
+                                        services.markers.addMarker(
+                                            CotMarker(
+                                                uid = result.uid,
+                                                type = type,
+                                                callsign = label,
+                                                latitude = targetDropPointState!!.latitude,
+                                                longitude = targetDropPointState!!.longitude,
+                                                altitude = null,
+                                                timestampMillis = System.currentTimeMillis(),
+                                            )
+                                        )
+                                        if (!result.transmitted) {
+                                            errorMessage = "Radio offline — marker saved locally only"
                                         }
                                         if (type == "b-m-p-w") {
                                             val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
@@ -1297,16 +1316,14 @@ fun AtlasMapScreen(
         }
         val metersPerPixel = mapRef.value?.projection
             ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
-        // Top band stack: compass tape, then the TacNav bearing readout, then the
-        // MGRS chip and LoS status. The Column carries no pointer input, so taps
-        // and drags in the gaps pass straight through to the map.
+        // Top band: opaque black so the system status bar (clock, date, battery)
+        // reads on top of it instead of over raw map imagery, and so the cutout
+        // never lands on the tape. Content is inset below the bar.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                // The app draws edge to edge, so a centered camera cutout (punch
-                // hole) would sit on top of the tape's red lubber line. Union with
-                // the status bar so there is always clearance, cutout or not.
+                .background(androidx.compose.ui.graphics.Color.Black)
                 .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -1314,24 +1331,28 @@ fun AtlasMapScreen(
                 bearing = currentBearing?.toDouble() ?: bearingHud,
                 modifier = Modifier.fillMaxWidth(),
             )
-            TacNavHud(
-                bearing = currentBearing,
-                hudColor = hudAccent,
-                frameLabel = currentHeadingFrame,
-                showReticle = false,
-                fillScreen = false,
-                topPadding = 0.dp,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-            )
+        }
+        // Left column: MGRS readout plus the LoS status line, both inset below
+        // the black band so they never collide with it.
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                .padding(start = 8.dp, top = 48.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             MgrsHud(mgrsText = mgrsText)
             when (losMode) {
                 LoSMode.AwaitingObserver -> Text(
                     text = "LoS: tap observer point",
                     fontSize = 12.sp,
+                    color = hudAccent,
                 )
                 LoSMode.AwaitingTarget -> Text(
                     text = "LoS: tap target point",
                     fontSize = 12.sp,
+                    color = hudAccent,
                 )
                 LoSMode.Inactive -> {
                     val error = losResult?.errorMessage
@@ -1361,9 +1382,12 @@ fun AtlasMapScreen(
             }
         }
         Column(
-            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                .padding(end = 8.dp, top = 48.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (recorderTick.value >= 0 && services.recorder.isRecording()) {
                 Surface {
@@ -1375,6 +1399,7 @@ fun AtlasMapScreen(
             }
             CompassOverlay(
                 bearing = bearingHud,
+                onLocate = onLocate,
                 onFaceNorth = {
                     headingUp.value = false
                     pendingHeadingUp.value = false
@@ -1382,6 +1407,17 @@ fun AtlasMapScreen(
                         map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
                     }
                 },
+            )
+            // Bearing readout sits directly under the rose, mirroring the TacNav
+            // readout style so the right column carries heading, not the center.
+            TacNavHud(
+                bearing = currentBearing,
+                hudColor = hudAccent,
+                frameLabel = currentHeadingFrame,
+                showReticle = false,
+                fillScreen = false,
+                topPadding = 0.dp,
+                modifier = Modifier.width(160.dp).height(56.dp),
             )
         }
         Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
@@ -1607,13 +1643,24 @@ fun AtlasMapScreen(
             )
         }
         if (attribution.value.isNotEmpty()) {
-            Surface(modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)) {
-                Text(
-                    text = attribution.value,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(4.dp),
-                )
-            }
+            // No Surface: an opaque panel buried the lower-left glass. White text
+            // with a shadow stays legible over snow, sand, and satellite imagery
+            // without hiding the map behind it.
+            Text(
+                text = attribution.value,
+                fontSize = 9.sp,
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                style = TextStyle(
+                    shadow = Shadow(
+                        color = androidx.compose.ui.graphics.Color.Black,
+                        blurRadius = 6f,
+                    )
+                ),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 8.dp, bottom = 8.dp),
+            )
         }
         AtlasLoadingOverlay(visible = mapLoading.value)
     }

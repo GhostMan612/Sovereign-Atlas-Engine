@@ -206,7 +206,11 @@ fun installAtlasLayers(style: Style) {
             ),
         AtlasLayerIds.WAYPOINTS_LAYER,
     )
-    style.addLayerBelow(
+    // addLayerBelow(..., WAYPOINTS_LAYER) is BROKEN in this style: the layer
+    // lands in the style at an unexpected index and then never paints, which is
+    // why CoT markers were invisible on device while the source held them.
+    // Plain addLayer() renders; markers belong on top anyway.
+    style.addLayer(
         CircleLayer(AtlasLayerIds.MARKER_LAYER, AtlasLayerIds.MARKER_SOURCE)
             .withProperties(
                 PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
@@ -214,7 +218,6 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.circleStrokeColor("#000000"),
                 PropertyFactory.circleStrokeWidth(2f),
             ),
-        AtlasLayerIds.WAYPOINTS_LAYER,
     )
     style.addLayerAbove(
         SymbolLayer(AtlasLayerIds.MESH_TRACK_LAYER, AtlasLayerIds.MESH_TRACK_SOURCE)
@@ -316,5 +319,12 @@ fun setAtlasLayerVisible(style: Style, layerId: String, visible: Boolean) {
 }
 
 fun pushFeatures(style: Style, sourceId: String, collection: FeatureCollection) {
-    style.getSourceAs<GeoJsonSource>(sourceId)?.setGeoJson(collection)
+    val source = style.getSourceAs<GeoJsonSource>(sourceId)
+    if (source == null) {
+        // A silent no-op here is indistinguishable from "no data", which is how
+        // a live feature set can vanish with nothing in the log.
+        android.util.Log.w("AtlasLayers", "pushFeatures: source '$sourceId' is not on the style")
+        return
+    }
+    source.setGeoJson(collection)
 }

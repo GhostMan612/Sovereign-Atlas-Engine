@@ -54,7 +54,10 @@ final class LineOfSightEngineTest {
         val engine = LineOfSightEngine(FakeElevation { _, _ -> null })
         val profile = engine.calculateProfile(point(44.9, -93.1), point(44.91, -93.09))
         assertFalse(profile.hasLineOfSight)
-        assertEquals("Missing DEM data at endpoints", profile.errorMessage)
+        assertEquals(
+            "No DEM elevation at the endpoints — activate a relief (.mbtiles DEM) map, then retry.",
+            profile.errorMessage,
+        )
     }
 
     @Test
@@ -90,7 +93,10 @@ final class LineOfSightEngineTest {
         })
         val profile = engine.calculateProfile(point(44.9, -93.1), point(44.91, -93.09))
         assertFalse(profile.hasLineOfSight)
-        assertEquals("Missing DEM data along path", profile.errorMessage)
+        assertEquals(
+            "No DEM elevation along the path — the relief map may not cover this area.",
+            profile.errorMessage,
+        )
     }
 
     @Test

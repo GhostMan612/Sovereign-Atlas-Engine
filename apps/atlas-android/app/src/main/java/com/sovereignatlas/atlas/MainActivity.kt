@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.sovereignatlas.atlas.android.services.AtlasTacticalService
 import com.sovereignatlas.atlas.goto.GoToState
 import com.sovereignatlas.atlas.heading.AndroidHeadingSource
@@ -151,6 +153,13 @@ final class MainActivity : ComponentActivity() {
         installSplashScreen().setKeepOnScreenCondition { !mapReady.value }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // enableEdgeToEdge() defaults to light scrims that vanish against a dark
+        // map. Keep the status and navigation bars on (and their icons light) so
+        // the clock, date, and battery stay readable on the black top band.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            isAppearanceLightStatusBars = false
+        }
         MapLibre.getInstance(this)
         initializeTacticalMesh()
         setContent {

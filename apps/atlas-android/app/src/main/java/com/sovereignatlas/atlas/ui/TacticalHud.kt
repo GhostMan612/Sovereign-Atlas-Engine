@@ -5,9 +5,10 @@
 
 package com.sovereignatlas.atlas.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,11 +60,14 @@ fun scaleLabel(niceMeters: Double): String {
 @Composable
 fun MgrsHud(mgrsText: String) {
     if (mgrsText.isEmpty()) return
-    Surface {
+    // Translucent scrim instead of an opaque white box: readable over any basemap
+    // without the oversized panel that dominated the lower-left corner.
+    Surface(color = Color.Black.copy(alpha = 0.45f)) {
         Text(
             text = mgrsText,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            fontSize = 11.sp,
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
         )
     }
 }
@@ -79,17 +83,23 @@ fun TacticalCrosshair(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CompassOverlay(bearing: Double, onFaceNorth: () -> Unit) {
+fun CompassOverlay(
+    bearing: Double,
+    onLocate: () -> Unit,
+    onFaceNorth: () -> Unit,
+) {
     Image(
         painter = painterResource(R.drawable.ic_compass_overlay),
-        contentDescription = "Compass - tap to face north",
+        contentDescription = "Compass - tap to locate, long-press to face north",
         modifier = Modifier.size(48.dp)
             .rotate(-bearing.toFloat())
-            .clickable(
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onFaceNorth,
+                onLongClick = onFaceNorth,
+                onClick = onLocate,
             ),
     )
 }
