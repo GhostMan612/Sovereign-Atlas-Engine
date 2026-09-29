@@ -50,11 +50,14 @@ jobs:
             --console=plain --continue > gradle-out.log 2>&1
           EXIT=$?
           set -e
-          # The run-summary widget is JavaScript-rendered, so a plain fetch of the
-          # run page cannot read it. Emit the same text as a step ERROR line,
-          # which does show up in the annotations endpoint unauthenticated.
+          # NOTE: this writes to the run summary, which the run page renders via a
+          # JavaScript widget. Reading it back programmatically is not possible
+          # here: the step log needs sign-in, the logs endpoint returns 403, and
+          # the annotations endpoint does not carry workflow-command output.
+          # A signed-in human reading the run page sees this block. Do not add
+          # ::error:: duplication hoping to surface it unauthenticated; that does
+          # not work and only floods the annotations list.
           {
-            echo "::group::atlas unit test diagnosis"
             echo "### gradlew exit code: $EXIT"
             echo '```'
             grep -nE "FAILED|What went wrong|Execution failed|error:|^e: |Caused by|missing|Tests? .*failed" gradle-out.log | head -60 || echo "(no failure lines matched)"
@@ -78,7 +81,7 @@ jobs:
             tail -40 gradle-out.log
             echo '```'
             echo "::endgroup::"
-          } | tee -a "$GITHUB_STEP_SUMMARY" | sed 's/^/::error title=atlas-unit-tests::/'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           cat gradle-out.log
           exit $EXIT
   release:
