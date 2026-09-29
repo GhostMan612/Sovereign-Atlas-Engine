@@ -38,9 +38,44 @@ jobs:
         # was not executable and this step failed with a permission error. The
         # index now records 100755, and chmod guards the case where a future
         # checkout loses the bit.
+        #
+        # The step also writes its own diagnosis into the run summary and job
+        # log, because the step that fails is not the step whose output explains
+        # it: this step's own log is sign-in gated, so a red run was previously
+        # undiagnosable without a browser session.
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
+          set +e
+          ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest \
+            --console=plain --continue > gradle-out.log 2>&1
+          EXIT=$?
+          set -e
+          {
+            echo "### gradlew exit code: $EXIT"
+            echo '```'
+            grep -nE "FAILED|What went wrong|Execution failed|error:|^e: |Caused by|missing|Tests? .*failed" gradle-out.log | head -60 || echo "(no failure lines matched)"
+            echo '```'
+            for f in app/build/test-results/*/*.xml; do
+              [ -e "$f" ] || continue
+              if grep -qE '<(failure|error)' "$f"; then
+                echo "--- FAILURES in $f"
+                grep -oE '<testcase name="[^"]+"' "$f" | head -20
+                grep -oE 'message="[^"]{0,300}' "$f" | head -20
+              fi
+            done
+            for d in testPlayDebugUnitTest testEnterpriseDebugUnitTest; do
+              if [ -d "app/build/test-results/$d" ]; then
+                echo "### $d XML files: $(ls app/build/test-results/$d/*.xml 2>/dev/null | wc -l)"
+              else
+                echo "### $d: no results directory (task never ran)"
+              fi
+            done
+            echo '```'
+            tail -40 gradle-out.log
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          cat gradle-out.log
+          exit $EXIT
   release:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
