@@ -151,3 +151,18 @@ dependencies {
 if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
+
+tasks.withType(Test).configureEach {
+    testLogging {
+        events "started", "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showExceptions true
+        showCauses true
+        showStackTraces true
+    }
+    // Without a task-level timeout a hung test runs until the Actions job cap
+    // fires, and when Actions kills the job Gradle writes no JUnit XML, emits no
+    // thread dump, and the artifact upload has nothing to ship. The timeout is
+    // what makes the diagnostic artifact exist at all.
+    timeout = java.time.Duration.ofMinutes(15)
+}

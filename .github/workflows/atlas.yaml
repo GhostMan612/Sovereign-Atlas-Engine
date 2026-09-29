@@ -9,6 +9,13 @@ name: atlas
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Defense in depth behind the 30-minute Unit tests step timeout and the
+    # 15-minute Gradle task timeout: a job that somehow outlives both should
+    # fail rather than sit until the 6-hour Actions cap, which kills the runner
+    # without letting Gradle write its XML.
+    timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -33,6 +40,8 @@ jobs:
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
           sdkmanager --list_installed
       - name: Unit tests
+        id: unit-tests
+        timeout-minutes: 30
         working-directory: apps/atlas-android
         # gradlew was committed with mode 100644 on a Windows host, so ./gradlew
         # was not executable and this step failed with a permission error. The
@@ -46,8 +55,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           set +e
+          set -o pipefail
           ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest \
-            --console=plain --continue > gradle-out.log 2>&1
+            --console=plain \
+            --continue \
+            --stacktrace \
+            --rerun-tasks \
+            --no-build-cache \
+            2>&1 | tee gradle-out.log
           EXIT=$?
           set -e
           # NOTE: this writes to the run summary, which the run page renders via a
@@ -84,6 +99,21 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           cat gradle-out.log
           exit $EXIT
+      # Runs even when Unit tests fails, so a partial or hung run still ships
+      # whatever XML and HTML Gradle managed to write before it was killed.
+      # if-no-files-found is an error on purpose: a silent zero-file upload
+      # reads as success and would hide the very evidence this exists to ship.
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-reports
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            apps/atlas-android/app/build/reports/tests/
+            apps/atlas-android/app/build/test-results/
+            apps/atlas-android/gradle-out.log
   release:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
