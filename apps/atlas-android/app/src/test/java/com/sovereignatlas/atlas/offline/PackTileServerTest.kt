@@ -192,6 +192,42 @@ final class PackTileServerTest {
     }
 
     @Test
+    fun vectorPbfRequestIsServed() {
+        val fake = FakeMbtiles { _, _, _, _ -> MbtilesTile(byteArrayOf(7, 7, 7), "application/x-protobuf") }
+        val server = mbtilesServer(fake)
+        val port = server.start()
+        try {
+            val connection = URL("http://127.0.0.1:$port/region.mbtiles/2/1/2.pbf").openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                assertEquals(200, connection.responseCode)
+                assertEquals("application/x-protobuf", connection.contentType)
+                assertTrue(connection.inputStream.use { it.readBytes() }.contentEquals(byteArrayOf(7, 7, 7)))
+            } finally {
+                connection.disconnect()
+            }
+            assertEquals(listOf("region.mbtiles/2/1/2"), fake.seen)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun unknownTileExtensionIs404() {
+        val fake = FakeMbtiles { _, _, _, _ -> MbtilesTile(byteArrayOf(1), "image/png") }
+        val server = mbtilesServer(fake)
+        val port = server.start()
+        try {
+            val (code, _) = get("http://127.0.0.1:$port/region.mbtiles/2/1/2.gif")
+            assertEquals(404, code)
+            assertTrue(fake.seen.isEmpty())
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun stopShutsDownMbtilesStore() {
         val fake = FakeMbtiles { _, _, _, _ -> null }
         val server = mbtilesServer(fake)

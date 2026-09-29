@@ -18,6 +18,7 @@ data class OfflineMap(
     val sizeBytes: Long,
     val format: String = "pbf",
     val kind: OfflineMapKind = OfflineMapKind.VECTOR,
+    val vectorLayerIds: List<String> = emptyList(),
 )
 
 interface DemTileStore {

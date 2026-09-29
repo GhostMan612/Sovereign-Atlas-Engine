@@ -11,6 +11,8 @@ import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
+val MBTILES_TILE_EXTENSIONS = listOf(".png", ".pbf")
+
 class PackTileServer(
     private val packsDir: () -> File,
     private val port: Int = 0,
@@ -200,10 +202,11 @@ class PackTileServer(
         val parts = path.trimStart('/').split("/")
         if (parts.size != 4 || !parts[0].endsWith(".mbtiles")) return null
         val rawY = parts[3]
-        if (!rawY.endsWith(".png")) return null
+        // Vector packs are requested as {y}.pbf by the MapLibre VectorSource.
+        val tileExtension = MBTILES_TILE_EXTENSIONS.firstOrNull { rawY.endsWith(it) } ?: return null
         val z = parts[1].toIntOrNull() ?: return null
         val x = parts[2].toIntOrNull() ?: return null
-        val y = rawY.removeSuffix(".png").toIntOrNull() ?: return null
+        val y = rawY.removeSuffix(tileExtension).toIntOrNull() ?: return null
         if (z !in 0..28 || !isTileRef(parts[1]) || !isTileRef(parts[2])) return null
         return store.getTile(parts[0], z, x, y)
     }

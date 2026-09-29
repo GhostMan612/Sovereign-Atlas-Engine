@@ -9,6 +9,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.util.Log
+import com.sovereignatlas.atlas.core.parseVectorLayerIds
 import com.sovereignatlas.atlas.offline.OfflineMap
 import com.sovereignatlas.atlas.offline.OfflineMapKind
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
@@ -89,6 +90,7 @@ class AndroidOfflineMapRepository(
                         absolutePath = file.absolutePath,
                         sizeBytes = file.length(),
                         format = "pbf",
+                        vectorLayerIds = readVectorLayerIds(db),
                     )
                 }
             }
@@ -98,5 +100,14 @@ class AndroidOfflineMapRepository(
             db?.close()
         }
         return null
+    }
+
+    private fun readVectorLayerIds(db: SQLiteDatabase): List<String> {
+        val json = runCatching {
+            db.rawQuery("SELECT value FROM metadata WHERE name = 'vector_layers'", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+        return parseVectorLayerIds(json)
     }
 }

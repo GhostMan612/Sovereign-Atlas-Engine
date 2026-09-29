@@ -16,3 +16,6 @@ interface MbtilesTileSource {
 }
 
 fun xyzToTmsY(z: Int, y: Int): Int = (1 shl z) - 1 - y
+
+fun vectorTileTemplateUrl(templated: String): String =
+    templated.replace(Regex("\\.png$"), ".pbf")

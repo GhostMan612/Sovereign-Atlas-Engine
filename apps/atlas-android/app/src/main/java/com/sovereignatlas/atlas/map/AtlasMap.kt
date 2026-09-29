@@ -99,6 +99,7 @@ import com.sovereignatlas.atlas.offline.mbtiles.MbtilesPack
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesLayerId
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesSafeId
 import com.sovereignatlas.atlas.offline.mbtiles.mbtilesSourceId
+import com.sovereignatlas.atlas.offline.vectorTileTemplateUrl
 import com.sovereignatlas.atlas.ui.los.TerrainProfileChart
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
@@ -152,6 +153,8 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
@@ -159,6 +162,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.RasterDemSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
+import org.maplibre.android.style.sources.VectorSource
 import kotlin.math.roundToInt
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -375,6 +379,24 @@ fun AtlasMapScreen(
         if (applyOnlineBase) {
             applyBaseSource(style, services, baseProviderId.value, basePackId.value)
         }
+        // A pbf offline pack cannot render through a raster source, so it takes
+        // over the base slot with a VectorSource plus one fill/line layer per
+        // declared source layer. Raster packs keep the untouched raster path.
+        val activeVectorPack = services.maps.activeMap.value
+            ?.takeIf { it.format.equals("pbf", ignoreCase = true) }
+        if (activeVectorPack != null) {
+            val vectorUrl = services.tiles.tileUrl(activeVectorPack.name)
+                ?.let { vectorTileTemplateUrl(it) }
+            if (vectorUrl != null) {
+                ensureVectorBaseTemplate(
+                    style = style,
+                    template = vectorUrl,
+                    minZoom = 0,
+                    maxZoom = 16,
+                    vectorLayerIds = activeVectorPack.vectorLayerIds,
+                )
+            }
+        }
         installAtlasLayers(style)
         ensureWaypointIcon(style)
         ensureGpsPuck(style, context)
@@ -501,10 +523,16 @@ fun AtlasMapScreen(
                         val screen = map.projection.toScreenLocation(point)
                         // Historical interrogation runs before waypoint selection so
                         // a polygon hit does not also clear the waypoint selection.
-                        // With HISTORICAL_LAYER_IDS empty this loop is a no-op and the
-                        // tap falls through to the waypoint behavior unchanged.
+                        // IDs come from the active pbf pack's vector_layers metadata,
+                        // so this stays empty for raster packs and for a pbf pack
+                        // whose metadata declares no layers.
                         if (screen != null) {
-                            for (layerId in HISTORICAL_LAYER_IDS) {
+                            val historicalLayerIds = services.maps.activeMap.value
+                                ?.takeIf { it.format.equals("pbf", ignoreCase = true) }
+                                ?.vectorLayerIds
+                                ?.map { AtlasLayerIds.HISTORICAL_FILL_PREFIX + it }
+                                ?: emptyList()
+                            for (layerId in historicalLayerIds) {
                                 val hit = map.queryRenderedFeatures(screen, layerId).firstOrNull()
                                 if (hit != null) {
                                     selectedHistoricalRecord.value =
@@ -1581,16 +1609,6 @@ fun AtlasMapScreen(
     )
 }
 
-// Audited layer IDs for historical interrogation. EMPTY BY DESIGN: the app
-// installs no historical, patent, parcel, or blueprint layer (every ID in
-// AtlasLayerIds is tactical or operational), so there is nothing real to
-// query. Names like "parcel-boundaries" and "blueprint-structures" exist only
-// as baseline rank strings in the pure-logic layers/AtlasLayers.kt registry and
-// are never turned into MapLibre layers. Fabricating IDs here would make the
-// interrogation look wired while querying nothing. Add verified IDs when a
-// historical vector layer actually ships; the loop is already in place.
-private val HISTORICAL_LAYER_IDS: List<String> = emptyList()
-
 @Composable
 private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
     TextButton(
@@ -2116,6 +2134,67 @@ fun removeBaseLayer(style: Style) {
     }
     if (style.getSource(BASE_SOURCE_ID) != null) {
         style.removeSource(BASE_SOURCE_ID)
+    }
+    // Per-source-layer vector fill/line layers from a pbf pack have no single
+    // ID, so they are cleared by prefix or they would survive a pack switch.
+    for (layer in style.layers) {
+        val id = layer.id
+        if (id.startsWith(AtlasLayerIds.HISTORICAL_FILL_PREFIX) ||
+            id.startsWith(AtlasLayerIds.HISTORICAL_LINE_PREFIX)
+        ) {
+            style.removeLayer(id)
+        }
+    }
+}
+
+fun ensureVectorBaseTemplate(
+    style: Style,
+    template: String,
+    minZoom: Int,
+    maxZoom: Int,
+    vectorLayerIds: List<String>,
+) {
+    removeBaseLayer(style)
+    val tileSet = TileSet("2.2.0", template)
+    tileSet.minZoom = minZoom.toFloat()
+    tileSet.maxZoom = maxZoom.toFloat()
+    style.addSource(VectorSource(BASE_SOURCE_ID, tileSet))
+    val anchor = if (style.getLayer(AtlasLayerIds.MGRS_LINE_LAYER) != null) {
+        AtlasLayerIds.MGRS_LINE_LAYER
+    } else if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+        AtlasLayerIds.WAYPOINTS_LAYER
+    } else {
+        null
+    }
+    for (internalLayerId in vectorLayerIds) {
+        val fillLayerId = AtlasLayerIds.HISTORICAL_FILL_PREFIX + internalLayerId
+        if (style.getLayer(fillLayerId) == null) {
+            val fillLayer = FillLayer(fillLayerId, BASE_SOURCE_ID)
+                .withSourceLayer(internalLayerId)
+                .withProperties(
+                    PropertyFactory.fillColor("#4A90E2"),
+                    PropertyFactory.fillOpacity(0.4f),
+                )
+            addBelowAnchor(style, fillLayer, anchor)
+        }
+        val lineLayerId = AtlasLayerIds.HISTORICAL_LINE_PREFIX + internalLayerId
+        if (style.getLayer(lineLayerId) == null) {
+            val lineLayer = LineLayer(lineLayerId, BASE_SOURCE_ID)
+                .withSourceLayer(internalLayerId)
+                .withProperties(
+                    PropertyFactory.lineColor("#003366"),
+                    PropertyFactory.lineWidth(1.5f),
+                )
+            addBelowAnchor(style, lineLayer, anchor)
+        }
+    }
+}
+
+private fun addBelowAnchor(style: Style, layer: Layer, anchor: String?) {
+    if (anchor == null) {
+        style.addLayer(layer)
+    } else {
+        style.addLayerBelow(layer, anchor)
     }
 }
 

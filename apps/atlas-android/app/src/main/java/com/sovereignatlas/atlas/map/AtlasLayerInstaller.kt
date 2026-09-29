@@ -55,6 +55,8 @@ object AtlasLayerIds {
     const val OPS_GRAPHICS_SOURCE = "ops-graphics-source"
     const val OPS_ZONE_LAYER = "ops-zone-layer"
     const val OPS_LINE_LAYER = "ops-line-layer"
+    const val HISTORICAL_FILL_PREFIX = "historical-fill-"
+    const val HISTORICAL_LINE_PREFIX = "historical-line-"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"

@@ -4,6 +4,75 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Vector tile engine (Strike 2) — pbf packs render (2026-09-27)
+
+- **Commit (pushed):** `feat(android): vector tile engine for
+  pbf packs` (2 new + 8 modified + handoff). New pure
+  `core/parseVectorLayerIds` (kotlinx JSON) and pure
+  `offline/vectorTileTemplateUrl`; `OfflineMap` gains
+  `vectorLayerIds`; the Android repo reads the
+  `vector_layers` metadata row; the base slot branches to a
+  `VectorSource` plus one `historical-fill-<id>` /
+  `historical-line-<id>` pair per declared source layer;
+  the click listener now reads those IDs from the active
+  pack. Strike 1's empty ID list is GONE — the loop is live.
+- **Task 0 audit answers:** (1) format field is
+  `OfflineMap.format: String`, **NON-nullable** (default
+  "pbf"), so `pack.format.lowercase() == "pbf"` needs no
+  `?.`. (2) There is **no `tileUrl` property on the model** —
+  the URL is `PackTileServer.tileUrl(packId)` returning an
+  **already-templated** `.../{z}/{x}/{y}.png`, so the
+  templated branch applies: swap the trailing `.png` for
+  `.pbf` (pure `vectorTileTemplateUrl`). (3) No JSON
+  metadata existed on the model before this sprint.
+  (4) Active pack accessor is `services.maps.activeMap`
+  (`StateFlow<OfflineMap?>`), read via `.value` inside the
+  listener. (5) kotlinx-serialization was ABSENT; added the
+  runtime only — **no compiler plugin**, per the accepted
+  risk. Pinned **1.9.0**, not 1.7.3: 1.9.0 is the newest
+  version present in the local Gradle cache and therefore
+  resolvable, and it is newer than the suggested pin.
+- **A required change the prompt did not mention:** the
+  tile server only routed `.png` (`mbtilesTile` required it),
+  so a VectorSource request for `{y}.pbf` would have 404'd.
+  `MBTILES_TILE_EXTENSIONS` now accepts `.png` and `.pbf`
+  (MIME already mapped to `application/x-protobuf` by
+  `MbtilesCache`). Unknown extensions still 404, verified by
+  a new test.
+- **API verified by javap before writing:** `withSourceLayer`
+  does NOT exist on the abstract `Layer` in 13.3.1, only on
+  the concrete `FillLayer`/`LineLayer` (it returns the
+  concrete type, so the chained `.withProperties` compiles).
+  `VectorSource(String, TileSet)` exists. Had the prompt's
+  snippet been written against `Layer` it would not compile.
+- **Reused `BASE_SOURCE_ID` instead of the stand-in
+  "offline-pack-source":** the existing `removeBaseLayer`
+  only knows the raster IDs, so a second ID set would have
+  leaked layers on every pack switch. `removeBaseLayer` now
+  also clears `historical-fill-`/`historical-line-` layers
+  by prefix (the same technique as the mbtiles prefix
+  sync), and the per-source-layer layers anchor below
+  `atlas-mgrs-lines-layer` with a graceful fallback.
+- **Gates here:** `:app:assemblePlayDebug` +
+  `:app:assembleEnterpriseDebug` BUILD SUCCESSFUL; Play +
+  Enterprise **352/352 green each** (new `VectorLayersTest`
+  7/7 incl. the nested-`fields.id` trap, malformed JSON and
+  wrong-shaped payloads; 2 new server tests for `.pbf` and
+  unknown extensions); `core/` arch grep clean. Two compile
+  errors caught and fixed: `const val` on a List, and three
+  missing MapLibre imports.
+- **Device verification PENDING (human/Studio):** a REAL pbf
+  pack is still required. None has ever been loaded in this
+  environment, so vector rendering and tap-to-sheet remain
+  UNPROVEN. A `.pbf` pack will also need its zoom range
+  (currently hardcoded 0..16) and its tile extent; real
+  metadata reading is the follow-up.
+- **Flake:** `AndroidKeyProviderTest.keySurvivesNewInstance`
+  failed a third time (10s `TimeoutCancellationException`,
+  Tink/IO timing, Enterprise flavor under parallel load); it
+  passed on the full re-run. Still unresolved, not proven
+  stable.
+
 ## Historical interrogation — pipeline shipped, ID list empty (2026-09-27)
 
 - **Commit (pushed):** `feat(android): historical interrogation
