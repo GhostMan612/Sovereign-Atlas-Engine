@@ -1,6 +1,7 @@
 # Sovereign Atlas CI.
-# NOTE: CI was failing at android-actions/setup-android on 60/60 runs; that
-# step is now pinned. First green run is still a tracked acceptance item.
+# NOTE: setup-android v3 failed 60/60 runs at that step and the Unit tests step
+# never executed. Upgraded to v4. First green run is still a tracked acceptance
+# item.
 name: atlas
 'on':
   push:
@@ -18,11 +19,13 @@ jobs:
       # this step and never reached the tests. Pin the last known-good
       # cmdline-tools build and ask for exactly what this module needs so the
       # step cannot drift with whatever Google currently publishes.
-      - uses: android-actions/setup-android@v3
+      # v3 failed 60/60 runs at this step. v4 moved the cmdline-tools default to
+      # 15859902 and re-bases on node24, which is what v3's bundled runtime could
+      # no longer resolve.
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          cmdline-tools-version: 11076708
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: yes
       - name: Report toolchain
         run: |
           java -version
@@ -41,11 +44,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          cmdline-tools-version: 11076708
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: yes
       - name: Build Release APKs
         working-directory: apps/atlas-android
         env:
