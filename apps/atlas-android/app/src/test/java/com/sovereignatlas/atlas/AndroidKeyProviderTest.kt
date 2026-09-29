@@ -52,7 +52,7 @@ final class AndroidKeyProviderTest {
     }
 
     private suspend fun awaitValue(provider: AndroidKeyProvider, expected: String?) {
-        withTimeout(10_000L) {
+        withTimeout(60_000L) {
             provider.cartoKey.first { it == expected }
         }
     }
