@@ -4,6 +4,40 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Layout defects 1 & 2 fixed and device-verified (2026-09-28)
+
+- **Commit (pushed):** `fix(android): clear camera cutout and FAB
+  rail` (2 files). (1) The centered camera cutout sat on the
+  tape's red lubber line: the top-band Column now applies
+  `windowInsetsPadding(WindowInsets.displayCutout.union(
+  WindowInsets.statusBars))`, so there is clearance whether a
+  cutout exists or not. (2) The drawing toolbar slid under
+  the right-rail FABs: it now reserves the rail's footprint
+  (`end = 88.dp` = 56dp FAB + 16dp rail padding + gap) and
+  applies `windowInsetsPadding(navigationBars)` to share the
+  rail's baseline. The toolbar Row is `horizontalScroll` so a
+  mode adding Pts/UNDO/COMMIT degrades instead of clipping.
+- **VERIFIED ON DEVICE (screenshot after reinstall):** the
+  tape and its red lubber line now sit clearly BELOW the
+  punch hole; the `Tools` FAB is fully visible with no
+  overlap behind `RESTRICT`; the top band reads cleanly as
+  tape -> `098` / `1748 mils TRUE` -> MGRS `31N AA 66021
+  00000`. No FATAL, no ANR, PID alive.
+- **Device detail worth knowing:** the unit wedged after the
+  first smoke (`no devices/emulators found`).
+  `adb kill-server` + `adb start-server` recovered it and it
+  reappeared as `adb-ZT4222BMWN-ux3EQE._adb-tls-connect._tcp`
+  (wireless/TCP, not the old USB serial) — RULES' kill-server
+  remedy worked again.
+- **Gates here:** `:app:assemblePlayDebug` +
+  `:app:assembleEnterpriseDebug` BUILD SUCCESSFUL; Play +
+  Enterprise **352/352 green each**. The
+  `AndroidKeyProviderTest.keySurvivesNewInstance` flake hit a
+  FOURTH time (same 10s Tink/IO timeout) and passed on the
+  immediate re-run. It now fails roughly every other full
+  run and is a real, unresolved test-harness problem, not
+  noise: it should get its own bounded investigation.
+
 ## DEVICE SMOKE — first physical run in this sprint set (2026-09-28)
 
 - **No Flutter exists to run (verified):** `git ls-files "*.dart"`

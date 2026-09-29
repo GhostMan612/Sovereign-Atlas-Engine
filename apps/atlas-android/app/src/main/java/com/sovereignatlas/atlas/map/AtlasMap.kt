@@ -20,12 +20,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1006,7 +1009,14 @@ fun AtlasMapScreen(
                     drawingModeFlow.value = DrawingMode.NONE
                     inProgressPointsFlow.value = emptyList()
                 },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
+                // The right-rail FABs own the bottom-right corner, so the toolbar
+                // reserves that width (56dp FAB + 16dp rail padding + gap) instead
+                // of sliding underneath the Tools button. The toolbar row scrolls
+                // horizontally when a mode adds its Pts/UNDO/COMMIT controls.
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 8.dp, end = 88.dp, bottom = 8.dp)
             )
         }
         if (showTools.value) {
@@ -1293,7 +1303,11 @@ fun AtlasMapScreen(
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                // The app draws edge to edge, so a centered camera cutout (punch
+                // hole) would sit on top of the tape's red lubber line. Union with
+                // the status bar so there is always clearance, cutout or not.
+                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             CompassTape(
