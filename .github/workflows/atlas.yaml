@@ -50,7 +50,11 @@ jobs:
             --console=plain --continue > gradle-out.log 2>&1
           EXIT=$?
           set -e
+          # The run-summary widget is JavaScript-rendered, so a plain fetch of the
+          # run page cannot read it. Emit the same text as a step ERROR line,
+          # which does show up in the annotations endpoint unauthenticated.
           {
+            echo "::group::atlas unit test diagnosis"
             echo "### gradlew exit code: $EXIT"
             echo '```'
             grep -nE "FAILED|What went wrong|Execution failed|error:|^e: |Caused by|missing|Tests? .*failed" gradle-out.log | head -60 || echo "(no failure lines matched)"
@@ -73,7 +77,8 @@ jobs:
             echo '```'
             tail -40 gradle-out.log
             echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          } | tee -a "$GITHUB_STEP_SUMMARY" | sed 's/^/::error title=atlas-unit-tests::/'
           cat gradle-out.log
           exit $EXIT
   release:
