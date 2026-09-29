@@ -4,7 +4,65 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
-## HUD declutter, CoT marker rendering fix, LoS message (2026-09-29) — UNCOMMITTED, device-verified
+## CI TRIAGE on fix/ci-and-rendering — CI STILL HAS NEVER BEEN GREEN (2026-09-29)
+
+- **Branch `fix/ci-and-rendering`, pushed, 6 commits, NOT merged to main.**
+  `9a873ae` v4 upgrade + toolchain fleet, `c228c9f` wrapper exec bit,
+  `1ac21dc` google-services conditional, `7fbb942` run-summary diagnosis,
+  `0f566a3` annotation attempt (reverted), `a3d76ce` revert the annotation.
+- **CI progress is real but incomplete.** setup-android v4 WORKS: runs
+  #63-#67 all show step 4 `Setup Android SDK -> success` and step 5
+  `Report toolchain -> success`, which never happened in the 60 runs
+  before. The job now dies one step later at `Unit tests`, a step
+  that had **never been reached before this session**. So the v3->v4
+  upgrade is proven; the pipeline is not yet green.
+- **Fix 1, proven defect:** `apps/atlas-android/gradlew` was committed
+  with mode `100644`, so `./gradlew` is not executable on the ubuntu
+  runner. `core.fileMode=false` on this Windows host is how the wrong
+  bit got recorded. Fixed with `git update-index --chmod=+x` (index
+  now `100755`, verified in a fresh clone) plus `chmod +x` in both
+  jobs as a guard.
+- **Fix 2, proven defect by reproduction:** `app/build.gradle`
+  applied `com.google.gms.google-services` unconditionally. That
+  plugin fails at CONFIGURATION time when `google-services.json` is
+  absent, and RULES.md 1.3 forbids committing that file, so a clean
+  checkout always failed. Reproduced locally: moving the file aside
+  made `:app:testPlayDebugUnitTest` fail in 11s with "File
+  google-services.json is missing". Now applied only when the file
+  exists; with it absent, 352/352 both flavors and both debug
+  assembles pass locally. Release is unaffected because the release
+  job writes the file from base64 before assembling.
+- **Cause of the remaining Unit tests failure is UNKNOWN. Do not
+  guess again.** A clean `git clone --depth 1` of this branch into a
+  temp dir, with no `google-services.json` present exactly as on CI,
+  passes `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest`
+  352/352 on Windows. The failure is therefore specific to the Linux
+  runner, not to the module's logic. That is a hypothesis, not a
+  conclusion.
+- **Reading CI output is blocked for tooling here, verified three
+  ways:** the run page and step log need sign-in; the REST logs
+  endpoint returns 403 unauthenticated; the check-runs annotations
+  endpoint does NOT carry workflow-command output (tested in run
+  #67, annotations came back empty). The run-summary block added in
+  `7fbb942` works for a signed-in human reading the run page and is
+  the only usable surface. **Getting the failure text requires a
+  signed-in browser session — this is a human step.**
+- **Next human action:** open
+  `https://github.com/GhostMan612/Sovereign-Atlas-Engine/actions/runs`
+  for the newest `fix/ci-and-rendering` run, read the `Unit tests`
+  step, and paste the output. The workflow now greps that output into
+  the run summary, so the failing lines should be at the top of the
+  summary block.
+- **Also still open on main:** `MGRS_LINE_LAYER`, `MGRS_LABEL_LAYER`
+  and `ROUTE_LAYER` use `addLayerBelow(WAYPOINTS_LAYER)` like the
+  marker layer did. Verified NOT broken: a paren-balanced parse of
+  `installAtlasLayers` found 20 add calls and **zero**
+  anchor-ordering violations, and on device with the MGRS grid
+  toggled on, the grid, range rings, graticule, CoT markers and a
+  tactical track all paint. The directive's premise that anchors are
+  missing was wrong and its Task 1 refactor was not applied.
+
+## HUD declutter, CoT marker rendering fix, LoS message (2026-09-29) — device-verified
 
 - **Gates green here:** `compilePlayDebugKotlin` BUILD SUCCESSFUL;
   `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`
