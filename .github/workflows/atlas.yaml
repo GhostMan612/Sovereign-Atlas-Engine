@@ -34,7 +34,13 @@ jobs:
           sdkmanager --list_installed
       - name: Unit tests
         working-directory: apps/atlas-android
-        run: ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
+        # gradlew was committed with mode 100644 on a Windows host, so ./gradlew
+        # was not executable and this step failed with a permission error. The
+        # index now records 100755, and chmod guards the case where a future
+        # checkout loses the bit.
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
   release:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -67,4 +73,5 @@ jobs:
 
           base64 -d <<< "$GOOGLE_SERVICES_JSON_BASE64" > app/google-services.json
 
+          chmod +x ./gradlew
           ./gradlew :app:assemblePlayRelease :app:assembleEnterpriseRelease -PdisableBuildScans=true --no-daemon --no-configuration-cache
