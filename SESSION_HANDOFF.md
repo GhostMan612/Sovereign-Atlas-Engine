@@ -4,6 +4,51 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## DEVICE SMOKE — first physical run in this sprint set (2026-09-28)
+
+- **No Flutter exists to run (verified):** `git ls-files "*.dart"`
+  = 0, zero `.dart` on disk, zero `flutter` references in
+  settings/build/app gradle, and no `flutter` binary on PATH.
+  The Dart lineage was deleted in `2727538` (717 files). The
+  only buildable project is the native Kotlin host; its
+  "parity" suite runs as JVM Kotlin and was already green at
+  352/352 per flavor.
+- **APKs built (explicitly ordered):** `:app:assemblePlayDebug`
+  + `:app:assembleEnterpriseDebug` BUILD SUCCESSFUL.
+  `app-play-debug.apk` 127.3 MB, `app-enterprise-debug.apk`
+  126.7 MB. (`app-debug.apk` 70.2 MB is a STALE pre-flavor
+  artifact — ignore it.)
+- **Install + launch on device ZT4222BMWN (Moto G):**
+  `adb install -r` Success; PID alive; MainActivity focused;
+  **no FATAL EXCEPTION and no ANR**; `libmaplibre.so` loads.
+- **FGS CASCADE PROVEN ON DEVICE (first time):** system log
+  shows `Background started FGS: Allowed ... AtlasTacticalService`
+  and `dumpsys activity services` reports
+  `isForeground=true foregroundId=1001 types=0x00000018` —
+  0x18 = LOCATION(0x10) | CONNECTED_DEVICE(0x08), so the
+  bitwise FGS types and the location-gated startup both work
+  on hardware. Notification is on `atlas_tactical_channel`
+  with 1 action (Stop). This closes the risk that the service
+  silently self-stopped.
+- **Screenshot evidence (OSM tiles render, St. Paul MN):**
+  compass tape + red lubber line at top, TacNav readout
+  `105` / `1369 mils TRUE` (TRUE frame label live), MGRS chip
+  `15T VK 91221 77113`, center reticle, GPS puck, compass
+  dial, FAB rail, drawing toolbar (LINE/MEDEVAC/RESTRICT),
+  `Layers 0`, OSM attribution.
+- **TWO DEFECTS VISIBLE ON SCREEN (not yet fixed):**
+  1. BottomCenter collision is real: the drawing toolbar
+     overlaps the `Tools` FAB ("...ols" is clipped behind
+     RESTRICT). This is the overlap flagged when the toolbar
+     was added, now confirmed.
+  2. Top band is tight: the tape band and the TacNav readout
+     sit adjacent with the readout text starting at the tape's
+     lower edge; legible but not cleanly separated.
+- **Still unproven (need a second peer or real packs):** blue
+  force PLI icon, CoT marker icons/labels, chat per-profile
+  routing, pbf vector rendering + tap-to-sheet, ops graphics
+  drawing, MBTiles layer manager with a real pack.
+
 ## Vector tile engine (Strike 2) — pbf packs render (2026-09-27)
 
 - **Commit (pushed):** `feat(android): vector tile engine for
