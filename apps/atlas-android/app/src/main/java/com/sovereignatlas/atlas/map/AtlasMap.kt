@@ -88,6 +88,7 @@ import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
+import com.sovereignatlas.atlas.core.HistoricalRecord
 import com.sovereignatlas.atlas.geo.graphics.DrawingMode
 import com.sovereignatlas.atlas.geo.graphics.OperationalGraphic
 import com.sovereignatlas.atlas.geo.graphics.ZoneType
@@ -115,9 +116,11 @@ import com.sovereignatlas.atlas.offline.DemTileStore
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import androidx.core.content.ContextCompat
 import com.sovereignatlas.atlas.map.cot.CotGeoJsonMapper
+import com.sovereignatlas.atlas.map.historical.HistoricalFeatureMapper
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
+import com.sovereignatlas.atlas.ui.historical.HistoricalRecordSheet
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
@@ -324,6 +327,10 @@ fun AtlasMapScreen(
     // value instead of a snapshot from the first composition.
     val drawingModeFlow = remember { MutableStateFlow(DrawingMode.NONE) }
     val inProgressPointsFlow = remember { MutableStateFlow<List<AtlasCoordinate>>(emptyList()) }
+    // Interrogated historical feature. Same rule as the drawing flows: created
+    // before the remembered MapView so the long-lived click listener can write it.
+    val selectedHistoricalRecord = remember { MutableStateFlow<HistoricalRecord?>(null) }
+    val selectedRecord by selectedHistoricalRecord.collectAsStateWithLifecycle()
     val drawingMode by drawingModeFlow.collectAsStateWithLifecycle()
     val inProgressPoints by inProgressPointsFlow.collectAsStateWithLifecycle()
     // Placeholder until the drawing tools UI ships: the operational-graphics
@@ -492,6 +499,20 @@ fun AtlasMapScreen(
                         // addOnMapClickListener replaces the prior listener, so this
                         // single registration is swap-safe: the map outlives styles.
                         val screen = map.projection.toScreenLocation(point)
+                        // Historical interrogation runs before waypoint selection so
+                        // a polygon hit does not also clear the waypoint selection.
+                        // With HISTORICAL_LAYER_IDS empty this loop is a no-op and the
+                        // tap falls through to the waypoint behavior unchanged.
+                        if (screen != null) {
+                            for (layerId in HISTORICAL_LAYER_IDS) {
+                                val hit = map.queryRenderedFeatures(screen, layerId).firstOrNull()
+                                if (hit != null) {
+                                    selectedHistoricalRecord.value =
+                                        HistoricalFeatureMapper.fromFeature(hit, layerId)
+                                    return@addOnMapClickListener true
+                                }
+                            }
+                        }
                         val hits = if (screen == null) {
                             emptyList()
                         } else {
@@ -1554,7 +1575,21 @@ fun AtlasMapScreen(
         }
         AtlasLoadingOverlay(visible = mapLoading.value)
     }
+    HistoricalRecordSheet(
+        record = selectedRecord,
+        onDismissRequest = { selectedHistoricalRecord.value = null }
+    )
 }
+
+// Audited layer IDs for historical interrogation. EMPTY BY DESIGN: the app
+// installs no historical, patent, parcel, or blueprint layer (every ID in
+// AtlasLayerIds is tactical or operational), so there is nothing real to
+// query. Names like "parcel-boundaries" and "blueprint-structures" exist only
+// as baseline rank strings in the pure-logic layers/AtlasLayers.kt registry and
+// are never turned into MapLibre layers. Fabricating IDs here would make the
+// interrogation look wired while querying nothing. Add verified IDs when a
+// historical vector layer actually ships; the loop is already in place.
+private val HISTORICAL_LAYER_IDS: List<String> = emptyList()
 
 @Composable
 private fun ToolRow(label: String, description: String, onClick: () -> Unit) {

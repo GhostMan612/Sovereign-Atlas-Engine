@@ -4,6 +4,68 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+## Historical interrogation — pipeline shipped, ID list empty (2026-09-27)
+
+- **Commit (pushed):** `feat(android): historical interrogation
+  pipeline` (4 new + 1 modified + handoff). New pure
+  `core/HistoricalRecord`, `map/historical/
+  HistoricalFeatureMapper`, `ui/historical/
+  HistoricalRecordSheet`; a composable-owned
+  `selectedHistoricalRecord` flow, a `queryRenderedFeatures`
+  hook inside the existing single click listener, and the
+  sheet mounted after the map Box.
+- **HALTED at Task 0.2 as instructed, then operator-approved.**
+  NO historical vector layer exists: every ID in
+  `AtlasLayerIds` (43 constants) plus `atlas-base-layer` /
+  `atlas-dem` is tactical or operational. The words DO appear
+  in `layers/AtlasLayers.kt` (`AtlasLayerKind.parcel /
+  structure / historical`, and `AtlasBaselineRanks` strings
+  "h3-heritage", "parcel-boundaries", "blueprint-structures",
+  "migration-flows") but that file is a pure-logic
+  DESCRIPTOR registry — taxonomy, capability flags and
+  ordering metadata from the retired Dart engine. Nothing in
+  `installAtlasLayers` reads `AtlasBaselineRanks` or creates
+  a layer from those strings. `HISTORICAL_LAYER_IDS` is
+  therefore `emptyList()` with a comment explaining exactly
+  why, so a future reader does not "fix" it into a fiction.
+  The query loop is in place and becomes live the moment a
+  real ID is added.
+- **PREREQUISITE FINDING for real historical vectors:**
+  `AndroidOfflineMapRepository.validateMbtiles` ACCEPTS
+  `format == "pbf"` packs (lines 86-92), so they show up in
+  the Offline dialog and can be activated, but
+  `ensureBaseTemplate` always builds a `RasterSource`. Vector
+  tiles served into a raster source cannot render, so a pbf
+  pack is admitted by the UI and would silently display
+  nothing. Verified by code reading, NOT yet device-proven.
+  Making pbf packs render is the real prerequisite sprint.
+- **Sequencing / drawing respected:** the hook lives in the
+  final `else` branch of the existing listener, i.e. AFTER
+  the drawing intercept, so a drawing-mode tap never reaches
+  it. It runs BEFORE waypoint hit-selection so a polygon hit
+  does not also clear the waypoint selection. With the list
+  empty the loop is a no-op and tap behavior is byte-
+  identical to before.
+- **Deliberate deviation:** the prompt's "return false when no
+  historical hit" was NOT adopted — the existing listener must
+  keep returning `true` for the waypoint path, so the branch
+  falls through instead. Accepted risks recorded in the
+  commit: first-hit (not topmost) iteration via audited list
+  order, and single-listener semantics.
+- **Deviation:** `core/historical/` does not exist and repo
+  packages are flat, so `HistoricalRecord` sits at
+  `com.sovereignatlas.atlas.core`, consistent with
+  `MapNameFormatter` and `CompassMath`. `map/historical/`
+  and `ui/historical/` follow the subpackage pattern already
+  used by `map/cot`, `map/graphics`, `ui/los`, `ui/hud`.
+- **Gates here:** `:app:assemblePlayDebug` +
+  `:app:assembleEnterpriseDebug` BUILD SUCCESSFUL; Play +
+  Enterprise **343/343 green each** (new
+  `HistoricalFeatureMapperTest` 7/7 incl. every fallback and
+  feature-id precedence); `core/` arch grep clean. Device
+  verification of the sheet is BLOCKED until a historical
+  layer exists — the mapper is unit-proven instead.
+
 ## Top-band HUD deconfliction (2026-09-27)
 
 - **Commit (pushed):** `fix(android): stack top HUD band in one
