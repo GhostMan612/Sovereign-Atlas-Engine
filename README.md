@@ -28,7 +28,7 @@ Host gate (no device, no build):
 
 ```powershell
 # from apps/atlas-android with JAVA_HOME + ANDROID_HOME set
-.\gradlew.bat :app:testDebugUnitTest --console=plain
+.\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
 184/184 unit tests green at last gate. The human builds in Android

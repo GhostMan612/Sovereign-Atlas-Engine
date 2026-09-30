@@ -29,6 +29,21 @@ const FORBIDDEN_IMPORTS = [
   },
 ]
 
+// STRICTER, SANCTUARY-ONLY rules. MASTER_OPERATING_DIRECTIVE §2 names only
+// `core/` and `geo/` as sacred ("ZERO Android framework, MapLibre, or java.net
+// imports"). The other eight packages in PURE_PACKAGES (offline, tactical, ...)
+// legitimately touch java.io/java.net for mbtiles and I/O — 13 correct files
+// already do — so these MUST NOT be applied repo-wide. Scoped by STRICT_PACKAGES.
+const STRICT_PACKAGES = ["core", "geo"]
+const STRICT_IMPORTS = [
+  { pattern: /^import\s+java\.net\./, label: "java.net.* (OS networking)" },
+  { pattern: /^import\s+javax\.net\./, label: "javax.net.* (OS networking)" },
+  { pattern: /^import\s+java\.io\./, label: "java.io.* (OS I/O)" },
+  { pattern: /^import\s+java\.nio\./, label: "java.nio.* (OS I/O)" },
+  { pattern: /^import\s+android\./, label: "android.* (Android framework)" },
+  { pattern: /^import\s+org\.maplibre\./, label: "org.maplibre.* (MapLibre)" },
+]
+
 function androidDir(worktree) {
   return worktree + "\\apps\\atlas-android"
 }
@@ -114,13 +129,20 @@ const tools = {
       for (const pkg of packages) {
         const files = await kotlinFiles(srcRoot + "\\" + pkg)
         scanned += files.length
+        // core/ and geo/ carry the extra java.net / java.io sanctuary rules
+        // from MASTER_OPERATING_DIRECTIVE §2. The other pure packages
+        // legitimately do OS I/O, so applying these repo-wide would fail
+        // 13 correct files.
+        const rules = STRICT_PACKAGES.includes(pkg)
+          ? FORBIDDEN_IMPORTS.concat(STRICT_IMPORTS)
+          : FORBIDDEN_IMPORTS
         for (const file of files) {
           const text = await fs.readFile(file, "utf8")
           const lines = text.split(/\r?\n/)
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i]
             if (!line.trimStart().startsWith("import ")) continue
-            for (const rule of FORBIDDEN_IMPORTS) {
+            for (const rule of rules) {
               if (rule.pattern.test(line)) {
                 violations.push(
                   relative(ctx.worktree, file) + ":" + (i + 1) + "  " + rule.label

@@ -2,10 +2,45 @@
   "$schema": "https://opencode.ai/config.json",
   "permission": {
     "bash": {
-      "Select-String*": "deny",
+      "cat*": "deny",
+      "type*": "deny",
+      "more*": "deny",
+      "head*": "deny",
+      "tail*": "deny",
       "Get-Content*": "deny",
+      "Select-String*": "deny",
+      "findstr*": "deny",
+      "rg*": "deny",
+      "grep*": "deny",
       "Get-ChildItem*": "deny",
-      "Test-Path*": "deny"
+      "dir*": "deny",
+      "ls*": "deny",
+      "Test-Path*": "deny",
+
+      "Set-Content*": "deny",
+      "Add-Content*": "deny",
+      "Out-File*": "deny",
+      "sed*": "deny",
+      "write*": "deny",
+      "echo*>*": "deny",
+
+      "*assembleRelease*": "deny",
+      "*bundleRelease*": "deny",
+      "*installRelease*": "deny",
+      "gradlew.bat *assemble*": "deny",
+      "gradlew *assemble*": "deny",
+      "adb*install*": "deny",
+      "adb*uninstall*": "deny",
+      "adb*root*": "deny",
+      "adb*push*": "deny",
+
+      "git*add*-A*": "deny",
+      "git*add*--all*": "deny",
+      "git*push*--force*": "deny",
+      "git*reset*--hard*": "deny",
+      "git*add*": "ask",
+      "git*commit*": "ask",
+      "git*push*": "ask"
     }
   }
 }
