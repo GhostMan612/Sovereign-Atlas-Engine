@@ -2166,9 +2166,11 @@ fun ensureBaseLayer(style: Style, providerId: String, key: String? = null) {
     for ((param, value) in descriptor.params) {
         template = template.replace("{$param}", value)
     }
-    // Key-aware templates substitute {key}; current CARTO basemaps are
-    // keyless, so a key arrival re-applies the identical source — the
-    // reactive path exists so key rotation takes effect without camera loss.
+    // {key} becomes the query parameter of the provider template, for example
+    // ".../{z}/{x}/{y}.png?key={key}" for CARTO. A null key leaves the parameter
+    // empty, which still resolves to a valid watermarked request rather than a
+    // malformed URL, and the reactive LaunchedEffect above re-applies the source
+    // when a key arrives so no app restart is needed.
     template = template.replace("{key}", key ?: "")
     ensureBaseTemplate(style, template, descriptor.minZoom, descriptor.maxZoom)
 }
