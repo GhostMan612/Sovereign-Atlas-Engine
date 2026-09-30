@@ -4,7 +4,41 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
-## CI TRIAGE on fix/ci-and-rendering — CI STILL HAS NEVER BEEN GREEN (2026-09-29)
+## CI IS GREEN — first-ever green run, root cause found (2026-09-29)
+
+- **Run #72 on `fix/ci-and-rendering` (`dbc9a08`) is the first green CI run in
+  this repository's history.** 71 consecutive red runs preceded it. Every step
+  passes, including `Unit tests`. Verified via the step-level API.
+- **Root cause of the long-red `Unit tests` step, for the record:** a Linux-only
+  asynchronous teardown race in `AndroidKeyProviderTest.keySurvivesNewInstance`.
+  `harnessOver` passes ONE `CoroutineScope` to both `buildApiKeyStore` and the
+  provider's `sharingScope`, so `first.scope.cancel()` cancels the DataStore actor
+  and the `stateIn` collector that own the scratch file — but `cancel()` is only a
+  *request*. The test then constructed a second DataStore over the same path while
+  the first was still winding down, and the second `stateIn` never delivered the
+  expected value, so `first()` on the coroutine `withTimeout` elapsed and surfaced
+  as a `TimeoutCancellationException`. Windows passes because teardown wins the
+  race there. Fixed by `runBlocking { first.scope.coroutineContext[Job]?.join() }`
+  immediately after `cancel()`, forcing synchronous teardown.
+- **The timeout was never the disease.** Widening 10s to 60s changed nothing; the
+  test needs 0.054s. RULES 4.5 forbids treating a timeout as a fix.
+- **Four real CI defects were fixed along the way, each reproduced not guessed:**
+  `setup-android` v3 failed 60/60 runs (v3's bundled runtime); `gradlew` was
+  committed mode 100644 so `./gradlew` was not executable; `app/build.gradle`
+  applied `com.google.gms.google-services` unconditionally, which fails at
+  CONFIGURATION time without the gitignored `google-services.json`; and the
+  teardown race above.
+- **What is deliberately still in the workflow:** the 15-minute Gradle test-task
+  timeout, `testLogging` per-test events, `--stacktrace`, and the
+  `actions/upload-artifact` step with `if-no-files-found: error`. The run-summary
+  grep block was REMOVED as redundant now that the artifact ships the real XML and
+  HTML; the summary was a JavaScript widget unreadable without a browser session.
+- **Reading CI output is still only possible for a signed-in human.** Verified:
+  step log needs sign-in, the REST logs endpoint returns 403, artifact download
+  returns 401, and the annotations endpoint carries no workflow output. The
+  artifact is the correct surface; tooling here cannot fetch it.
+
+## PRIOR CI TRIAGE (2026-09-29) — superseded by the entry above
 
 - **Branch `fix/ci-and-rendering`, pushed, 6 commits, NOT merged to main.**
   `9a873ae` v4 upgrade + toolchain fleet, `c228c9f` wrapper exec bit,
@@ -39,6 +73,11 @@
   352/352 on Windows. The failure is therefore specific to the Linux
   runner, not to the module's logic. That is a hypothesis, not a
   conclusion.
+  **RESOLVED — see the GREEN entry at the top of this file.** It was a
+  Linux-only teardown race. Both the Windows-only pass and the
+  clean-clone pass were correct signals that the defect was
+  environmental rather than a logic bug; the mistake was stopping at
+  "environmental" instead of asking what teardown looks like.
 - **Reading CI output is blocked for tooling here, verified three
   ways:** the run page and step log need sign-in; the REST logs
   endpoint returns 403 unauthenticated; the check-runs annotations

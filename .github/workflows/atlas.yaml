@@ -48,10 +48,11 @@ jobs:
         # index now records 100755, and chmod guards the case where a future
         # checkout loses the bit.
         #
-        # The step also writes its own diagnosis into the run summary and job
-        # log, because the step that fails is not the step whose output explains
-        # it: this step's own log is sign-in gated, so a red run was previously
-        # undiagnosable without a browser session.
+        # tee keeps gradle-out.log for the artifact upload below. A previous
+        # version also grepped that log into the run summary, which was removed
+        # once the artifact worked: the summary is a JavaScript widget that
+        # cannot be read unauthenticated, whereas ci-test-reports ships the real
+        # XML and HTML.
         run: |
           chmod +x ./gradlew
           set +e
@@ -65,38 +66,6 @@ jobs:
             2>&1 | tee gradle-out.log
           EXIT=$?
           set -e
-          # NOTE: this writes to the run summary, which the run page renders via a
-          # JavaScript widget. Reading it back programmatically is not possible
-          # here: the step log needs sign-in, the logs endpoint returns 403, and
-          # the annotations endpoint does not carry workflow-command output.
-          # A signed-in human reading the run page sees this block. Do not add
-          # ::error:: duplication hoping to surface it unauthenticated; that does
-          # not work and only floods the annotations list.
-          {
-            echo "### gradlew exit code: $EXIT"
-            echo '```'
-            grep -nE "FAILED|What went wrong|Execution failed|error:|^e: |Caused by|missing|Tests? .*failed" gradle-out.log | head -60 || echo "(no failure lines matched)"
-            echo '```'
-            for f in app/build/test-results/*/*.xml; do
-              [ -e "$f" ] || continue
-              if grep -qE '<(failure|error)' "$f"; then
-                echo "--- FAILURES in $f"
-                grep -oE '<testcase name="[^"]+"' "$f" | head -20
-                grep -oE 'message="[^"]{0,300}' "$f" | head -20
-              fi
-            done
-            for d in testPlayDebugUnitTest testEnterpriseDebugUnitTest; do
-              if [ -d "app/build/test-results/$d" ]; then
-                echo "### $d XML files: $(ls app/build/test-results/$d/*.xml 2>/dev/null | wc -l)"
-              else
-                echo "### $d: no results directory (task never ran)"
-              fi
-            done
-            echo '```'
-            tail -40 gradle-out.log
-            echo '```'
-            echo "::endgroup::"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
           cat gradle-out.log
           exit $EXIT
       # Runs even when Unit tests fails, so a partial or hung run still ships
