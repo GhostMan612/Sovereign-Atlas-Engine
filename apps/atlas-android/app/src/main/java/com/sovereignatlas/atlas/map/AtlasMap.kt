@@ -129,6 +129,7 @@ import com.sovereignatlas.atlas.map.historical.HistoricalFeatureMapper
 import com.sovereignatlas.atlas.map.historical.domainAssetId
 import com.sovereignatlas.atlas.map.historical.toMapLibreFeatureCollection
 import com.sovereignatlas.atlas.core.LandPatent
+import com.sovereignatlas.atlas.core.SanbornBlueprint
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
@@ -168,6 +169,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -303,14 +305,14 @@ fun AtlasMapScreen(
     val onHaptic: () -> Unit = {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
-    // Refreshes patent parcels for the current viewport. Reading the catalogue
-    // touches the filesystem, so the query runs on Dispatchers.IO and the result
-    // is handed back to pushFeatures, which the MapLibre style owns. Bounds are
-    // clamped before use: a projection can report a viewport that wraps the
-    // antimeridian, which AtlasBoundingBox encodes as west > east, and the
+    // Refreshes every historical asset in the current viewport. Reading the
+    // catalogue touches the filesystem, so the query runs on Dispatchers.IO and
+    // the result is handed back to the MapLibre style, which owns the sources.
+    // Bounds are clamped before use: a projection can report a viewport that wraps
+    // the antimeridian, which AtlasBoundingBox encodes as west > east, and the
     // repository handles that shape, but an empty or non-finite projection during
     // a style swap must not be turned into a query that matches nothing.
-    val refreshHistoricalPatents: (MapLibreMap) -> Unit = { map ->
+    val refreshHistoricalAssets: (MapLibreMap) -> Unit = { map ->
         mapScope.launch {
             val region = map.projection.visibleRegion.latLngBounds
             val south = region.latitudeSouth
@@ -326,15 +328,17 @@ fun AtlasMapScreen(
                 north = north.coerceIn(-90.0, 90.0),
                 east = east.coerceIn(-180.0, 180.0),
             )
-            val patents = withContext(Dispatchers.IO) {
-                services.historicalAssets.getAssets(box).filterIsInstance<LandPatent>()
-            }
+            val assets = withContext(Dispatchers.IO) { services.historicalAssets.getAssets(box) }
+            val patents = assets.filterIsInstance<LandPatent>()
+            val blueprints = assets.filterIsInstance<SanbornBlueprint>()
+
             // Push an empty collection rather than skipping when nothing matched:
             // leaving the previous viewport's parcels on screen would show parcels
             // outside the visible area as if they were in it.
             val collection = patents.toMapLibreFeatureCollection()
             styleRef.value?.let { style ->
                 pushFeatures(style, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE, collection)
+                syncHistoricalBlueprintLayers(style, services, blueprints)
             }
         }
     }
@@ -479,7 +483,7 @@ fun AtlasMapScreen(
         // Patents are pushed here as well as on camera idle: a style reload
         // recreates an empty source, and a camera that never moves again would
         // otherwise leave the viewport with no parcels at all.
-        refreshHistoricalPatents(map)
+        refreshHistoricalAssets(map)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
             style,
@@ -676,7 +680,7 @@ fun AtlasMapScreen(
                     styleRef.value?.let { style ->
                         if (showGraticule.value) pushGraticule(map, style)
                     }
-                    refreshHistoricalPatents(map)
+                    refreshHistoricalAssets(map)
                 }
                 val initialJson = services.maps.activeMap.value?.let { offline ->
                     buildMbtilesStyleJson(context, offline.absolutePath)
@@ -2371,6 +2375,78 @@ private fun addBelowAnchor(style: Style, layer: Layer, anchor: String?) {
         style.addLayerBelow(layer, anchor)
     }
 }
+
+/**
+ * Mounts one RasterSource + RasterLayer per Sanborn blueprint in view, and hides
+ * the ones that have left the viewport.
+ *
+ * WHY THIS DOES NOT USE `mbtiles://`: MapLibre Android registers no `mbtiles://`
+ * protocol handler. A TileSet built on that scheme resolves to nothing, the source
+ * accepts the URL, the layer is created, and the map stays blank — the exact
+ * "features reach their source but nothing draws" failure this repo already has a
+ * standing note about. The app already ships a loopback tile server that serves
+ * MBTiles by pack name, so the blueprint's pack is requested over that instead and
+ * the existing server does the file access.
+ *
+ * Visibility is toggled rather than layers being torn down. A pack is expensive to
+ * mount (open database, build TileSet) and cheap to hide, and the operator moving
+ * back and forth across a city edge would otherwise thrash the engine. A layer left
+ * hidden holds memory for the rest of the style's life, which is the deliberate
+ * trade here.
+ *
+ * The pack is addressed by FILE NAME, because that is the key the tile server and
+ * the MBTiles cache resolve. Passing the absolute path would build a URL with the
+ * whole filesystem path embedded in it.
+ */
+fun syncHistoricalBlueprintLayers(
+    style: Style,
+    services: AtlasServices,
+    inView: List<SanbornBlueprint>,
+) {
+    val visible = inView.associateBy { blueprint -> historicalRasterLayerId(blueprint.id) }
+
+    for (blueprint in inView) {
+        val layerId = historicalRasterLayerId(blueprint.id)
+        if (style.getLayer(layerId) != null) {
+            continue
+        }
+        val url = services.tiles.tileUrl(packNameFor(blueprint)) ?: continue
+        val tileSet = TileSet("2.2.0", url)
+        // The pack's own zMax, not the camera ceiling. Without it MapLibre asks for
+        // literal z24 tiles of a 17-max pack and renders black at high zoom.
+        blueprint.maxZoom?.let { tileSet.maxZoom = it }
+        blueprint.minZoom?.let { tileSet.minZoom = it }
+        style.addSource(RasterSource(historicalRasterSourceId(blueprint.id), tileSet))
+        val layer = RasterLayer(layerId, historicalRasterSourceId(blueprint.id))
+        // Plain addLayer: addLayerBelow has produced layers that exist in
+        // style.layers and never paint.
+        style.addLayer(layer)
+    }
+
+    for (layer in style.layers) {
+        val id = layer.id
+        if (!id.startsWith(AtlasLayerIds.HISTORICAL_RASTER_LAYER_PREFIX)) continue
+        val shouldShow = visible.containsKey(id)
+        // Property.VISIBLE and Property.NONE are plain String constants, and
+        // PropertyValue<String> is what the layer hands back, so the comparison is
+        // a string compare, not an enum compare.
+        val current = layer.visibility?.value
+        val target = if (shouldShow) Property.VISIBLE else Property.NONE
+        if (current == target) continue
+        layer.setProperties(PropertyFactory.visibility(target))
+    }
+}
+
+private fun packNameFor(blueprint: SanbornBlueprint): String {
+    val file = blueprint.filePath.substringAfterLast('/').substringAfterLast('\\')
+    return file.ifEmpty { blueprint.id }
+}
+
+fun historicalRasterSourceId(assetId: String): String =
+    AtlasLayerIds.HISTORICAL_RASTER_SOURCE_PREFIX + mbtilesSafeId(assetId)
+
+fun historicalRasterLayerId(assetId: String): String =
+    AtlasLayerIds.HISTORICAL_RASTER_LAYER_PREFIX + mbtilesSafeId(assetId)
 
 fun ensureMbtilesPackLayer(style: Style, services: AtlasServices, packId: String) {
     val sourceId = mbtilesSourceId(packId)

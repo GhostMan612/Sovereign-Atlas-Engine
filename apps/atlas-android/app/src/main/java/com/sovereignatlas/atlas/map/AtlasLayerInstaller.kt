@@ -60,6 +60,8 @@ object AtlasLayerIds {
     const val HISTORICAL_PATENTS_SOURCE = "historical-patents-source"
     const val HISTORICAL_PATENTS_FILL = "historical-patents-fill"
     const val HISTORICAL_PATENTS_BORDER = "historical-patents-border"
+    const val HISTORICAL_RASTER_SOURCE_PREFIX = "historical-raster-source-"
+    const val HISTORICAL_RASTER_LAYER_PREFIX = "historical-raster-layer-"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"

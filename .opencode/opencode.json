@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "Select-String*": "deny",
+      "Get-Content*": "deny",
+      "Get-ChildItem*": "deny",
+      "Test-Path*": "deny"
+    }
+  }
+}

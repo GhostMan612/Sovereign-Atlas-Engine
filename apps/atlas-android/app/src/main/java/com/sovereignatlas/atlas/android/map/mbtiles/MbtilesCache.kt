@@ -12,7 +12,23 @@ import com.sovereignatlas.atlas.offline.xyzToTmsY
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-class MbtilesCache(private val baseDir: File) : MbtilesTileSource {
+/**
+ * Serves tiles out of one or more pack directories.
+ *
+ * [baseDirs] is a list rather than a single directory because packs legitimately
+ * live in more than one place: the pack journal under filesDir, and the
+ * historical drop under externalFilesDir. It is a list and not a "search
+ * everywhere" path because the containment guard below is the whole security
+ * property of this class. A pack name is only honoured when it resolves to a real
+ * file *inside* one of these roots, so adding a root is a deliberate widening of
+ * what the app will open, not a side effect of calling it twice.
+ *
+ * Where two roots hold the same pack name, the first root wins. Callers that care
+ * must keep pack file names unique across roots.
+ */
+class MbtilesCache(private val baseDirs: List<File>) : MbtilesTileSource {
+    constructor(baseDir: File) : this(listOf(baseDir))
+
     private val dbHandles = ConcurrentHashMap<String, SQLiteDatabase>()
     private val mimeTypes = ConcurrentHashMap<String, String>()
     private val lock = Any()
@@ -20,12 +36,7 @@ class MbtilesCache(private val baseDir: File) : MbtilesTileSource {
     override fun getTile(packName: String, z: Int, x: Int, y: Int): MbtilesTile? {
         if (!packName.endsWith(".mbtiles")) return null
 
-        val safeBaseDir = baseDir.canonicalFile
-        val dbFile = File(baseDir, packName).canonicalFile
-
-        if (!dbFile.path.startsWith(safeBaseDir.path + File.separator) || !dbFile.exists()) {
-            return null
-        }
+        val dbFile = resolveInsideRoots(packName) ?: return null
 
         val db = dbHandles[packName] ?: synchronized(lock) {
             dbHandles[packName] ?: runCatching {
@@ -67,6 +78,23 @@ class MbtilesCache(private val baseDir: File) : MbtilesTileSource {
             }
         }
 
+        return null
+    }
+
+    /**
+     * Resolves [packName] to an existing file inside one of the configured roots.
+     *
+     * `canonicalFile` is applied on both sides so `..` segments and symlinks
+     * cannot walk a pack name out of its root. Returns null when the name escapes
+     * every root or names a file that is not there.
+     */
+    private fun resolveInsideRoots(packName: String): File? {
+        for (root in baseDirs) {
+            val safeRoot = runCatching { root.canonicalFile }.getOrNull() ?: continue
+            val candidate = runCatching { File(root, packName).canonicalFile }.getOrNull() ?: continue
+            if (!candidate.path.startsWith(safeRoot.path + File.separator)) continue
+            if (candidate.isFile) return candidate
+        }
         return null
     }
 

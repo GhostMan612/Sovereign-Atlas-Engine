@@ -94,8 +94,15 @@ State exactly which gate ran and what remains unverified.
 
 ## Repo-specific agents and tools
 
-`.opencode/agent/*.md` (subagents) and `.opencode/plugin/atlas-tools.ts` (tools). Restart
-opencode after changing any of them; config is not hot-reloaded.
+`.opencode/agent/*.md` (subagents), `.opencode/plugin/atlas-tools.ts` (tools), and
+`.opencode/opencode.json` (permissions). Restart opencode after changing any of them;
+config is not hot-reloaded.
+
+`.opencode/opencode.json` **denies** `Select-String*`, `Get-Content*`,
+`Get-ChildItem*` and `Test-Path*` in bash. That is the hard version of the tool law
+above: those four exist here only for the `atlas_*` tools' own internals. A denial
+means the tool call is refused, not that a warning is printed — so if you reach for
+one and it comes back denied, the answer is `grep`/`glob`/`read`, not a retry.
 
 Tools: `atlas_purity_scan` (engine/adapters boundary), `atlas_gates` (host gate with real
 counts, working JDK baked in), `atlas_device` (install/launch/logcat/screenshot on the Moto G
