@@ -8,8 +8,8 @@ package com.sovereignatlas.atlas.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ListItem
@@ -43,22 +43,27 @@ fun LayersDialog(
         onDismissRequest = onClose,
         title = { Text("Layers") },
         text = {
-            Column {
-                LazyColumn {
-                    items(OfflineBuiltinProviders.all, key = { it.id }) { provider ->
-                        ListItem(
-                            headlineContent = { Text(provider.title) },
-                            leadingContent = {
-                                RadioButton(
-                                    selected = provider.id == providerId,
-                                    onClick = { onProviderSelected(provider.id) },
-                                )
-                            },
-                            modifier = Modifier.clickable {
-                                onProviderSelected(provider.id)
-                            },
-                        )
-                    }
+            // One scroll container for the whole dialog. The provider list was a
+            // LazyColumn sitting directly in the dialog's unconstrained Column,
+            // so the six overlay checkboxes below it were pushed past the bottom
+            // of the dialog. A LazyColumn nested inside a vertically-scrolling
+            // parent would additionally throw on infinite height constraints, so
+            // the inner list is a plain Column and the outer Column owns the
+            // single scroll.
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                for (provider in OfflineBuiltinProviders.all) {
+                    ListItem(
+                        headlineContent = { Text(provider.title) },
+                        leadingContent = {
+                            RadioButton(
+                                selected = provider.id == providerId,
+                                onClick = { onProviderSelected(provider.id) },
+                            )
+                        },
+                        modifier = Modifier.clickable {
+                            onProviderSelected(provider.id)
+                        },
+                    )
                 }
                 for (row in listOf(
                     "Graticule" to (showGraticule to onGraticuleChanged),
