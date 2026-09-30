@@ -52,20 +52,12 @@ class AppServices(private val context: Context) {
 
     val offline = OfflineStore(directoryProvider = { appContext.filesDir })
 
-    private val historicalDir: File? get() = appContext.getExternalFilesDir(HISTORICAL_ASSET_DIR)
-
     val tiles = PackTileServer(packsDir = { File(appContext.filesDir, PACK_JOURNAL_DIR) }).also { server ->
-        // Two roots: the pack journal, and the historical Sanborn drop. Both are
-        // served over the same loopback tile route, so a blueprint in external
-        // storage is reachable by pack name without a second server. The cache
-        // keeps a containment guard per root, so adding a root is an explicit
-        // widening of what the app will open.
-        server.mbtilesStore = MbtilesCache(
-            listOfNotNull(
-                File(appContext.filesDir, PACK_JOURNAL_DIR),
-                historicalDir,
-            ),
-        )
+        // Single root, on purpose: MbtilesCache's containment guard is what stops a
+        // pack name from walking out of the journal. Historical Sanborn packs live in
+        // external storage and are read by MapLibre's own mbtiles:// scheme, not
+        // through this server.
+        server.mbtilesStore = MbtilesCache(File(appContext.filesDir, PACK_JOURNAL_DIR))
     }
 
     val mbtilesScanner: MbtilesScanner = DefaultMbtilesScanner(

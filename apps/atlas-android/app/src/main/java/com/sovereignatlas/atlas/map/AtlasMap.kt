@@ -338,7 +338,7 @@ fun AtlasMapScreen(
             val collection = patents.toMapLibreFeatureCollection()
             styleRef.value?.let { style ->
                 pushFeatures(style, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE, collection)
-                syncHistoricalBlueprintLayers(style, services, blueprints)
+                syncHistoricalBlueprintLayers(style, blueprints)
             }
         }
     }
@@ -2380,47 +2380,41 @@ private fun addBelowAnchor(style: Style, layer: Layer, anchor: String?) {
  * Mounts one RasterSource + RasterLayer per Sanborn blueprint in view, and hides
  * the ones that have left the viewport.
  *
- * WHY THIS DOES NOT USE `mbtiles://`: MapLibre Android registers no `mbtiles://`
- * protocol handler. A TileSet built on that scheme resolves to nothing, the source
- * accepts the URL, the layer is created, and the map stays blank — the exact
- * "features reach their source but nothing draws" failure this repo already has a
- * standing note about. The app already ships a loopback tile server that serves
- * MBTiles by pack name, so the blueprint's pack is requested over that instead and
- * the existing server does the file access.
+ * The tile URL is the app's established MBTiles form, `mbtiles://file://<abs>`,
+ * the same one `buildMbtilesStyleJson` substitutes into `offline_style.json` for
+ * an offline base map. MapLibre Native resolves that scheme against the file
+ * directly, so a Sanborn pack is read without going through the loopback tile
+ * server and without the pack needing to live in the pack-journal directory.
  *
  * Visibility is toggled rather than layers being torn down. A pack is expensive to
- * mount (open database, build TileSet) and cheap to hide, and the operator moving
+ * mount (open database, build TileSet) and cheap to hide, and an operator moving
  * back and forth across a city edge would otherwise thrash the engine. A layer left
  * hidden holds memory for the rest of the style's life, which is the deliberate
  * trade here.
  *
- * The pack is addressed by FILE NAME, because that is the key the tile server and
- * the MBTiles cache resolve. Passing the absolute path would build a URL with the
- * whole filesystem path embedded in it.
+ * A blueprint with no recorded file path is skipped rather than mounted against an
+ * empty URI: the source would be created and would never resolve a tile.
  */
 fun syncHistoricalBlueprintLayers(
     style: Style,
-    services: AtlasServices,
     inView: List<SanbornBlueprint>,
 ) {
     val visible = inView.associateBy { blueprint -> historicalRasterLayerId(blueprint.id) }
 
     for (blueprint in inView) {
+        if (blueprint.filePath.isEmpty()) continue
         val layerId = historicalRasterLayerId(blueprint.id)
-        if (style.getLayer(layerId) != null) {
-            continue
-        }
-        val url = services.tiles.tileUrl(packNameFor(blueprint)) ?: continue
-        val tileSet = TileSet("2.2.0", url)
-        // The pack's own zMax, not the camera ceiling. Without it MapLibre asks for
-        // literal z24 tiles of a 17-max pack and renders black at high zoom.
+        if (style.getLayer(layerId) != null) continue
+        val tileSet = TileSet("2.2.0", "mbtiles://file://${blueprint.filePath}")
+        // The pack's own zoom range, not the camera ceiling. With maxzoom unset
+        // MapLibre asks for literal z24 tiles of a 17-max pack and renders black
+        // at high zoom.
         blueprint.maxZoom?.let { tileSet.maxZoom = it }
         blueprint.minZoom?.let { tileSet.minZoom = it }
         style.addSource(RasterSource(historicalRasterSourceId(blueprint.id), tileSet))
-        val layer = RasterLayer(layerId, historicalRasterSourceId(blueprint.id))
         // Plain addLayer: addLayerBelow has produced layers that exist in
         // style.layers and never paint.
-        style.addLayer(layer)
+        style.addLayer(RasterLayer(layerId, historicalRasterSourceId(blueprint.id)))
     }
 
     for (layer in style.layers) {
@@ -2435,11 +2429,6 @@ fun syncHistoricalBlueprintLayers(
         if (current == target) continue
         layer.setProperties(PropertyFactory.visibility(target))
     }
-}
-
-private fun packNameFor(blueprint: SanbornBlueprint): String {
-    val file = blueprint.filePath.substringAfterLast('/').substringAfterLast('\\')
-    return file.ifEmpty { blueprint.id }
 }
 
 fun historicalRasterSourceId(assetId: String): String =

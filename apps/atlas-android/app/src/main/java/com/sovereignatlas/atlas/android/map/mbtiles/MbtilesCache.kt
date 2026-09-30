@@ -13,22 +13,16 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Serves tiles out of one or more pack directories.
+ * Serves tiles out of the pack directory.
  *
- * [baseDirs] is a list rather than a single directory because packs legitimately
- * live in more than one place: the pack journal under filesDir, and the
- * historical drop under externalFilesDir. It is a list and not a "search
- * everywhere" path because the containment guard below is the whole security
- * property of this class. A pack name is only honoured when it resolves to a real
- * file *inside* one of these roots, so adding a root is a deliberate widening of
- * what the app will open, not a side effect of calling it twice.
- *
- * Where two roots hold the same pack name, the first root wins. Callers that care
- * must keep pack file names unique across roots.
+ * [baseDir] is a single root on purpose. The containment guard below is the whole
+ * security property of this class: a pack name is only honoured when it resolves to
+ * a real file *inside* that root, so a name carrying `..` or a symlink cannot walk
+ * the app into opening an arbitrary file. Widening this to several roots would make
+ * it a search-anywhere path, so historical packs in external storage are read by
+ * MapLibre's own `mbtiles://` scheme instead and do not come through here.
  */
-class MbtilesCache(private val baseDirs: List<File>) : MbtilesTileSource {
-    constructor(baseDir: File) : this(listOf(baseDir))
-
+class MbtilesCache(private val baseDir: File) : MbtilesTileSource {
     private val dbHandles = ConcurrentHashMap<String, SQLiteDatabase>()
     private val mimeTypes = ConcurrentHashMap<String, String>()
     private val lock = Any()
@@ -36,7 +30,12 @@ class MbtilesCache(private val baseDirs: List<File>) : MbtilesTileSource {
     override fun getTile(packName: String, z: Int, x: Int, y: Int): MbtilesTile? {
         if (!packName.endsWith(".mbtiles")) return null
 
-        val dbFile = resolveInsideRoots(packName) ?: return null
+        val safeBaseDir = runCatching { baseDir.canonicalFile }.getOrNull() ?: return null
+        val dbFile = runCatching { File(baseDir, packName).canonicalFile }.getOrNull() ?: return null
+
+        if (!dbFile.path.startsWith(safeBaseDir.path + File.separator) || !dbFile.isFile) {
+            return null
+        }
 
         val db = dbHandles[packName] ?: synchronized(lock) {
             dbHandles[packName] ?: runCatching {
@@ -78,23 +77,6 @@ class MbtilesCache(private val baseDirs: List<File>) : MbtilesTileSource {
             }
         }
 
-        return null
-    }
-
-    /**
-     * Resolves [packName] to an existing file inside one of the configured roots.
-     *
-     * `canonicalFile` is applied on both sides so `..` segments and symlinks
-     * cannot walk a pack name out of its root. Returns null when the name escapes
-     * every root or names a file that is not there.
-     */
-    private fun resolveInsideRoots(packName: String): File? {
-        for (root in baseDirs) {
-            val safeRoot = runCatching { root.canonicalFile }.getOrNull() ?: continue
-            val candidate = runCatching { File(root, packName).canonicalFile }.getOrNull() ?: continue
-            if (!candidate.path.startsWith(safeRoot.path + File.separator)) continue
-            if (candidate.isFile) return candidate
-        }
         return null
     }
 
