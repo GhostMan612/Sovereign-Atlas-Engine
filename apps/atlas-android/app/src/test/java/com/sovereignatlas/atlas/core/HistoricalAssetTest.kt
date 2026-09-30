@@ -18,6 +18,8 @@ private val BOX = AtlasBoundingBox(
     east = -104.8,
 )
 
+private val POINT = GeoJsonGeometry.Point(LngLat(longitude = -104.85, latitude = 39.05))
+
 final class HistoricalAssetTest {
     @Test
     fun landPatentCarriesProvenance() {
@@ -29,6 +31,7 @@ final class HistoricalAssetTest {
             license = HistoricalLicense.PublicDomainUsOnly(),
             attribution = "Bureau of Land Management",
             patentNumber = "1880-0042",
+            geometry = POINT,
         )
 
         assertEquals("lp-1880-0042", asset.id)
@@ -64,6 +67,7 @@ final class HistoricalAssetTest {
                 boundingBox = BOX,
                 license = HistoricalLicense.PublicDomain,
                 patentNumber = "1",
+                geometry = POINT,
             )
         }.exceptionOrNull()
 
@@ -132,6 +136,7 @@ final class HistoricalAssetTest {
             boundingBox = BOX,
             license = HistoricalLicense.Unverified("no rights found"),
             patentNumber = "1",
+            geometry = POINT,
         )
 
         assertNull(asset.attribution)
@@ -147,9 +152,9 @@ final class HistoricalAssetTest {
             title = "Sheet",
             year = 1897,
             boundingBox = BOX,
-            license = HistoricalLicense.PublicDomain,
-            edition = 1,
-            sheet = "1",
+license = HistoricalLicense.PublicDomain,
+                edition = 1,
+                sheet = "1",
         )
         val box: AtlasBoundingBox = asset.boundingBox
         assertEquals(39.0, box.south, 0.0)

@@ -75,15 +75,21 @@ data class LandPatent(
     override val year: Int,
     override val boundingBox: AtlasBoundingBox,
     override val license: HistoricalLicense,
-    override val attribution: String? = null,
-    /** Patent or survey identifier as printed on the source document. */
     val patentNumber: String,
-    /** Survey township and range, where the source records one. */
     val township: String? = null,
+    val patenteeName: String? = null,
+    val issueDate: String? = null,
+    val acreage: Double? = null,
+    val legalDescription: String? = null,
+    val state: String? = null,
+    val county: String? = null,
+    val geometry: GeoJsonGeometry,
+    override val attribution: String? = null,
 ) : HistoricalAsset {
     init {
         require(id.isNotBlank()) { "HistoricalAsset id must not be blank." }
         require(title.isNotBlank()) { "HistoricalAsset title must not be blank." }
+        require(patentNumber.isNotBlank()) { "LandPatent patentNumber must not be blank." }
     }
 }
 
