@@ -111,6 +111,34 @@ class HistoricalAssetMapperTest {
     }
 
     @Test
+    fun domainIdIsCarriedAsAPropertyForTapResolution() {
+        assertEquals("lp-1", patent().toMapLibreFeature().domainAssetId())
+    }
+
+    @Test
+    fun aRenderedFeatureIdIsPreferredOverTheProperty() {
+        val feature = patent().toMapLibreFeature()
+        val properties = com.google.gson.JsonObject()
+        properties.addProperty(ASSET_ID_PROPERTY, "lp-1")
+        val withId = org.maplibre.geojson.Feature.fromGeometry(
+            feature.geometry(),
+            properties,
+            "lp-feature-id",
+        )
+
+        assertEquals("lp-feature-id", withId.domainAssetId())
+    }
+
+    @Test
+    fun domainIdIsNullWhenNeitherCarrierIsPresent() {
+        val bare = org.maplibre.geojson.Feature.fromGeometry(
+            patent().toMapLibreFeature().geometry(),
+        )
+
+        assertNull(bare.domainAssetId())
+    }
+
+    @Test
     fun featureCarriesTheRecordedPatentProperties() {
         val feature = patent().toMapLibreFeature()
 

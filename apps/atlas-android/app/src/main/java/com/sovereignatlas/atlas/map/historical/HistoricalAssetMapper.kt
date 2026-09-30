@@ -64,7 +64,14 @@ private fun List<LngLat>.toClosedRing(): List<Point> {
  * mean "no issue date recorded" and 0 AD is a fact this map must not assert.
  */
 fun LandPatent.toMapLibreFeature(): Feature {
+    // The domain id is carried as a PROPERTY, not as the GeoJSON feature id. There
+    // is no Feature.fromGeometry(Geometry, String) overload to set an id directly,
+    // and the overloads that do take one require a gson JsonObject, which this
+    // mapper has no business constructing. A property survives every source
+    // serialisation path, and a tap that cannot resolve an id leaves a plainly
+    // visible parcel inert.
     val feature = Feature.fromGeometry(geometry.toMapLibreGeometry())
+    feature.addStringProperty(ASSET_ID_PROPERTY, id)
     feature.addStringProperty("patentNumber", patentNumber)
     patenteeName?.let { feature.addStringProperty("patenteeName", it) }
     issueDate?.let { feature.addStringProperty("issueDate", it) }
@@ -75,6 +82,16 @@ fun LandPatent.toMapLibreFeature(): Feature {
 }
 
 private const val UNKNOWN_FIELD = "Unknown"
+
+/** Property carrying the domain id, mirrored from the GeoJSON feature id. */
+const val ASSET_ID_PROPERTY = "assetId"
+
+/**
+ * Reads the domain id back off a rendered feature. Feature id is preferred, with
+ * the property as the fallback, so a tap resolves even when the source stripped
+ * the feature id.
+ */
+fun Feature.domainAssetId(): String? = id() ?: getStringProperty(ASSET_ID_PROPERTY)
 
 /** Builds the collection pushed to the patents source in one map step. */
 fun List<LandPatent>.toMapLibreFeatureCollection(): FeatureCollection =

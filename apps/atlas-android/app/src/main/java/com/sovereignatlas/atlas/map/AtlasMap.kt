@@ -95,6 +95,7 @@ import com.sovereignatlas.atlas.geo.LoSResult
 import com.sovereignatlas.atlas.geo.LineOfSightEngine
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
+import com.sovereignatlas.atlas.core.HistoricalAsset
 import com.sovereignatlas.atlas.core.HistoricalRecord
 import com.sovereignatlas.atlas.geo.graphics.DrawingMode
 import com.sovereignatlas.atlas.geo.graphics.OperationalGraphic
@@ -125,11 +126,13 @@ import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import androidx.core.content.ContextCompat
 import com.sovereignatlas.atlas.map.cot.CotGeoJsonMapper
 import com.sovereignatlas.atlas.map.historical.HistoricalFeatureMapper
+import com.sovereignatlas.atlas.map.historical.domainAssetId
 import com.sovereignatlas.atlas.map.historical.toMapLibreFeatureCollection
 import com.sovereignatlas.atlas.core.LandPatent
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
+import com.sovereignatlas.atlas.ui.historical.HistoricalAssetSheet
 import com.sovereignatlas.atlas.ui.historical.HistoricalRecordSheet
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
@@ -379,6 +382,14 @@ fun AtlasMapScreen(
     // before the remembered MapView so the long-lived click listener can write it.
     val selectedHistoricalRecord = remember { MutableStateFlow<HistoricalRecord?>(null) }
     val selectedRecord by selectedHistoricalRecord.collectAsStateWithLifecycle()
+    // Resolved from the catalogue by id on tap. Kept separate from
+    // selectedHistoricalRecord because that one is built from the rendered
+    // feature of an offline pack, which is lossy; this one is the domain object.
+    val selectedHistoricalAsset = remember { MutableStateFlow<HistoricalAsset?>(null) }
+    val selectedAsset by selectedHistoricalAsset.collectAsStateWithLifecycle()
+    // Bumped on every tap and on every dismissal so a catalogue lookup that
+    // completes late cannot resurrect a sheet the operator already closed.
+    val patentTapToken = remember { java.util.concurrent.atomic.AtomicInteger(0) }
     val drawingMode by drawingModeFlow.collectAsStateWithLifecycle()
     val inProgressPoints by inProgressPointsFlow.collectAsStateWithLifecycle()
     // Placeholder until the drawing tools UI ships: the operational-graphics
@@ -592,12 +603,48 @@ fun AtlasMapScreen(
                             for (layerId in historicalLayerIds) {
                                 val hit = map.queryRenderedFeatures(screen, layerId).firstOrNull()
                                 if (hit != null) {
+                                    // This tap selected a different historical source,
+                                    // so any open patent sheet is now describing
+                                    // something the operator is no longer pointing at.
+                                    patentTapToken.incrementAndGet()
+                                    selectedHistoricalAsset.value = null
                                     selectedHistoricalRecord.value =
                                         HistoricalFeatureMapper.fromFeature(hit, layerId)
                                     return@addOnMapClickListener true
                                 }
                             }
+                            // Catalogue patents are interrogated after the offline
+                            // pack layers: a pack layer that hits under the same tap
+                            // is the older, more specific source.
+                            val patentHit = map
+                                .queryRenderedFeatures(screen, AtlasLayerIds.HISTORICAL_PATENTS_FILL)
+                                .firstOrNull()
+                            val patentId = patentHit?.domainAssetId()
+                            if (patentId != null) {
+                                // Token guards against a slow lookup resolving after
+                                // the operator has already tapped something else or
+                                // dismissed the sheet. Comparing the flow's own value
+                                // is not enough: after a dismissal the flow is null
+                                // again, and the stale result would re-open the sheet.
+                                val token = patentTapToken.incrementAndGet()
+                                mapScope.launch {
+                                    // Reading the catalogue touches the filesystem,
+                                    // so it leaves the main thread.
+                                    val asset = withContext(Dispatchers.IO) {
+                                        services.historicalAssets.getAssetById(patentId)
+                                    }
+                                    if (token == patentTapToken.get()) {
+                                        selectedHistoricalAsset.value = asset
+                                    }
+                                }
+                                return@addOnMapClickListener true
+                            }
                         }
+                        // A tap that reaches here hit no historical feature at all, so
+                        // any open sheet is describing something off-screen. The token
+                        // bump also cancels a lookup still in flight from a prior tap.
+                        patentTapToken.incrementAndGet()
+                        selectedHistoricalAsset.value = null
                         val hits = if (screen == null) {
                             emptyList()
                         } else {
@@ -1718,6 +1765,13 @@ fun AtlasMapScreen(
     HistoricalRecordSheet(
         record = selectedRecord,
         onDismissRequest = { selectedHistoricalRecord.value = null }
+    )
+    HistoricalAssetSheet(
+        asset = selectedAsset,
+        onDismissRequest = {
+            patentTapToken.incrementAndGet()
+            selectedHistoricalAsset.value = null
+        },
     )
 }
 
