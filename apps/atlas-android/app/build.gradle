@@ -142,4 +142,27 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
 
-apply plugin: "com.google.gms.google-services"
+// The google-services plugin hard-fails at configuration time when the file is
+// absent, which broke the CI unit-test step: the file is gitignored by
+// RULES.md 1.3, so it never exists on a clean checkout. Only wire the plugin up
+// when the file is actually present, so assemble and unit tests work without a
+// credential. The release job writes the real file before assembling, and it
+// still gets the plugin.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
+tasks.withType(Test).configureEach {
+    testLogging {
+        events "started", "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showExceptions true
+        showCauses true
+        showStackTraces true
+    }
+    // Without a task-level timeout a hung test runs until the Actions job cap
+    // fires, and when Actions kills the job Gradle writes no JUnit XML, emits no
+    // thread dump, and the artifact upload has nothing to ship. The timeout is
+    // what makes the diagnostic artifact exist at all.
+    timeout = java.time.Duration.ofMinutes(15)
+}

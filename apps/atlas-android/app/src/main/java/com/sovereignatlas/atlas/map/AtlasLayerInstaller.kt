@@ -177,16 +177,19 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.lineOpacity(0.9f),
             ),
     )
-    style.addLayerBelow(
+    // These three were previously added below WAYPOINTS_LAYER. Both forms render
+    // on device, so this is defence in depth rather than a bug fix: it removes
+    // three more uses of addLayerBelow, leaving only the two ops-graphics layers,
+    // which must stay below MESH_TRACK_LAYER by design, and PLI.
+    style.addLayer(
         LineLayer(AtlasLayerIds.MGRS_LINE_LAYER, AtlasLayerIds.MGRS_LINE_SOURCE)
             .withProperties(
                 PropertyFactory.lineColor("#7A8A7A"),
                 PropertyFactory.lineWidth(1.0f),
                 PropertyFactory.lineOpacity(0.7f),
             ),
-        AtlasLayerIds.WAYPOINTS_LAYER,
     )
-    style.addLayerBelow(
+    style.addLayer(
         SymbolLayer(AtlasLayerIds.MGRS_LABEL_LAYER, AtlasLayerIds.MGRS_LABEL_SOURCE)
             .withProperties(
                 PropertyFactory.textField(Expression.get("title")),
@@ -195,21 +198,18 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.textAllowOverlap(false),
                 PropertyFactory.textIgnorePlacement(false),
             ),
-        AtlasLayerIds.WAYPOINTS_LAYER,
     )
-    style.addLayerBelow(
+    style.addLayer(
         LineLayer(AtlasLayerIds.ROUTE_LAYER, AtlasLayerIds.ROUTE_SOURCE)
             .withProperties(
                 PropertyFactory.lineColor("#39FF14"),
                 PropertyFactory.lineWidth(4.0f),
                 PropertyFactory.lineOpacity(0.8f),
             ),
-        AtlasLayerIds.WAYPOINTS_LAYER,
     )
-    // addLayerBelow(..., WAYPOINTS_LAYER) is BROKEN in this style: the layer
-    // lands in the style at an unexpected index and then never paints, which is
-    // why CoT markers were invisible on device while the source held them.
-    // Plain addLayer() renders; markers belong on top anyway.
+    // Plain addLayer, not addLayerBelow: with addLayerBelow the CoT marker layer
+    // sat in the style but never painted on device while its source held the
+    // data, and addLayer rendered immediately. Markers belong on top regardless.
     style.addLayer(
         CircleLayer(AtlasLayerIds.MARKER_LAYER, AtlasLayerIds.MARKER_SOURCE)
             .withProperties(

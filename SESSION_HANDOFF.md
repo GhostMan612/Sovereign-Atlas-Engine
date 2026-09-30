@@ -4,7 +4,104 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
-## HUD declutter, CoT marker rendering fix, LoS message (2026-09-29) — UNCOMMITTED, device-verified
+## CI IS GREEN — first-ever green run, root cause found (2026-09-29)
+
+- **Run #72 on `fix/ci-and-rendering` (`dbc9a08`) is the first green CI run in
+  this repository's history.** 71 consecutive red runs preceded it. Every step
+  passes, including `Unit tests`. Verified via the step-level API.
+- **Root cause of the long-red `Unit tests` step, for the record:** a Linux-only
+  asynchronous teardown race in `AndroidKeyProviderTest.keySurvivesNewInstance`.
+  `harnessOver` passes ONE `CoroutineScope` to both `buildApiKeyStore` and the
+  provider's `sharingScope`, so `first.scope.cancel()` cancels the DataStore actor
+  and the `stateIn` collector that own the scratch file — but `cancel()` is only a
+  *request*. The test then constructed a second DataStore over the same path while
+  the first was still winding down, and the second `stateIn` never delivered the
+  expected value, so `first()` on the coroutine `withTimeout` elapsed and surfaced
+  as a `TimeoutCancellationException`. Windows passes because teardown wins the
+  race there. Fixed by `runBlocking { first.scope.coroutineContext[Job]?.join() }`
+  immediately after `cancel()`, forcing synchronous teardown.
+- **The timeout was never the disease.** Widening 10s to 60s changed nothing; the
+  test needs 0.054s. RULES 4.5 forbids treating a timeout as a fix.
+- **Four real CI defects were fixed along the way, each reproduced not guessed:**
+  `setup-android` v3 failed 60/60 runs (v3's bundled runtime); `gradlew` was
+  committed mode 100644 so `./gradlew` was not executable; `app/build.gradle`
+  applied `com.google.gms.google-services` unconditionally, which fails at
+  CONFIGURATION time without the gitignored `google-services.json`; and the
+  teardown race above.
+- **What is deliberately still in the workflow:** the 15-minute Gradle test-task
+  timeout, `testLogging` per-test events, `--stacktrace`, and the
+  `actions/upload-artifact` step with `if-no-files-found: error`. The run-summary
+  grep block was REMOVED as redundant now that the artifact ships the real XML and
+  HTML; the summary was a JavaScript widget unreadable without a browser session.
+- **Reading CI output is still only possible for a signed-in human.** Verified:
+  step log needs sign-in, the REST logs endpoint returns 403, artifact download
+  returns 401, and the annotations endpoint carries no workflow output. The
+  artifact is the correct surface; tooling here cannot fetch it.
+
+## PRIOR CI TRIAGE (2026-09-29) — superseded by the entry above
+
+- **Branch `fix/ci-and-rendering`, pushed, 6 commits, NOT merged to main.**
+  `9a873ae` v4 upgrade + toolchain fleet, `c228c9f` wrapper exec bit,
+  `1ac21dc` google-services conditional, `7fbb942` run-summary diagnosis,
+  `0f566a3` annotation attempt (reverted), `a3d76ce` revert the annotation.
+- **CI progress is real but incomplete.** setup-android v4 WORKS: runs
+  #63-#67 all show step 4 `Setup Android SDK -> success` and step 5
+  `Report toolchain -> success`, which never happened in the 60 runs
+  before. The job now dies one step later at `Unit tests`, a step
+  that had **never been reached before this session**. So the v3->v4
+  upgrade is proven; the pipeline is not yet green.
+- **Fix 1, proven defect:** `apps/atlas-android/gradlew` was committed
+  with mode `100644`, so `./gradlew` is not executable on the ubuntu
+  runner. `core.fileMode=false` on this Windows host is how the wrong
+  bit got recorded. Fixed with `git update-index --chmod=+x` (index
+  now `100755`, verified in a fresh clone) plus `chmod +x` in both
+  jobs as a guard.
+- **Fix 2, proven defect by reproduction:** `app/build.gradle`
+  applied `com.google.gms.google-services` unconditionally. That
+  plugin fails at CONFIGURATION time when `google-services.json` is
+  absent, and RULES.md 1.3 forbids committing that file, so a clean
+  checkout always failed. Reproduced locally: moving the file aside
+  made `:app:testPlayDebugUnitTest` fail in 11s with "File
+  google-services.json is missing". Now applied only when the file
+  exists; with it absent, 352/352 both flavors and both debug
+  assembles pass locally. Release is unaffected because the release
+  job writes the file from base64 before assembling.
+- **Cause of the remaining Unit tests failure is UNKNOWN. Do not
+  guess again.** A clean `git clone --depth 1` of this branch into a
+  temp dir, with no `google-services.json` present exactly as on CI,
+  passes `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest`
+  352/352 on Windows. The failure is therefore specific to the Linux
+  runner, not to the module's logic. That is a hypothesis, not a
+  conclusion.
+  **RESOLVED — see the GREEN entry at the top of this file.** It was a
+  Linux-only teardown race. Both the Windows-only pass and the
+  clean-clone pass were correct signals that the defect was
+  environmental rather than a logic bug; the mistake was stopping at
+  "environmental" instead of asking what teardown looks like.
+- **Reading CI output is blocked for tooling here, verified three
+  ways:** the run page and step log need sign-in; the REST logs
+  endpoint returns 403 unauthenticated; the check-runs annotations
+  endpoint does NOT carry workflow-command output (tested in run
+  #67, annotations came back empty). The run-summary block added in
+  `7fbb942` works for a signed-in human reading the run page and is
+  the only usable surface. **Getting the failure text requires a
+  signed-in browser session — this is a human step.**
+- **Next human action:** open
+  `https://github.com/GhostMan612/Sovereign-Atlas-Engine/actions/runs`
+  for the newest `fix/ci-and-rendering` run, read the `Unit tests`
+  step, and paste the output. The workflow now greps that output into
+  the run summary, so the failing lines should be at the top of the
+  summary block.
+- **Also still open on main:** `MGRS_LINE_LAYER`, `MGRS_LABEL_LAYER`
+  and `ROUTE_LAYER` use `addLayerBelow(WAYPOINTS_LAYER)` like the
+  marker layer did. Verified NOT broken: a paren-balanced parse of
+  `installAtlasLayers` found 20 add calls and **zero**
+  anchor-ordering violations, and on device with the MGRS grid
+  toggled on, the grid, range rings, graticule, CoT markers and a
+  tactical track all paint. The directive's premise that anchors are
+  missing was wrong and its Task 1 refactor was not applied.
+
+## HUD declutter, CoT marker rendering fix, LoS message (2026-09-29) — device-verified
 
 - **Gates green here:** `compilePlayDebugKotlin` BUILD SUCCESSFUL;
   `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`
