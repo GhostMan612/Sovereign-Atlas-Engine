@@ -2280,7 +2280,14 @@ fun ensureMbtilesPackLayer(style: Style, services: AtlasServices, packId: String
     val sourceId = mbtilesSourceId(packId)
     if (style.getSource(sourceId) != null) return
     val url = services.tiles.tileUrl(packId) ?: return
-    style.addSource(RasterSource(sourceId, TileSet("2.2.0", url)))
+    // The pack's own zMax must be on the TileSet, otherwise the source maxzoom is
+    // unset and MapLibre requests literal z24 tiles for this pack instead of
+    // overzooming its deepest available tile, which renders black at the global
+    // camera ceiling. Overlook the lookup failing and leave maxzoom unset, which
+    // is the previous behaviour.
+    val tileSet = TileSet("2.2.0", url)
+    services.offline.lookup(packId)?.zMax?.let { tileSet.maxZoom = it.toFloat() }
+    style.addSource(RasterSource(sourceId, tileSet))
     val layer = RasterLayer(mbtilesLayerId(packId), sourceId)
     if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
         style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
