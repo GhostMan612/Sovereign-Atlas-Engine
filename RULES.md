@@ -67,7 +67,7 @@ Do not install software, modify system settings, or write outside the work area 
 
 - Filter all terminal output; pipe for failures only, never ingest passing noise.
 - No massive file reads — probe large files/logs/data with short scripts or filtered searches.
-- Targeted verification during development; full suites reserved for staged-commit verification.
+- **No intermediate shells.** The shell is not a verification tool; it is the gate. Verification happens once, at the end of a phase, or not at all. See RULES §3.
 - Spawn subagents for deep exploration when available; return summaries, not raw dumps.
 - Proactively compact context after each verified phase.
 
@@ -88,6 +88,8 @@ Do not install software, modify system settings, or write outside the work area 
 
 | Law | Rule |
 |-----|------|
+| Shell is the last resort | A dedicated tool exists for nearly every read, search, and edit. Use `read`/`grep`/`glob`/`edit`/`write` and the `atlas_*` tools. NEVER reach for `Select-String`, `Get-Content`, `Get-ChildItem`, or `Test-Path` in a shell to do work a tool already does. |
+| One shell per phase | Shell out ONCE per task, at the end, for gates and git. Never per edit, never per compile error, never to re-inspect one line. A gate failure is fixed with editor tools, then confirmed by the next single gate run. |
 | PowerShell edits | NEVER modify source through PS text pipelines (`Get-Content/-replace/Set-Content`, `Out-File`). Editor tools only; Python `encoding='utf-8'` if scripted. |
 | PowerShell binary pulls | NEVER pipe `adb pull` / binary output through PS pipes — write straight to file, no `Out-String`. |
 | adb flakiness | `adb kill-server` recovers most wedges. |

@@ -21,6 +21,9 @@ Dart/Flutter lineage — read-only context, never a build target.
   `C:\Program Files\Android\Android Studio\jbr` is stripped (no `lib/jvm.cfg`) and every
   Gradle invocation fails against it. Set both before any Gradle call:
   `$env:JAVA_HOME = "C:\Users\612co\.jdks\jbr-21.0.11"; $env:ANDROID_HOME = "C:\android"`
+- **Prefer the `atlas_gates` tool over typing `gradlew` yourself.** It sets both
+  variables, runs both flavors, and reports real test counts. Hand-written
+  `gradlew` is the fallback when the tool cannot express the task, not the default.
 
 ## Commands
 
@@ -29,23 +32,53 @@ Dart/Flutter lineage — read-only context, never a build target.
 .\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
-## Verification cadence (operator directive, 2026-09-29)
+Prefer the equivalent tool call first. See the tool law below.
 
-**Batch every edit in a task, then shell out exactly ONCE at the end for the
-gates.** No intermediate compiles, no grep sweeps, no per-edit checks. The
-incremental-verification instinct in RULES.md 1A and 4.5 does NOT mean
-re-verifying after each line edit — it means the gate must actually run before
-any claim, not that it must run ten times.
+## Verification cadence (operator directive, 2026-09-29, AMENDED 2026-09-30)
 
-Reads and file edits are free. Only shell out for: the single end-of-task gate
-run, `adb` when device work is asked for, and git.
+**One shell per PHASE. Not per edit. Not per compile error.** A phase is the
+whole task in the authorization you were handed.
 
-The one exception, which is not an excuse to shell: if a task contains a
-contradiction where proceeding means guessing — a device serial that is not the
-test device, a spec that will not compile, a root cause with no evidence — STOP
-and report. That is cheaper than grinding, and it is what caught a wrong Carto
-query parameter and a commit pushed to the wrong branch. One question beats ten
-speculative edits.
+### The tool law
+
+There is a dedicated tool for almost everything, and the shell is the last
+resort. Using the wrong one is the single most expensive mistake in this repo,
+because a PowerShell round trip costs more wall clock than ten file reads.
+
+| Need | Use | NEVER use |
+|------|-----|-----------|
+| Find text in a file | `grep` tool | `Select-String` in shell |
+| Find a file by name | `glob` tool | `Get-ChildItem` in shell |
+| Read a file | `read` tool | `Get-Content` in shell |
+| Edit a file | `edit` / `write` tools | PS text pipelines (`RULES.md` §3 forbids) |
+| Verify a MapLibre/Android signature | `atlas_maplibre_probe` | shell + `javap` |
+| Check the pure boundary | `atlas_purity_scan` | shell + grep loop |
+| Run the gates | `atlas_gates`, ONE call | ad-hoc `gradlew` |
+| Install / launch / logcat | `atlas_device` | raw `adb` in shell |
+| git | shell (no tool exists) | — |
+
+`Select-String`, `Get-Content`, `Get-ChildItem`, and `Test-Path` in a shell have
+no place in normal work. They exist in this repo only for the `atlas_*` tools'
+own internals. Reaching for one means the equivalent tool was missed.
+
+### The phase law
+
+1. Do the whole task with `read` / `grep` / `glob` / `edit` / `write`.
+2. Re-read the files you changed and fix every error you can find by eye.
+3. Shell out ONCE, at the very end, for the gate.
+4. If the gate fails, fix the reported errors with `edit`, then shell once more.
+   Do NOT re-run the gate to inspect one line, and do NOT run it per error.
+
+### The stop rule
+
+A compile error from the gate is not an emergency. Read the whole error, fix it,
+and let the next gate confirm. Re-running after each fix costs minutes each time
+and buys nothing, because the errors were reported in one batch anyway.
+
+If a gate failure suggests a deeper contradiction — a spec that cannot compile,
+a signature that does not exist, an unknown that changes the design — STOP and
+report. That is not an excuse to shell; it is the opposite. Ask, then continue
+with the fix once answered.
 
 Corollary for commit messages: do not claim a verification that did not happen.
 State exactly which gate ran and what remains unverified.
