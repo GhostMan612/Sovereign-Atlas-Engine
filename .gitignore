@@ -22,16 +22,3 @@ google-services.json
 secrets/
 local/
 .tmp/
-
-# Device screenshots and recordings are evidence, not source. A 1.78 MB
-# orphaned screenshot sat committed at the repo root (54% of all tracked
-# bytes) with zero references anywhere. Keep evidence in blueprints/ when it
-# belongs to a record; keep scratch captures out of git.
-Screenshot_*.png
-screenshot_*.png
-*.mp4
-*.mov
-
-# Root .gitignore had no node_modules entry - it was only covered by
-# .opencode/.gitignore, so any new npm dep elsewhere would be committed.
-node_modules/

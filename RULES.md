@@ -54,8 +54,7 @@ No real person names, addresses, or personal data in committed code, tests, or f
 
 ### 1.6 BUILD BOUNDARY — HARD RULE
 - **NEVER run builds here unless explicitly asked.** No `assembleDebug`/`assembleRelease`, no emulator installs, no device runs. The human builds in Android Studio.
-- Permitted gates: `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest` (Gradle unit tests, host-side only, no device).
-  **⚠️ Corrected 2026-09-30.** This line said `:app:testDebugUnitTest`, which **cannot exist** — the app declares `productFlavors { play; enterprise }`, so AGP generates a `test<Variant>UnitTest` task per flavor. The old name produced a *task-not-found error that masquerades as a broken build*. Prefer the `atlas_gates` tool, which runs both flavors and parses real JUnit counts.
+- Permitted gates: `:app:testDebugUnitTest` (Gradle unit tests, host-side only, no device).
 - `androidTest/` connected tests exist for the human's manual/device runs — do NOT execute them here unless explicitly asked (they need a device).
 - Debug device failures from the human's pasted output — never by rebuilding locally.
 
@@ -111,7 +110,7 @@ Do not install software, modify system settings, or write outside the work area 
 4. Work the current phase; consult ADRs as needed
 
 ### 4.2 Session end (every session)
-1. `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest` green (host gate — see the flavor correction in §1.6)
+1. `:app:testDebugUnitTest` green (host gate)
 2. Update `SESSION_HANDOFF.md` (where we are + next actions)
 3. Tick affected checklists / track docs
 4. Commit by explicit path with a descriptive message. **No push unless told.**
@@ -125,6 +124,6 @@ Do not install software, modify system settings, or write outside the work area 
 Phases live in the blueprint first. Ship vertical slices; never let polish precede correctness gates. No engine rewrites to serve app convenience — change the adapter's placement, never weaken the contract.
 
 ### 4.5 Test posture law
-- **Always run here:** `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest` (fast, no build, no device — it is the contract proof).
+- **Always run here:** `:app:testDebugUnitTest` (fast, no build, no device — it is the contract proof).
 - **Only on explicit ask:** `androidTest/` connected tests (need a device). Keep the files rigorous; the human runs them against his own builds.
 - **Never weaken** a test to satisfy implementation. Fix the code; if the test is wrong, fix the test and say so.

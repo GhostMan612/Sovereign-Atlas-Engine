@@ -157,21 +157,11 @@ the pattern) and refuse silently-never.
 
 ## 6. Verification sketch (for implementation prompts later)
 
-> ⛔ **Timing corrected 2026-09-30.** This originally said "full suite + analyze
-> gates; Moto G smoke **per workstream**" — five workstreams, so five full-suite
-> runs inside one sprint. That is the mid-plan shell traffic `RULES.md` §3
-> forbids. **Gate once, at the end of the phase.** Device smoke is a separate
-> human-owned checklist, not something to interleave.
->
-> Canonical: implement all workstreams with `read`/`grep`/`edit`/`write`, then
-> **one** `atlas_gates` run, then the human's device pass.
-
 Golden vectors for stack/attribution/zoom math (extend `test/golden/`,
 never mint converter-style vectors); widget tests with semantic
-finders (toggle → layer presence; zoom clamps per
-provider; the six zoom-15 regressions; cold-start triple); then **one**
-full suite + analyze gate at the end of the phase; Moto G smoke as a
-single human-owned checklist afterwards; no pushes without
+finders per workstream (toggle → layer presence; zoom clamps per
+provider; the six zoom-15 regressions; cold-start triple); full suite
++ analyze gates; Moto G smoke per workstream; no pushes without
 authorization. Estimated shape (NOT a commitment): A ~2 sessions,
 B ~1, C ~1–2 (permission matrix), D ~1, E ~1 each.
 

@@ -18,7 +18,7 @@ Read in this order, and stop reading once the question is answered:
 3. The blueprint section or ADR in `docs/architecture/` for the task at hand.
 
 Then answer the specific question with the governing rule cited by number, for example
-"RULES 1.6: builds are not run here; the permitted gate is `:app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest`" (the app has product flavors, so the unflavored `testDebugUnitTest` task does not exist). If two
+"RULES 1.6: builds are not run here; the permitted gate is `:app:testDebugUnitTest`". If two
 documents conflict, say so and that RULES.md wins.
 
 Common questions worth answering precisely:

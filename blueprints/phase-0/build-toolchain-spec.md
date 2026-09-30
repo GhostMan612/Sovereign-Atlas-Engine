@@ -1,18 +1,5 @@
 # Phase 0.3 — Build Toolchain Spec (Evaluation, Nothing Installed)
 
-> ## ⛔ SUPERSEDED as a workflow mandate (2026-09-30)
->
-> This is a Phase-0 **evaluation** document. Its §2 was marked ATLAS-NORMATIVE,
-> which made "Static analysis runs on every change" read as a live rule — and it
-> is satisfied by **nothing**: there is no detekt, ktlint, spotless, `lint.xml`, or
-> `.editorconfig` in the repo. It was a spec for a tool that was never installed.
->
-> **The workflow law now lives in `RULES.md` §3: no intermediate shells, one
-> gate per phase.** Verification is end-of-phase, not per change. Do not run
-> analysis "on every change" on the strength of this file.
->
-> Canonical law: `RULES.md`. This file is historical.
-
 - **Status:** Evaluation only. No tool installed, initialized, or configured.
 - **Scope:** What each toolchain would own IF chosen; final selection is DEC-016 (workspace) and DEC-014 (language).
 
