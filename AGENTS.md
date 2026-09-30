@@ -29,11 +29,33 @@ Dart/Flutter lineage — read-only context, never a build target.
 .\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
+## Verification cadence (operator directive, 2026-09-29)
+
+**Batch every edit in a task, then shell out exactly ONCE at the end for the
+gates.** No intermediate compiles, no grep sweeps, no per-edit checks. The
+incremental-verification instinct in RULES.md 1A and 4.5 does NOT mean
+re-verifying after each line edit — it means the gate must actually run before
+any claim, not that it must run ten times.
+
+Reads and file edits are free. Only shell out for: the single end-of-task gate
+run, `adb` when device work is asked for, and git.
+
+The one exception, which is not an excuse to shell: if a task contains a
+contradiction where proceeding means guessing — a device serial that is not the
+test device, a spec that will not compile, a root cause with no evidence — STOP
+and report. That is cheaper than grinding, and it is what caught a wrong Carto
+query parameter and a commit pushed to the wrong branch. One question beats ten
+speculative edits.
+
+Corollary for commit messages: do not claim a verification that did not happen.
+State exactly which gate ran and what remains unverified.
+
 ## Session shape
 
 1. RULES.md → SESSION_HANDOFF.md → task blueprint/ADR → work
 2. Inspect before modifying; smallest coherent unit; tests/fixtures with it
-3. Gates green → handoff updated → commit by explicit path → **no push unless told**
+3. Gates green (once, at the end) → handoff updated → commit by explicit path →
+   **no push unless told**
 4. Slash commands in `.opencode/commands/`: `/verify`, `/gates`, `/probe`, `/smoke`,
    `/smoketest`, `/lawcheck`, `/citriage`, `/diagnose`
 
@@ -64,5 +86,7 @@ Subagents: `atlas-boundary-auditor`, `atlas-gatekeeper`, `atlas-device-smoker`,
   source but nothing draws.
 - `getSourceAs<GeoJsonSource>(id)` returns null instead of throwing, so a style push is a
   silent no-op.
-- CI `verify` is the only workflow. It has been red on `android-actions/setup-android` and is
-  now pinned; judge a red run by per-step conclusions, not the job conclusion.
+- CI `verify` is the only workflow. It has been green since run #72 (2026-09-29);
+  judge a red run by per-step conclusions, not the job conclusion. Reads of CI
+  output need a signed-in human: the step log is sign-in gated, the REST logs
+  endpoint returns 403, and artifact download returns 401.
