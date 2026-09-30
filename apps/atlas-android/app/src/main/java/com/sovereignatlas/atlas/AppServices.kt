@@ -12,6 +12,8 @@ import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
 import com.sovereignatlas.atlas.android.comms.MarkerStore
+import com.sovereignatlas.atlas.android.data.HISTORICAL_ASSET_DIR
+import com.sovereignatlas.atlas.android.data.LocalHistoricalAssetRepository
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
 import com.sovereignatlas.atlas.android.map.mbtiles.AndroidMetadataReader
 import com.sovereignatlas.atlas.android.map.mbtiles.MbtilesCache
@@ -75,6 +77,10 @@ class AppServices(private val context: Context) {
     val scrubState = TrackScrubState()
     val losState = LoSState()
     val routing = RoutingState()
+
+    val historicalAssets = LocalHistoricalAssetRepository(
+        directoryProvider = { appContext.getExternalFilesDir(HISTORICAL_ASSET_DIR) },
+    )
 
     val pliStore = PliStore(localDeviceUid = localDeviceUid, ttlMillis = 15 * 60 * 1000L)
 
