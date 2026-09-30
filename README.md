@@ -24,15 +24,17 @@ in `map/` + `ui/` + `location/` + `heading/`. Boundary rules in
 
 ## Verification
 
-Host gate (no device, no build):
+Host gate (no device, no build), **once per phase**:
 
 ```powershell
 # from apps/atlas-android with JAVA_HOME + ANDROID_HOME set
-.\gradlew.bat :app:testDebugUnitTest --console=plain
+# Prefer the atlas_gates tool: it sets both variables and reports real counts.
+.\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
-184/184 unit tests green at last gate. The human builds in Android
-Studio; device runs are explicit-ask only.
+There is no `:app:testDebugUnitTest` — the two product flavors make that name
+ambiguous, and Gradle fails on it. The human builds in Android Studio; device runs
+are explicit-ask only. See `AGENTS.md` for the one-gate-per-phase rule.
 
 ## Lineage
 

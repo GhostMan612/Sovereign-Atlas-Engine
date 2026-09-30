@@ -1,5 +1,11 @@
 # Camera + Layers Sprint — Proposal for Architect Review
 
+> **SUPERSEDED / CLOSED.** Retired 2026-09-30; see `DEC-023`. Its section 6 asked
+> for "full suite + analyze gates; Moto G smoke per workstream" across five
+> workstreams, which multiplies a full-suite run per workstream. A proposal doc
+> written before the phase law cannot re-license per-edit verification after the
+> fact. The gate is one run per phase; device smoke is the operator's checklist.
+
 - **Status:** IMPLEMENTED per the architect-issued execution order
   (all 8 open decisions applied). See `docs/architecture/DEC-023-*`
   and `SESSION_HANDOFF.md`. Device smoke PENDING.
@@ -155,7 +161,12 @@ the pattern) and refuse silently-never.
 8. Whether any of this belongs in the frozen master blueprint as a
    Phase entry, or stays app-track only.
 
-## 6. Verification sketch (for implementation prompts later)
+## 6. Verification sketch (for implementation prompts later) — SUPERSEDED
+
+**Do not implement the gate wording below.** It asks for a full suite per
+workstream across five workstreams, which is the per-edit verification loop the
+phase law in `AGENTS.md` exists to prevent. One gate run per phase via
+`atlas_gates`; device smoke stays the operator's checklist. Original text:
 
 Golden vectors for stack/attribution/zoom math (extend `test/golden/`,
 never mint converter-style vectors); widget tests with semantic

@@ -4,6 +4,35 @@
 > continuation point — state, facts, next moves. Evidence docs stay in
 > `blueprints/app-track/`; this file points at them, never duplicates them.
 
+> **SIZE WARNING — 1,607 lines / 90 KB (measured 2026-09-30).** It holds ~40
+> `##` blocks, and they are NOT all live state. At least these are superseded and
+> should be read only if chasing a specific past decision:
+> - line 41 `PRIOR CI TRIAGE` — self-marked "superseded by the entry above"
+> - line 104 onward, every dated 2026-09-27..29 entry — completed sprints, not
+>   current state. The historical-encyclopedia pipeline, CoT mapper, MBTiles
+>   manager, and routing sprint are all closed.
+> - line 1170 `Where we are (2026-09-11)` — the oldest live-tense block, 3 weeks
+>   stale and directly contradicted by the entries above it
+> - lines 1397-1544 `Slice 4A-D closure` and 1284-1396 native/Flutter-removal —
+>   closed, and the Flutter lineage is deleted
+>
+> The blocks that actually matter on a cold start are the FIRST block (CI state),
+> `Standing environment facts` (line 1545), `Verification posture` (line 1560),
+> and `Next actions` (line 1598). Everything else is evidence the per-slice
+> commits already carry. Proposed split is in the operator report; not done
+> without approval.
+
+## Verification posture correction (2026-09-30)
+
+- **`:app:testDebugUnitTest` does not exist.** Two product flavors make the
+  unflavored name ambiguous; Gradle fails with "task 'testDebugUnitTest' is
+  ambiguous in project ':app'". Confirmed by `--dry-run`. The real gate is
+  `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`.
+- **Counts in the entries below are stale by construction** — they were recorded
+  when each block was written. Do not quote a historical count as current; run
+  the gate.
+- The gate runs **once per phase** (`AGENTS.md` "The tool law"). Not per edit.
+
 ## CI IS GREEN — first-ever green run, root cause found (2026-09-29)
 
 - **Run #72 on `fix/ci-and-rendering` (`dbc9a08`) is the first green CI run in

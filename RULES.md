@@ -54,7 +54,8 @@ No real person names, addresses, or personal data in committed code, tests, or f
 
 ### 1.6 BUILD BOUNDARY — HARD RULE
 - **NEVER run builds here unless explicitly asked.** No `assembleDebug`/`assembleRelease`, no emulator installs, no device runs. The human builds in Android Studio.
-- Permitted gates: `:app:testDebugUnitTest` (Gradle unit tests, host-side only, no device).
+- Permitted gates: `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`, host-side only, no device, run **once per phase** via the `atlas_gates` tool.
+- **There is no `:app:testDebugUnitTest`.** The project declares two product flavors (`play`, `enterprise`), so the unflavored name is ambiguous and Gradle fails with `task 'testDebugUnitTest' is ambiguous in project ':app'` — verified 2026-09-30. Older revisions of this file and of `README.md` named it; those names are wrong and will look like a broken build rather than a wrong task name.
 - `androidTest/` connected tests exist for the human's manual/device runs — do NOT execute them here unless explicitly asked (they need a device).
 - Debug device failures from the human's pasted output — never by rebuilding locally.
 
@@ -88,8 +89,9 @@ Do not install software, modify system settings, or write outside the work area 
 
 | Law | Rule |
 |-----|------|
-| Shell is the last resort | A dedicated tool exists for nearly every read, search, and edit. Use `read`/`grep`/`glob`/`edit`/`write` and the `atlas_*` tools. NEVER reach for `Select-String`, `Get-Content`, `Get-ChildItem`, or `Test-Path` in a shell to do work a tool already does. |
-| One shell per phase | Shell out ONCE per task, at the end, for gates and git. Never per edit, never per compile error, never to re-inspect one line. A gate failure is fixed with editor tools, then confirmed by the next single gate run. |
+| Shell is the last resort | A dedicated tool exists for nearly every read, search, and edit. Use `read`/`grep`/`glob`/`edit`/`write` and the `atlas_*` tools. NEVER reach for a shell read/search/edit cmdlet (`Select-String`, `Get-Content`, `Get-ChildItem`, `Test-Path`, `cat`, `grep`, `rg`, `findstr`, `dir`, `ls`, `head`, `tail`, `more`, `type`, `sed`) or write cmdlet (`Set-Content`, `Add-Content`, `Out-File`, `echo >`) to do work a tool already does. These are denied in `.opencode/opencode.json`. |
+| One shell per phase | Shell out ONCE per task, at the end, for gates and git. Never per edit, never per compile error, never to re-inspect one line. A gate failure is fixed with editor tools, then confirmed by the next single gate run. If a phase genuinely cannot be completed without mid-flight verification, report it as a blocked item and wait — do not self-authorise repeated runs. |
+| Dead docs do not bind | `blueprints/MASTER_OPERATING_DIRECTIVE.md`, `blueprints/phase-0/build-toolchain-spec.md` §2, and `blueprints/camera-layers-sprint.md` §6 are RETIRED and marked as such in-file. They demanded a build per prompt and per-workstream gates, contradicting 1.6 and §1A. Read them as history; do not implement their gate wording. |
 | PowerShell edits | NEVER modify source through PS text pipelines (`Get-Content/-replace/Set-Content`, `Out-File`). Editor tools only; Python `encoding='utf-8'` if scripted. |
 | PowerShell binary pulls | NEVER pipe `adb pull` / binary output through PS pipes — write straight to file, no `Out-String`. |
 | adb flakiness | `adb kill-server` recovers most wedges. |
@@ -110,13 +112,13 @@ Do not install software, modify system settings, or write outside the work area 
 4. Work the current phase; consult ADRs as needed
 
 ### 4.2 Session end (every session)
-1. `:app:testDebugUnitTest` green (host gate)
+1. `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` green (host gate, one run)
 2. Update `SESSION_HANDOFF.md` (where we are + next actions)
 3. Tick affected checklists / track docs
 4. Commit by explicit path with a descriptive message. **No push unless told.**
 
 ### 4.3 Verification law
-- Host gate always: Gradle unit tests.
+- Host gate always: Gradle unit tests, **once per phase**.
 - Device claims ONLY from device runs (automated here when explicitly asked, or the human's pasted evidence). Screenshots alone never prove a behavior — instrumented assertions do.
 - Transport-blocked ≠ radio-off. No pixels-as-proof. No invented requirements.
 
@@ -124,6 +126,6 @@ Do not install software, modify system settings, or write outside the work area 
 Phases live in the blueprint first. Ship vertical slices; never let polish precede correctness gates. No engine rewrites to serve app convenience — change the adapter's placement, never weaken the contract.
 
 ### 4.5 Test posture law
-- **Always run here:** `:app:testDebugUnitTest` (fast, no build, no device — it is the contract proof).
+- **Always run here:** `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` (fast, no build, no device — it is the contract proof). One run per phase, never per edit.
 - **Only on explicit ask:** `androidTest/` connected tests (need a device). Keep the files rigorous; the human runs them against his own builds.
 - **Never weaken** a test to satisfy implementation. Fix the code; if the test is wrong, fix the test and say so.
