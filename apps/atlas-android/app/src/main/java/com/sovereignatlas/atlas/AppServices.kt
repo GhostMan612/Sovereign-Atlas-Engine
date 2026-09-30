@@ -80,6 +80,7 @@ class AppServices(private val context: Context) {
 
     val historicalAssets = LocalHistoricalAssetRepository(
         directoryProvider = { appContext.getExternalFilesDir(HISTORICAL_ASSET_DIR) },
+        metadataReader = AndroidMetadataReader(),
     )
 
     val pliStore = PliStore(localDeviceUid = localDeviceUid, ttlMillis = 15 * 60 * 1000L)

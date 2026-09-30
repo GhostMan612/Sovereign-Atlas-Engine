@@ -12,8 +12,33 @@ import kotlinx.coroutines.withContext
 
 data class MbtilesPack(val packId: String, val name: String, val description: String)
 
+/**
+ * Reads an MBTiles metadata table. Pure interface so the pack scanner and the
+ * historical catalogue can be tested on the JVM with a fake; the Android SQLite
+ * implementation lives in the adapter layer.
+ */
 interface MetadataReader {
     fun read(file: File): Pair<String, String>?
+
+    /**
+     * The complete `metadata` table as key-value pairs, or null when the file is
+     * not a readable MBTiles database.
+     *
+     * [read] is a two-field projection of this and is what the pack list needs.
+     * Consumers that want zoom range, format, or bounds need the whole table,
+     * and re-querying per field would reopen the database per field.
+     *
+     * The default derives a two-entry map from [read] so a reader that only cares
+     * about name and description keeps working without implementing this. A
+     * reader that overrides this should leave [read] alone unless the pair is
+     * genuinely derivable, otherwise the two can disagree.
+     */
+    fun readAll(file: File): Map<String, String>? = read(file)?.let { (name, description) ->
+        buildMap {
+            if (name.isNotEmpty()) put("name", name)
+            if (description.isNotEmpty()) put("description", description)
+        }
+    }
 }
 
 interface MbtilesScanner {

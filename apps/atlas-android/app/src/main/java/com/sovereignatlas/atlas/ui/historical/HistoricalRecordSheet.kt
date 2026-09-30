@@ -27,6 +27,7 @@ import com.sovereignatlas.atlas.core.HistoricalAsset
 import com.sovereignatlas.atlas.core.HistoricalLicense
 import com.sovereignatlas.atlas.core.HistoricalRecord
 import com.sovereignatlas.atlas.core.LandPatent
+import com.sovereignatlas.atlas.core.SanbornBlueprint
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,11 +113,7 @@ fun HistoricalAssetSheet(
 
             when (asset) {
                 is LandPatent -> PatentFields(asset)
-                else -> Text(
-                    text = asset.id,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                is SanbornBlueprint -> BlueprintFields(asset)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -142,6 +139,24 @@ private fun PatentFields(patent: LandPatent) {
         patent.legalDescription.orPlaceholder(),
     )
 }
+
+@Composable
+private fun BlueprintFields(blueprint: SanbornBlueprint) {
+    DetailRow("Sheet", blueprint.sheet)
+    DetailRow("Edition", blueprint.edition.toString())
+    DetailRow(
+        "Zoom range",
+        if (blueprint.minZoom == null || blueprint.maxZoom == null) {
+            NOT_RECORDED
+        } else {
+            "z${formatZoom(blueprint.minZoom)} to z${formatZoom(blueprint.maxZoom)}"
+        },
+    )
+    DetailRow("Format", blueprint.format.orPlaceholder())
+}
+
+private fun formatZoom(zoom: Float): String =
+    if (zoom == zoom.toInt().toFloat()) zoom.toInt().toString() else zoom.toString()
 
 @Composable
 private fun AssetProvenance(asset: HistoricalAsset) {

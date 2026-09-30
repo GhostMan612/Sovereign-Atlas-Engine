@@ -99,6 +99,12 @@ data class LandPatent(
  * Sanborn sheets are raster and hand-drafted, so an adapter serves this from an
  * MBTiles pack. [edition] and [sheet] locate the leaf on the volume because a
  * city is typically split across many sheets.
+ *
+ * [minZoom] / [maxZoom] / [format] / [filePath] carry the raster pack's own
+ * metadata, which is what the tile pipeline needs to decide whether this asset
+ * can serve the current camera. They are nullable because a blueprint may be
+ * described by a GeoJSON record with no pack behind it, and an absent zoom range
+ * is a real state: it must not be read as 0..0.
  */
 data class SanbornBlueprint(
     override val id: String,
@@ -111,6 +117,19 @@ data class SanbornBlueprint(
     val edition: Int,
     /** Sheet identifier as printed on the leaf. */
     val sheet: String,
+    /** Lowest zoom level the pack contains, or null when unrecorded. */
+    val minZoom: Float? = null,
+    /** Highest zoom level the pack contains, or null when unrecorded. */
+    val maxZoom: Float? = null,
+    /** MBTiles format, e.g. `png` or `jpg`. Null when unrecorded. */
+    val format: String? = null,
+    /**
+     * Absolute path of the pack backing this blueprint, or empty when the asset
+     * has no pack behind it. Never a fabricated path: the tile pipeline resolves
+     * it, and an invented path fails as "missing pack" rather than as a wrong
+     * file.
+     */
+    val filePath: String = "",
 ) : HistoricalAsset {
     init {
         require(id.isNotBlank()) { "HistoricalAsset id must not be blank." }
