@@ -464,6 +464,15 @@ fun AtlasMapScreen(
                     // Compose HUD owns compass + scale: native widgets stay off.
                     isCompassEnabled = false
                 }
+                // Global camera ceiling, pinned once here. The MapLibre default is
+                // 22.0; 24.0 permits 4 levels of overzoom past the Carto source
+                // max of 20, which is 2^4 = 16x linear magnification before tiles
+                // stop being readable. The SDK hard cap is 25.5 and this stays
+                // under it, so no silent clamping occurs. This is GLOBAL, so it
+                // also governs offline MBTiles packs whose TileSet maxZoom is
+                // unset; that path is expected to request literal z24 tiles and
+                // is called out as a known follow-up in the commit message.
+                map.setMaxZoomPreference(24.0)
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         services.behavior.markUserInteracted()
@@ -2182,8 +2191,14 @@ fun ensureBaseTemplate(style: Style, template: String, minZoom: Int, maxZoom: In
     tileSet.maxZoom = maxZoom.toFloat()
     style.addSource(RasterSource(BASE_SOURCE_ID, tileSet, 256))
     val layer = RasterLayer(BASE_LAYER_ID, BASE_SOURCE_ID)
+    // minZoom stays, maxZoom is deliberately NOT set. A layer maxZoom is a hard
+    // render cutoff, not a hint: with it set to the provider max the base layer
+    // vanished at zoom 20 while the camera continued past it, which presented as
+    // a black screen with the overlays still drawing. MapLibre overzooms the
+    // source tiles above tileSet.maxZoom, so leaving the layer unconstrained
+    // makes the raster stretch instead of self-culling. Only this base layer is
+    // affected; MGRS, waypoint and route layers keep their own limits.
     layer.minZoom = minZoom.toFloat()
-    layer.maxZoom = maxZoom.toFloat()
     if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
         style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
     } else {
