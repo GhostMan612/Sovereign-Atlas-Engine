@@ -125,6 +125,8 @@ import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import androidx.core.content.ContextCompat
 import com.sovereignatlas.atlas.map.cot.CotGeoJsonMapper
 import com.sovereignatlas.atlas.map.historical.HistoricalFeatureMapper
+import com.sovereignatlas.atlas.map.historical.toMapLibreFeatureCollection
+import com.sovereignatlas.atlas.core.LandPatent
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
@@ -298,6 +300,41 @@ fun AtlasMapScreen(
     val onHaptic: () -> Unit = {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
+    // Refreshes patent parcels for the current viewport. Reading the catalogue
+    // touches the filesystem, so the query runs on Dispatchers.IO and the result
+    // is handed back to pushFeatures, which the MapLibre style owns. Bounds are
+    // clamped before use: a projection can report a viewport that wraps the
+    // antimeridian, which AtlasBoundingBox encodes as west > east, and the
+    // repository handles that shape, but an empty or non-finite projection during
+    // a style swap must not be turned into a query that matches nothing.
+    val refreshHistoricalPatents: (MapLibreMap) -> Unit = { map ->
+        mapScope.launch {
+            val region = map.projection.visibleRegion.latLngBounds
+            val south = region.latitudeSouth
+            val west = region.longitudeWest
+            val north = region.latitudeNorth
+            val east = region.longitudeEast
+            val edges = listOf(south, west, north, east)
+            if (edges.any { !it.isFinite() }) return@launch
+            if (south > north || north > 90.0 || south < -90.0) return@launch
+            val box = AtlasBoundingBox(
+                south = south.coerceIn(-90.0, 90.0),
+                west = west.coerceIn(-180.0, 180.0),
+                north = north.coerceIn(-90.0, 90.0),
+                east = east.coerceIn(-180.0, 180.0),
+            )
+            val patents = withContext(Dispatchers.IO) {
+                services.historicalAssets.getAssets(box).filterIsInstance<LandPatent>()
+            }
+            // Push an empty collection rather than skipping when nothing matched:
+            // leaving the previous viewport's parcels on screen would show parcels
+            // outside the visible area as if they were in it.
+            val collection = patents.toMapLibreFeatureCollection()
+            styleRef.value?.let { style ->
+                pushFeatures(style, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE, collection)
+            }
+        }
+    }
     val measureActive = remember { mutableStateOf(services.measure.isActive()) }
     val measureSnapshot = remember {
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
@@ -428,6 +465,10 @@ fun AtlasMapScreen(
             services.losState.result.value,
         )
         applyOverlayVisibility(style, showGraticule.value, showMgrsGrid.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
+        // Patents are pushed here as well as on camera idle: a style reload
+        // recreates an empty source, and a camera that never moves again would
+        // otherwise leave the viewport with no parcels at all.
+        refreshHistoricalPatents(map)
         pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
         pushFeatures(
             style,
@@ -588,6 +629,7 @@ fun AtlasMapScreen(
                     styleRef.value?.let { style ->
                         if (showGraticule.value) pushGraticule(map, style)
                     }
+                    refreshHistoricalPatents(map)
                 }
                 val initialJson = services.maps.activeMap.value?.let { offline ->
                     buildMbtilesStyleJson(context, offline.absolutePath)

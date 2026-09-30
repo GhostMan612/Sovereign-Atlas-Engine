@@ -89,6 +89,7 @@ final class MainActivity : ComponentActivity() {
             multicastListener = appServices.multicastListener,
             atakBroadcaster = appServices.atakBroadcaster,
             mbtilesScanner = appServices.mbtilesScanner,
+            historicalAssets = appServices.historicalAssets,
         )
     }
 

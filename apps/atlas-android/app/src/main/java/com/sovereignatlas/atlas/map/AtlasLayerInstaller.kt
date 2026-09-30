@@ -57,6 +57,9 @@ object AtlasLayerIds {
     const val OPS_LINE_LAYER = "ops-line-layer"
     const val HISTORICAL_FILL_PREFIX = "historical-fill-"
     const val HISTORICAL_LINE_PREFIX = "historical-line-"
+    const val HISTORICAL_PATENTS_SOURCE = "historical-patents-source"
+    const val HISTORICAL_PATENTS_FILL = "historical-patents-fill"
+    const val HISTORICAL_PATENTS_BORDER = "historical-patents-border"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -81,6 +84,15 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.GRATICULE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.RINGS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.POSITION_SOURCE))
+    // Synchronous update: the patents collection is pushed wholesale on camera
+    // idle, and a deferred update leaves a visible gap between the camera settling
+    // and the parcels appearing.
+    style.addSource(
+        GeoJsonSource(
+            AtlasLayerIds.HISTORICAL_PATENTS_SOURCE,
+            GeoJsonOptions().withSynchronousUpdate(true),
+        ),
+    )
     style.addSource(GeoJsonSource(AtlasLayerIds.GOTO_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LINE_SOURCE))
@@ -175,6 +187,24 @@ fun installAtlasLayers(style: Style) {
             .withProperties(
                 PropertyFactory.lineWidth(2.0f),
                 PropertyFactory.lineOpacity(0.9f),
+            ),
+    )
+    // Patent parcels sit above the terrain/raster basemap and below every
+    // navigational overlay. addLayer is used deliberately: plain addLayer is
+    // the form verified to paint on device, and addLayerBelow has produced
+    // layers present in style.layers that never render.
+    style.addLayer(
+        FillLayer(AtlasLayerIds.HISTORICAL_PATENTS_FILL, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE)
+            .withProperties(
+                PropertyFactory.fillColor("#C8912B"),
+                PropertyFactory.fillOpacity(0.3f),
+            ),
+    )
+    style.addLayer(
+        LineLayer(AtlasLayerIds.HISTORICAL_PATENTS_BORDER, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE)
+            .withProperties(
+                PropertyFactory.lineColor("#8A5F13"),
+                PropertyFactory.lineWidth(2.0f),
             ),
     )
     // These three were previously added below WAYPOINTS_LAYER. Both forms render

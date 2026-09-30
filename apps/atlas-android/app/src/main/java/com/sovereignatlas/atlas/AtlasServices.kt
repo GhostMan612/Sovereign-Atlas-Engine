@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas
 
+import com.sovereignatlas.atlas.core.HistoricalAssetRepository
 import com.sovereignatlas.atlas.core.KeyProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
@@ -60,6 +61,7 @@ class AtlasServices(
     val multicastListener: AtakMulticastListener,
     val atakBroadcaster: AtakBroadcaster,
     val mbtilesScanner: MbtilesScanner,
+    val historicalAssets: HistoricalAssetRepository,
 ) {
     val lineOfSightEngine = LineOfSightEngine(
         elevationProvider = object : ElevationProvider {
