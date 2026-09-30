@@ -118,7 +118,7 @@ object OfflineBuiltinProviders {
     val cartoPositron = OfflineProviderDescriptor(
         id = "carto-positron",
         title = "CARTO Positron",
-        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png?key={key}",
         params = mapOf("s" to "a"),
         minZoom = 0,
         maxZoom = 20,
@@ -129,7 +129,7 @@ object OfflineBuiltinProviders {
     val cartoDarkMatter = OfflineProviderDescriptor(
         id = "carto-dark-matter",
         title = "CARTO Dark Matter",
-        urlTemplate = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key={key}",
         params = mapOf("s" to "a"),
         minZoom = 0,
         maxZoom = 20,

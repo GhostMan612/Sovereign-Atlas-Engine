@@ -52,8 +52,13 @@ final class OfflineProvidersTest {
 
     @Test
     fun cartoPositronResolvesWithSubdomain() {
+        // The {key} placeholder survives resolveTileUrl on purpose: that
+        // function is the offline prefetch path, and both CARTO descriptors set
+        // prefetchAllowed = false, so no prefetch ever requests a URL carrying an
+        // unsubstituted placeholder. The live map path substitutes the real key
+        // in AtlasMap.ensureBaseLayer before the template reaches MapLibre.
         assertEquals(
-            "https://a.basemaps.cartocdn.com/light_all/10/1/2.png",
+            "https://a.basemaps.cartocdn.com/light_all/10/1/2.png?key={key}",
             resolveTileUrl(OfflineBuiltinProviders.cartoPositron, 10, 1, 2),
         )
     }

@@ -464,6 +464,15 @@ fun AtlasMapScreen(
                     // Compose HUD owns compass + scale: native widgets stay off.
                     isCompassEnabled = false
                 }
+                // Global camera ceiling, pinned once here. The MapLibre default is
+                // 22.0; 24.0 permits 4 levels of overzoom past the Carto source
+                // max of 20, which is 2^4 = 16x linear magnification before tiles
+                // stop being readable. The SDK hard cap is 25.5 and this stays
+                // under it, so no silent clamping occurs. This is GLOBAL, so it
+                // also governs offline MBTiles packs whose TileSet maxZoom is
+                // unset; that path is expected to request literal z24 tiles and
+                // is called out as a known follow-up in the commit message.
+                map.setMaxZoomPreference(24.0)
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         services.behavior.markUserInteracted()
@@ -2166,9 +2175,11 @@ fun ensureBaseLayer(style: Style, providerId: String, key: String? = null) {
     for ((param, value) in descriptor.params) {
         template = template.replace("{$param}", value)
     }
-    // Key-aware templates substitute {key}; current CARTO basemaps are
-    // keyless, so a key arrival re-applies the identical source — the
-    // reactive path exists so key rotation takes effect without camera loss.
+    // {key} becomes the query parameter of the provider template, for example
+    // ".../{z}/{x}/{y}.png?key={key}" for CARTO. A null key leaves the parameter
+    // empty, which still resolves to a valid watermarked request rather than a
+    // malformed URL, and the reactive LaunchedEffect above re-applies the source
+    // when a key arrives so no app restart is needed.
     template = template.replace("{key}", key ?: "")
     ensureBaseTemplate(style, template, descriptor.minZoom, descriptor.maxZoom)
 }
@@ -2180,8 +2191,14 @@ fun ensureBaseTemplate(style: Style, template: String, minZoom: Int, maxZoom: In
     tileSet.maxZoom = maxZoom.toFloat()
     style.addSource(RasterSource(BASE_SOURCE_ID, tileSet, 256))
     val layer = RasterLayer(BASE_LAYER_ID, BASE_SOURCE_ID)
+    // minZoom stays, maxZoom is deliberately NOT set. A layer maxZoom is a hard
+    // render cutoff, not a hint: with it set to the provider max the base layer
+    // vanished at zoom 20 while the camera continued past it, which presented as
+    // a black screen with the overlays still drawing. MapLibre overzooms the
+    // source tiles above tileSet.maxZoom, so leaving the layer unconstrained
+    // makes the raster stretch instead of self-culling. Only this base layer is
+    // affected; MGRS, waypoint and route layers keep their own limits.
     layer.minZoom = minZoom.toFloat()
-    layer.maxZoom = maxZoom.toFloat()
     if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
         style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
     } else {
@@ -2263,7 +2280,14 @@ fun ensureMbtilesPackLayer(style: Style, services: AtlasServices, packId: String
     val sourceId = mbtilesSourceId(packId)
     if (style.getSource(sourceId) != null) return
     val url = services.tiles.tileUrl(packId) ?: return
-    style.addSource(RasterSource(sourceId, TileSet("2.2.0", url)))
+    // The pack's own zMax must be on the TileSet, otherwise the source maxzoom is
+    // unset and MapLibre requests literal z24 tiles for this pack instead of
+    // overzooming its deepest available tile, which renders black at the global
+    // camera ceiling. Overlook the lookup failing and leave maxzoom unset, which
+    // is the previous behaviour.
+    val tileSet = TileSet("2.2.0", url)
+    services.offline.lookup(packId)?.zMax?.let { tileSet.maxZoom = it.toFloat() }
+    style.addSource(RasterSource(sourceId, tileSet))
     val layer = RasterLayer(mbtilesLayerId(packId), sourceId)
     if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
         style.addLayerBelow(layer, AtlasLayerIds.WAYPOINTS_LAYER)
