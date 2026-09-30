@@ -15,6 +15,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
@@ -86,7 +87,12 @@ final class AndroidKeyProviderTest {
                 awaitValue(first.provider, "persist-key")
             }
         } finally {
+            // cancel() is only a request; the DataStore actor and the stateIn
+            // collector may still be touching the file when the next instance
+            // boots. Joining the scope's Job makes teardown actually complete
+            // before the second harness is constructed.
             first.scope.cancel()
+            runBlocking { first.scope.coroutineContext[Job]?.join() }
         }
         resetEncryptedDataStoreForTests()
         val second = harnessOver(root, aead)
