@@ -363,7 +363,7 @@ const tools = {
         .describe("File name for action=screenshot, e.g. smoke1.png."),
     },
     async execute(args, ctx) {
-      const device = "adb-ZT4222BMWN-ux3EQE._adb-tls-connect._tcp"
+      const device = "7040016025040287"
       const pkg = "com.sovereignatlas.atlas"
       const adb = (a, t) => run("adb", ["-s", device].concat(a), ctx.worktree, t || 300000)
       const short = (r) => (r.stdout + r.stderr).trim() || "exit=" + r.code

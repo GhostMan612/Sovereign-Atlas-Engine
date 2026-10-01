@@ -3,8 +3,12 @@
 // The Future Dictates the Past and the Past is Always Present.
 // ============================================================
 
-package com.sovereignatlas.atlas.offline
+package com.sovereignatlas.atlas.android.offline
 
+import com.sovereignatlas.atlas.offline.BASEMAP_SESSION_TILES
+import com.sovereignatlas.atlas.offline.MbtilesTile
+import com.sovereignatlas.atlas.offline.MbtilesTileSource
+import com.sovereignatlas.atlas.offline.xyzToTmsY
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -13,6 +17,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+/**
+ * Integration test for [PackTileServer], which binds a real loopback port and
+ * serves real HTTP responses.
+ *
+ * Moved here from `offline/` by ADR-006 because the socket behaviour IS the
+ * subject under test. Rewriting these against a `LocalTileServer` fake would have
+ * tested the fake. They stay JVM unit tests rather than moving to `androidTest`,
+ * since `java.net` needs no device and RULES 4.5 reserves connected tests for an
+ * explicit ask.
+ */
 
 private fun get(url: String): Pair<Int, ByteArray> {
     val connection = URL(url).openConnection() as HttpURLConnection

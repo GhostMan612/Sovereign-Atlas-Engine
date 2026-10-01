@@ -3,7 +3,7 @@
 // The Future Dictates the Past and the Past is Always Present.
 // ============================================================
 
-package com.sovereignatlas.atlas.offline
+package com.sovereignatlas.atlas.android.offline
 
 import java.io.File
 import java.net.HttpURLConnection
@@ -13,6 +13,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+/**
+ * Integration test for the per-bucket session quota in [PackTileServer].
+ *
+ * Moved here from `offline/` by ADR-006 for the same reason as
+ * [PackTileServerTest]: the quota is enforced while serving real requests, so a
+ * fake transport would not exercise the code path being tested. Kept as a JVM
+ * unit test; no device required.
+ */
 
 private fun quotaGet(url: String): Int {
     val connection = URL(url).openConnection() as HttpURLConnection

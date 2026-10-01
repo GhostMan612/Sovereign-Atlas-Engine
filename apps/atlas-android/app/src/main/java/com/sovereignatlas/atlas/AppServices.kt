@@ -29,8 +29,8 @@ import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
+import com.sovereignatlas.atlas.android.offline.PackTileServer
 import com.sovereignatlas.atlas.offline.LocalTileServer
-import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.offline.mbtiles.DefaultMbtilesScanner
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
 import com.sovereignatlas.atlas.track.TrackRepository

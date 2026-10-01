@@ -3,8 +3,17 @@
 // The Future Dictates the Past and the Past is Always Present.
 // ============================================================
 
-package com.sovereignatlas.atlas.offline
+package com.sovereignatlas.atlas.android.offline
 
+import com.sovereignatlas.atlas.offline.BASEMAP_SESSION_TILES
+import com.sovereignatlas.atlas.offline.DEM_DIR_NAME
+import com.sovereignatlas.atlas.offline.DEM_SESSION_TILES
+import com.sovereignatlas.atlas.offline.DemTileStore
+import com.sovereignatlas.atlas.offline.GLOBAL_TILE_HARD_CAP
+import com.sovereignatlas.atlas.offline.LocalTileServer
+import com.sovereignatlas.atlas.offline.MbtilesTile
+import com.sovereignatlas.atlas.offline.MbtilesTileSource
+import com.sovereignatlas.atlas.offline.TileBucket
 import java.io.File
 import java.net.ServerSocket
 import java.net.Socket
@@ -16,11 +25,14 @@ val MBTILES_TILE_EXTENSIONS = listOf(".png", ".pbf")
 /**
  * Loopback tile server over `java.net.Socket`.
  *
- * Implements the pure [LocalTileServer] contract (ADR-006). This class stays in
- * the pure tier for Phase 1 so that callers move to the interface before the
- * implementation relocates; Phase 2 moves it to `android/` unchanged. The
- * interface is a strict subset of what this class already exposed, so no method
- * here is new and no signature changed.
+ * Relocated here from the pure `offline/` tier by ADR-006, which completes the
+ * extraction: `offline/` now holds no networking at all. This class implements the
+ * pure [LocalTileServer] contract, so no caller names it.
+ *
+ * The quota constants it defaults to stay in `offline/` and are imported above.
+ * Those are session policy - how many tiles a session may serve - and they belong
+ * with the pack bookkeeping that defines them, not with the transport that
+ * enforces them.
  */
 class PackTileServer(
     private val packsDir: () -> File,

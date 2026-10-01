@@ -7,9 +7,15 @@ package com.sovereignatlas.atlas.offline
 
 import com.sovereignatlas.atlas.field.JournalJson
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
+/**
+ * Per-tile network timeout.
+ *
+ * This is policy - how long the app is willing to wait for one tile - so it stays
+ * in the pure tier by ADR-006 and is imported by the `android/` transport rather
+ * than being redefined there. It is deliberately not a constructor parameter of
+ * this downloader: it belongs to the request, not to the loop that counts tiles.
+ */
 const val PER_TILE_TIMEOUT_MS = 30_000
 
 sealed interface DownloadResult {
@@ -19,12 +25,19 @@ sealed interface DownloadResult {
 }
 
 /**
- * Tile acquisition over an injected `chunk` function.
+ * Tile acquisition over an injected `chunk` function. Pure: no `java.net`, no
+ * sockets, no HTTP.
  *
  * Implements the pure [OfflineMapDownloader] contract (ADR-006). The `chunk`
- * parameter is the transport seam: production supplies [httpChunk], which holds
- * the `java.net` call, while tests supply a lambda and never open a socket. Phase
- * 2 moves `httpChunk` to the `android/` tier; this download loop does not change.
+ * parameter is the transport seam. Production supplies
+ * `com.sovereignatlas.atlas.android.offline.AndroidHttpDownloader::httpChunk`;
+ * tests supply a lambda and never open a connection. The `java.net`
+ * implementation used to live in this file's companion object and was relocated
+ * to the `android/` tier, leaving this class holding only the download loop and
+ * its policy.
+ *
+ * The loop mutates [OfflinePackRecord] as it goes, so a caller can render progress
+ * and a crash leaves a trail rather than a silent partial pack.
  */
 class OfflineDownloader(
     private val chunk: (descriptor: OfflineProviderDescriptor, z: Int, x: Int, y: Int) -> ByteArray?,
@@ -107,35 +120,5 @@ class OfflineDownloader(
         if (minIntervalMs <= 0L || lastRequestAt <= 0L) return
         val wait = minIntervalMs - (clockMs() - lastRequestAt)
         if (wait > 0) sleeper(wait)
-    }
-
-    companion object {
-        fun httpChunk(
-            descriptor: OfflineProviderDescriptor,
-            z: Int,
-            x: Int,
-            y: Int,
-        ): ByteArray? {
-            val raw = resolveTileUrl(descriptor, z, x, y) ?: return null
-            val connection = URL(raw).openConnection() as HttpURLConnection
-            try {
-                connection.connectTimeout = PER_TILE_TIMEOUT_MS
-                connection.readTimeout = PER_TILE_TIMEOUT_MS
-                connection.setRequestProperty(
-                    "User-Agent",
-                    descriptor.headers["User-Agent"] ?: "SovereignAtlasEngine/0.1.0",
-                )
-                for ((key, value) in descriptor.headers) {
-                    if (!key.equals("User-Agent", ignoreCase = true)) {
-                        connection.setRequestProperty(key, value)
-                    }
-                }
-                connection.connect()
-                if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-                return connection.inputStream.use { it.readBytes() }
-            } finally {
-                connection.disconnect()
-            }
-        }
     }
 }

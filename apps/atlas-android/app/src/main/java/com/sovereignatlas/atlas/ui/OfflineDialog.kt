@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.core.MapNameFormatter
+import com.sovereignatlas.atlas.android.offline.AndroidHttpDownloader
 import com.sovereignatlas.atlas.offline.DownloadResult
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.OfflineDownloader
@@ -199,11 +200,13 @@ private fun startDownload(
     pack.lifecycle = OfflinePackLifecycle.downloading
     store.notifyChanged()
     thread(isDaemon = true) {
-        // Typed as the pure contract (ADR-006). There is no DI binding for the
-        // downloader yet - it is constructed at its single call site - so this local
-        // is where the interface earns its keep. httpChunk is still named here
-        // because that companion function holds the java.net call until Phase 2.
-        val downloader: OfflineMapDownloader = OfflineDownloader(OfflineDownloader::httpChunk)
+        // Typed as the pure contract (ADR-006). The transport is supplied here, at the
+        // one place that knows it is running on a device: AndroidHttpDownloader is
+        // the entire java.net surface of the offline path. The composition root
+        // still has no downloader binding - it is constructed at its single call
+        // site - and that is unchanged by the relocation.
+        val downloader: OfflineMapDownloader =
+            OfflineDownloader(AndroidHttpDownloader::httpChunk)
         val result = downloader.download(
             record = pack,
             descriptor = provider,
