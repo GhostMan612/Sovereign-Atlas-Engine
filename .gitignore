@@ -5,6 +5,7 @@ pubspec.lock
 !apps/atlas/pubspec.lock
 build/
 coverage/
+node_modules/
 .idea/
 .vscode/
 *.iml
@@ -22,3 +23,5 @@ google-services.json
 secrets/
 local/
 .tmp/
+iim_statement.json
+iim_patents.geojson
