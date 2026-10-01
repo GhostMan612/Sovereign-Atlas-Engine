@@ -13,13 +13,22 @@ import kotlin.concurrent.thread
 
 val MBTILES_TILE_EXTENSIONS = listOf(".png", ".pbf")
 
+/**
+ * Loopback tile server over `java.net.Socket`.
+ *
+ * Implements the pure [LocalTileServer] contract (ADR-006). This class stays in
+ * the pure tier for Phase 1 so that callers move to the interface before the
+ * implementation relocates; Phase 2 moves it to `android/` unchanged. The
+ * interface is a strict subset of what this class already exposed, so no method
+ * here is new and no signature changed.
+ */
 class PackTileServer(
     private val packsDir: () -> File,
     private val port: Int = 0,
     private val basemapQuota: Int = BASEMAP_SESSION_TILES,
     private val demQuota: Int = DEM_SESSION_TILES,
     private val globalCap: Int = GLOBAL_TILE_HARD_CAP,
-) {
+) : LocalTileServer {
     private var socket: ServerSocket? = null
     private val running = AtomicBoolean(false)
     private var baseHits = 0L
@@ -28,22 +37,22 @@ class PackTileServer(
     // MBTiles-backed DEM source, injected when a DEM map is activated.
     // Takes precedence over the flat dem/ directory on the /dem/ route.
     @Volatile
-    var demStore: DemTileStore? = null
+    override var demStore: DemTileStore? = null
 
     @Volatile
-    var mbtilesStore: MbtilesTileSource? = null
+    override var mbtilesStore: MbtilesTileSource? = null
 
-    fun port(): Int = socket?.localPort ?: -1
+    override fun port(): Int = socket?.localPort ?: -1
 
-    fun isRunning(): Boolean = running.get()
+    override fun isRunning(): Boolean = running.get()
 
-    fun tileHits(): Long = baseHits + demHits
+    override fun tileHits(): Long = baseHits + demHits
 
-    fun basemapHits(): Long = baseHits
+    override fun basemapHits(): Long = baseHits
 
-    fun demHits(): Long = demHits
+    override fun demHits(): Long = demHits
 
-    fun start(): Int {
+    override fun start(): Int {
         if (running.get()) return port()
         val server = ServerSocket(port, 4)
         socket = server
@@ -61,7 +70,7 @@ class PackTileServer(
         return server.localPort
     }
 
-    fun stop() {
+    override fun stop() {
         running.set(false)
         try {
             socket?.close()
@@ -72,19 +81,19 @@ class PackTileServer(
         mbtilesStore?.shutdown()
     }
 
-    fun tileUrl(packId: String): String? {
+    override fun tileUrl(packId: String): String? {
         val bound = port()
         if (bound <= 0) return null
         return "http://127.0.0.1:$bound/$packId/{z}/{x}/{y}.png"
     }
 
-    fun demTileUrl(): String? {
+    override fun demTileUrl(): String? {
         val bound = port()
         if (bound <= 0) return null
         return "http://127.0.0.1:$bound/dem/{z}/{x}/{y}.png"
     }
 
-    fun demAvailable(): Boolean {
+    override fun demAvailable(): Boolean {
         return File(packsDir(), DEM_DIR_NAME).isDirectory
     }
 

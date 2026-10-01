@@ -18,13 +18,21 @@ sealed interface DownloadResult {
     data class Failed(val detail: String, val tiles: Int, val bytes: Long) : DownloadResult
 }
 
+/**
+ * Tile acquisition over an injected `chunk` function.
+ *
+ * Implements the pure [OfflineMapDownloader] contract (ADR-006). The `chunk`
+ * parameter is the transport seam: production supplies [httpChunk], which holds
+ * the `java.net` call, while tests supply a lambda and never open a socket. Phase
+ * 2 moves `httpChunk` to the `android/` tier; this download loop does not change.
+ */
 class OfflineDownloader(
     private val chunk: (descriptor: OfflineProviderDescriptor, z: Int, x: Int, y: Int) -> ByteArray?,
     private val minIntervalMs: Long = 500L,
     private val sleeper: (Long) -> Unit = { Thread.sleep(it) },
     private val clockMs: () -> Long = { System.currentTimeMillis() },
-) {
-    fun download(
+) : OfflineMapDownloader {
+    override fun download(
         record: OfflinePackRecord,
         descriptor: OfflineProviderDescriptor,
         dir: File,

@@ -29,6 +29,7 @@ import com.sovereignatlas.atlas.geo.location.LocationEngine
 import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.offline.PACK_JOURNAL_DIR
+import com.sovereignatlas.atlas.offline.LocalTileServer
 import com.sovereignatlas.atlas.offline.PackTileServer
 import com.sovereignatlas.atlas.offline.mbtiles.DefaultMbtilesScanner
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
@@ -52,7 +53,12 @@ class AppServices(private val context: Context) {
 
     val offline = OfflineStore(directoryProvider = { appContext.filesDir })
 
-    val tiles = PackTileServer(packsDir = { File(appContext.filesDir, PACK_JOURNAL_DIR) }).also { server ->
+    // The composition root is the ONE place that names PackTileServer. Everything
+    // downstream sees LocalTileServer (ADR-006), so Phase 2 can relocate the
+    // socket implementation to android/ without touching a single caller.
+    val tiles: LocalTileServer = PackTileServer(
+        packsDir = { File(appContext.filesDir, PACK_JOURNAL_DIR) },
+    ).also { server ->
         // Single root, on purpose: MbtilesCache's containment guard is what stops a
         // pack name from walking out of the journal. Historical Sanborn packs live in
         // external storage and are read by MapLibre's own mbtiles:// scheme, not

@@ -48,6 +48,7 @@ import com.sovereignatlas.atlas.core.MapNameFormatter
 import com.sovereignatlas.atlas.offline.DownloadResult
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.OfflineDownloader
+import com.sovereignatlas.atlas.offline.OfflineMapDownloader
 import com.sovereignatlas.atlas.offline.OfflineMapKind
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.offline.OfflinePackLifecycle
@@ -198,7 +199,11 @@ private fun startDownload(
     pack.lifecycle = OfflinePackLifecycle.downloading
     store.notifyChanged()
     thread(isDaemon = true) {
-        val downloader = OfflineDownloader(OfflineDownloader::httpChunk)
+        // Typed as the pure contract (ADR-006). There is no DI binding for the
+        // downloader yet - it is constructed at its single call site - so this local
+        // is where the interface earns its keep. httpChunk is still named here
+        // because that companion function holds the java.net call until Phase 2.
+        val downloader: OfflineMapDownloader = OfflineDownloader(OfflineDownloader::httpChunk)
         val result = downloader.download(
             record = pack,
             descriptor = provider,

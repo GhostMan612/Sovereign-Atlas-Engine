@@ -32,7 +32,7 @@ import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.offline.OfflineStore
-import com.sovereignatlas.atlas.offline.PackTileServer
+import com.sovereignatlas.atlas.offline.LocalTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
 
 class AtlasServices(
@@ -43,7 +43,9 @@ class AtlasServices(
     val behavior: MapBehavior,
     val offline: OfflineStore,
     val heading: HeadingService,
-    val tiles: PackTileServer,
+    // Typed as the pure contract, not the socket implementation (ADR-006). The
+    // composition root below is the only place that names PackTileServer.
+    val tiles: LocalTileServer,
     val keys: KeyProvider,
     val maps: OfflineMapRepository,
     val database: AtlasDatabase,
