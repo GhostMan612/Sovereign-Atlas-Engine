@@ -107,9 +107,14 @@ Do not install software, modify system settings, or write outside the work area 
 
 ### 4.1 Cold start (every session, in order)
 1. Read THIS file (`RULES.md`)
-2. Read `SESSION_HANDOFF.md` (state, environment facts, next moves)
+2. Read `SESSION_HANDOFF.md` (live state, environment facts, next moves — ~110 lines)
 3. Read the master blueprint section / app-track doc for the task at hand
 4. Work the current phase; consult ADRs as needed
+
+`blueprints/app-track/HISTORY.md` is the **archive**, split out of the handoff on
+2026-09-30 (it was 1,636 lines of closed sprints). Do not read it on a cold start.
+Read it only when chasing a specific past decision, and treat every count and
+status in it as stale by construction.
 
 ### 4.2 Session end (every session)
 1. `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` green (host gate, one run)

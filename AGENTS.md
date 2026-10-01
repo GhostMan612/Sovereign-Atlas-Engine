@@ -98,6 +98,10 @@ State exactly which gate ran and what remains unverified.
 `.opencode/opencode.json` (permissions). Restart opencode after changing any of them;
 config is not hot-reloaded.
 
+**Session archive:** `blueprints/app-track/HISTORY.md` holds every closed sprint
+record that used to sit in `SESSION_HANDOFF.md`. It is NOT live state — do not read it
+on a cold start. Its counts and statuses are stale by construction.
+
 `.opencode/opencode.json` **denies** `Select-String*`, `Get-Content*`,
 `Get-ChildItem*` and `Test-Path*` in bash. That is the hard version of the tool law
 above: those four exist here only for the `atlas_*` tools' own internals. A denial

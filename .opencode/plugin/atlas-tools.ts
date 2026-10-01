@@ -76,12 +76,59 @@ async function kotlinFiles(root) {
       }
     }
   }
+  const present = await fs
+    .stat(root)
+    .then((s) => s.isDirectory())
+    .catch(() => false)
+  if (!present) return { files: out, missing: true }
   await walk(root)
-  return out
+  return { files: out, missing: false }
 }
 
 function relative(worktree, file) {
   return file.startsWith(worktree) ? file.slice(worktree.length + 1) : file
+}
+
+function gradleEnv() {
+  return Object.assign({}, process.env, {
+    JAVA_HOME: "C:\\Users\\612co\\.jdks\\jbr-21.0.11",
+    ANDROID_HOME: "C:\\android",
+  })
+}
+
+// gradlew.bat cannot be execFile'd directly on Windows. Since the
+// CVE-2024-27980 hardening, Node refuses to spawn a .bat/.cmd without
+// shell:true and throws EINVAL - which is why every atlas_gates call used to
+// die at spawn. Go through cmd.exe, and always hand it the working JDK: the
+// Android Studio JBR is stripped (no lib/jvm.cfg) and every Gradle call fails
+// against it. One helper so the assemble path cannot forget the env.
+function runGradle(tasks, cwd, timeoutMs) {
+  const limit = timeoutMs || 3600000
+  return new Promise((resolve) => {
+    const child = execFile(
+      "cmd.exe",
+      ["/c", "gradlew.bat"].concat(tasks),
+      {
+        cwd: cwd,
+        env: gradleEnv(),
+        timeout: limit,
+        maxBuffer: 128 * 1024 * 1024,
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        let code = 0
+        if (error) code = typeof error.code === "number" ? error.code : 1
+        resolve({
+          code: code,
+          out: (stdout ? stdout.toString() : ""),
+          err: (stderr ? stderr.toString() : ""),
+        })
+      }
+    )
+    child.on("error", () => {
+      resolve({ code: 127, out: "", err: "gradlew.bat spawn failed" })
+    })
+  })
 }
 
 const tools = {
@@ -89,8 +136,12 @@ const tools = {
     description:
       "Audit the Atlas engine/adapters boundary (RULES.md 2.1). Scans the pure-logic " +
       "packages (core, geo, camera, layers, field, measure, goto, track, offline, tactical) " +
-      "for forbidden MapLibre, Compose, or Android imports and reports each violation with " +
-      "file:line. Use after editing anything in a pure package, and before claiming a gate is green.",
+      "for forbidden MapLibre, Compose, Android, or AndroidX imports and reports each " +
+      "violation with file:line. Use after editing anything in a pure package, and before " +
+      "claiming a gate is green. Scope note: RULES.md 2.1 forbids MapLibre/Android/Compose " +
+      "only. java.net is NOT in that list, so offline/ legitimately imports ServerSocket and " +
+      "HttpURLConnection - do not report those here. A missing package directory or a zero-file " +
+      "scan is reported as INCOMPLETE, never as clean.",
     args: {
       package: tool.schema
         .string()
@@ -109,12 +160,14 @@ const tools = {
       }
 
       const violations = []
+      const missing = []
       let scanned = 0
 
       for (const pkg of packages) {
-        const files = await kotlinFiles(srcRoot + "\\" + pkg)
-        scanned += files.length
-        for (const file of files) {
+        const found = await kotlinFiles(srcRoot + "\\" + pkg)
+        if (found.missing) missing.push(pkg)
+        scanned += found.files.length
+        for (const file of found.files) {
           const text = await fs.readFile(file, "utf8")
           const lines = text.split(/\r?\n/)
           for (let i = 0; i < lines.length; i++) {
@@ -131,6 +184,27 @@ const tools = {
         }
       }
 
+      if (missing.length) {
+        return [
+          "PURITY SCAN INCOMPLETE - " +
+            missing.length +
+            " package directory/directories not found: " +
+            missing.join(", "),
+          "A missing package is NOT a clean result. Either the package was renamed or moved,",
+          "or PURE_PACKAGES in atlas-tools.ts names a path that does not exist. Fix one or the",
+          "other before trusting any purity claim.",
+        ].join("\n")
+      }
+
+      if (scanned === 0) {
+        return [
+          "PURITY SCAN INCONCLUSIVE - 0 Kotlin files scanned across " +
+            packages.length +
+            " package(s).",
+          "Zero files means the source root or the scan path is wrong. This is not a clean result.",
+        ].join("\n")
+      }
+
       if (violations.length === 0) {
         return (
           "PURITY CLEAN - " + scanned + " Kotlin files scanned across " +
@@ -139,8 +213,8 @@ const tools = {
       }
       return [
         "PURITY VIOLATIONS - " + violations.length + " found in " + scanned + " files scanned.",
-        "Pure packages must not import MapLibre, Compose, or Android. Move the logic down, or",
-        "keep the platform type behind an abstraction.",
+        "Pure packages must not import MapLibre, Compose, Android, or AndroidX (RULES.md 2.1).",
+        "Move the logic down, or keep the platform type behind an abstraction.",
         "",
       ].concat(violations).join("\n")
     },
@@ -164,39 +238,11 @@ const tools = {
     },
     async execute(args, ctx) {
       const dir = androidDir(ctx.worktree)
-      const env = Object.assign({}, process.env, {
-        JAVA_HOME: "C:\\Users\\612co\\.jdks\\jbr-21.0.11",
-        ANDROID_HOME: "C:\\android",
-      })
       const tasks = args.task
         ? [args.task]
         : [":app:testPlayDebugUnitTest", ":app:testEnterpriseDebugUnitTest"]
 
-      const result = await new Promise((resolve) => {
-        const child = execFile(
-          "gradlew.bat",
-          tasks.concat(["--console=plain"]),
-          {
-            cwd: dir,
-            env: env,
-            timeout: 3600000,
-            maxBuffer: 128 * 1024 * 1024,
-            windowsHide: true,
-          },
-          (error, stdout, stderr) => {
-            let code = 0
-            if (error) code = typeof error.code === "number" ? error.code : 1
-            resolve({
-              code: code,
-              out: (stdout ? stdout.toString() : ""),
-              err: (stderr ? stderr.toString() : ""),
-            })
-          }
-        )
-        child.on("error", () => {
-          resolve({ code: 127, out: "", err: "gradlew.bat spawn failed" })
-        })
-      })
+      const result = await runGradle(tasks.concat(["--console=plain"]), dir)
 
       const lines = []
       lines.push("exit=" + result.code + "  tasks=" + tasks.join(" "))
@@ -205,14 +251,17 @@ const tools = {
       const resultDirs = ["testPlayDebugUnitTest", "testEnterpriseDebugUnitTest"]
       let grandTotal = 0
       let grandFailures = 0
+      const noResults = []
       for (const name of resultDirs) {
         const xmlDir = dir + "\\app\\build\\test-results\\" + name
         let files = []
         try {
           files = (await fs.readdir(xmlDir)).filter((f) => f.endsWith(".xml"))
         } catch {
+          noResults.push(name)
           continue
         }
+        if (!files.length) noResults.push(name)
         let tests = 0
         let bad = 0
         for (const file of files) {
@@ -228,6 +277,13 @@ const tools = {
         grandTotal += tests
         grandFailures += bad
         lines.push(name + ": " + tests + " tests, " + bad + " failures+errors")
+      }
+      if (noResults.length) {
+        lines.push(
+          "NO JUnit XML for: " +
+            noResults.join(", ") +
+            " - those tasks did not run. A missing result set is NOT a pass."
+        )
       }
       lines.push("TOTAL: " + grandTotal + " tests, " + grandFailures + " failures+errors")
 
@@ -252,15 +308,14 @@ const tools = {
       }
 
       if (args.include_assemble) {
-        const asm = await run(
-          "gradlew.bat",
+        const asm = await runGradle(
           [":app:assemblePlayDebug", ":app:assembleEnterpriseDebug", "--console=plain"],
           dir
         )
         lines.push(
           "",
           "assemble: " +
-            (/BUILD SUCCESSFUL/.test(asm.stdout) ? "BUILD SUCCESSFUL" : "FAILED") +
+            (/BUILD SUCCESSFUL/.test(asm.out) ? "BUILD SUCCESSFUL" : "FAILED") +
             " (exit=" + asm.code + ")"
         )
       }
@@ -268,8 +323,10 @@ const tools = {
       lines.push(
         "",
         "Note: the unit tests are the host gate. Assembly is reported separately and is not a",
-        "correctness claim. Known flake: AndroidKeyProviderTest.keySurvivesNewInstance times out",
-        "under parallel flavor load and passes on re-run; unresolved, not a regression."
+        "correctness claim. A non-zero count here is a real failure - do not re-run to make it",
+        "green. The historical AndroidKeyProviderTest.keySurvivesNewInstance flake was a Linux",
+        "teardown race, fixed by joining the cancelled scope (CI run #72 root cause); treat any",
+        "reappearance as a regression, not a known flake."
       )
       return lines.join("\n")
     },
