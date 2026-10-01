@@ -11,7 +11,7 @@ import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
-import com.sovereignatlas.atlas.android.comms.MarkerStore
+import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.android.data.HISTORICAL_ASSET_DIR
 import com.sovereignatlas.atlas.android.data.LocalHistoricalAssetRepository
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine

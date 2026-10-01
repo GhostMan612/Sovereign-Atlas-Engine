@@ -12,5 +12,11 @@ data class CotMarker(
     val latitude: Double,
     val longitude: Double,
     val altitude: Double?,
-    val timestampMillis: Long
+    val timestampMillis: Long,
+    /**
+     * Epoch millis at which the producer declared this report stale, from the CoT
+     * `stale` attribute. Null when the message carried no readable `stale`, in
+     * which case [MarkerStore] falls back to `timestampMillis + TTL_MILLIS`.
+     */
+    val expiresAtMillis: Long? = null,
 )

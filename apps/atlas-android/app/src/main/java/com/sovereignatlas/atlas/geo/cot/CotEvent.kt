@@ -69,3 +69,38 @@ data class CotEvent(
      */
     fun isStaleAsOf(nowIso8601: String): Boolean = stale < nowIso8601
 }
+
+/**
+ * Narrows a full [CotEvent] to the symbol model the map already renders.
+ *
+ * This is the seam that keeps the `AtlasMap` integration path intact. `CotEvent`
+ * carries the whole report; `CotPli` carries what a map layer draws. Converting
+ * here, in the pure tier, means no caller had to change and no rendering code had
+ * to learn about `ce`, `le`, or `stale`.
+ *
+ * `expiresAtMillis` is the producer's `stale` converted to epoch millis, which is
+ * the point of the whole exercise: a sender declaring "this expires at 00:05" is a
+ * fact, and the old store's blanket 15-minute TTL was a guess that could keep a
+ * track alive long past its useful life or drop a live one early.
+ *
+ * When `stale` is absent or unreadable, expiry is null and [PliStore] falls back to
+ * its TTL. That fallback is a labelled guess, not a fabricated timestamp.
+ *
+ * `timestamp` is the observation instant in epoch millis, supplied by the caller
+ * because parsing a clock is not this type's business. Passing the arrival time is
+ * correct for a live receiver and keeps the function pure.
+ *
+ * `callsign` falls back to the last four of the uid, matching what the shipped
+ * `AtakPayloadParser` already does, so a marker with no contact block renders with
+ * the same label it does today rather than blanking.
+ */
+fun CotEvent.toCotPli(observedAtMillis: Long): CotPli = CotPli(
+    uid = uid,
+    type = type,
+    callsign = callsign?.takeIf { it.isNotBlank() } ?: uid.takeLast(4),
+    latitude = lat,
+    longitude = lon,
+    timestamp = observedAtMillis,
+    altitude = hae,
+    expiresAtMillis = Iso8601.parseToEpochMillis(stale),
+)

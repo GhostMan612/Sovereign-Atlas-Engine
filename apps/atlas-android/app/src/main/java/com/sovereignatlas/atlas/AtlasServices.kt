@@ -19,7 +19,7 @@ import com.sovereignatlas.atlas.geo.routing.RoutingState
 import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
-import com.sovereignatlas.atlas.android.comms.MarkerStore
+import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.los.ElevationProvider
 import com.sovereignatlas.atlas.geo.los.LineOfSightEngine
 import com.sovereignatlas.atlas.offline.OfflineMapRepository

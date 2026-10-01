@@ -78,7 +78,7 @@ class AtlasTacticalService : Service() {
         }
 
         serviceScope.launch {
-            services.pliStore.activePlis
+            services.pliStore.observe()
                 .map { it.size }
                 .distinctUntilChanged()
                 .drop(1)

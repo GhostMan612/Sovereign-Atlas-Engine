@@ -463,9 +463,9 @@ fun AtlasMapScreen(
         ensurePliMarker(style, context)
         ensureCotTrackIcons(style, context)
         pushScrubPoint(style, services.scrubState.activePoint.value)
-        pushPli(style, services.pli.activePlis.value)
-        pushMarkers(style, services.markers.markerStream.value)
-        pushMeshTracks(style, services.markers.markerStream.value)
+        pushPli(style, services.pli.observe().value)
+        pushMarkers(style, services.markers.observe().value)
+        pushMeshTracks(style, services.markers.observe().value)
         pushOpsGraphics(style, displayGraphics)
         pushRouteResult(style, services.routing.result.value)
         if (showMgrsGrid.value) {
@@ -836,14 +836,14 @@ fun AtlasMapScreen(
                 }
             }
             launch {
-                services.pli.activePlis.collect { plis ->
+                services.pli.observe().collect { plis ->
                     styleRef.value?.let { style ->
                         pushPli(style, plis)
                     }
                 }
             }
             launch {
-                services.markers.markerStream.collect { markerMap ->
+                services.markers.observe().collect { markerMap ->
                     styleRef.value?.let { style ->
                         pushMarkers(style, markerMap)
                         pushMeshTracks(style, markerMap)
@@ -1358,7 +1358,7 @@ fun AtlasMapScreen(
                                         // depending on multicast loopback, and a later
                                         // mesh round-trip overwrites the same key
                                         // rather than duplicating it.
-                                        services.markers.addMarker(
+                                        services.markers.upsert(
                                             CotMarker(
                                                 uid = result.uid,
                                                 type = type,

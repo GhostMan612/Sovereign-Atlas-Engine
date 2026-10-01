@@ -15,6 +15,7 @@ import android.util.Log
 import com.sovereignatlas.atlas.geo.cot.CotParser
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.ParsedCot
+import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import java.io.IOException
 import java.net.DatagramPacket
@@ -118,9 +119,9 @@ class AtakMulticastListener(
                             bound.receive(packet)
                             val data = packet.data.copyOf(packet.length)
                             when (val parsed = parser.parse(data)) {
-                                is ParsedCot.Pli -> pliStore.update(parsed.pli)
+                                is ParsedCot.Pli -> pliStore.upsert(parsed.pli)
                                 is ParsedCot.Chat -> messageStore.addMessage(parsed.message)
-                                is ParsedCot.Marker -> markerStore.addMarker(parsed.marker)
+                                is ParsedCot.Marker -> markerStore.upsert(parsed.marker)
                                 null -> Unit
                             }
                         } catch (error: SocketTimeoutException) {
@@ -147,7 +148,7 @@ class AtakMulticastListener(
 
         scope.launch(Dispatchers.Default) {
             while (isActive) {
-                pliStore.pruneExpired()
+                pliStore.prune(System.currentTimeMillis())
                 delay(30_000L)
             }
         }
