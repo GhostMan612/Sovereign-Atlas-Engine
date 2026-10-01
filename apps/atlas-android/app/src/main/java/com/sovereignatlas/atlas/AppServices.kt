@@ -11,6 +11,8 @@ import com.sovereignatlas.atlas.android.AndroidImageDecoder
 import com.sovereignatlas.atlas.android.comms.AtakBroadcaster
 import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.android.comms.AtakPayloadParser
+import com.sovereignatlas.atlas.geo.cot.CotMessageRouter
+import com.sovereignatlas.atlas.geo.cot.LegacyCotReader
 import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.android.data.HISTORICAL_ASSET_DIR
 import com.sovereignatlas.atlas.android.data.LocalHistoricalAssetRepository
@@ -101,12 +103,21 @@ class AppServices(private val context: Context) {
 
     val markerStore = MarkerStore(markerScope)
 
+    // Composition root for CoT ingest. The router is pure and owns every routing
+    // rule; the only thing the Android tier supplies is the escape hatch for wire
+    // protobuf and GeoChat detail, neither of which a pure string reader can
+    // decode. That keeps the decision provable on the JVM while the Android tier
+    // keeps the ATAK codec.
+    val cotRouter = CotMessageRouter(
+        pliStore = pliStore,
+        markerStore = markerStore,
+        messageStore = messageStore,
+        legacyReader = LegacyCotReader { packetData -> AtakPayloadParser().parse(packetData) },
+    )
+
     val multicastListener = AtakMulticastListener(
         context = appContext,
-        pliStore = pliStore,
-        messageStore = messageStore,
-        markerStore = markerStore,
-        parser = AtakPayloadParser(),
+        router = cotRouter,
     )
 
     val syncProvider: SyncProvider = FirestoreSyncProvider(
