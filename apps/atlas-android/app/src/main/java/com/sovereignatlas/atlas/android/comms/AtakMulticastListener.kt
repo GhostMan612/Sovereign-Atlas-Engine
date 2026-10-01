@@ -12,11 +12,14 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
+import com.sovereignatlas.atlas.geo.cot.CotIngestDecision
 import com.sovereignatlas.atlas.geo.cot.CotParser
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.ParsedCot
 import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
+import com.sovereignatlas.atlas.geo.cot.StringCotParser
+import com.sovereignatlas.atlas.geo.cot.decideIngest
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -118,12 +121,7 @@ class AtakMulticastListener(
                         try {
                             bound.receive(packet)
                             val data = packet.data.copyOf(packet.length)
-                            when (val parsed = parser.parse(data)) {
-                                is ParsedCot.Pli -> pliStore.upsert(parsed.pli)
-                                is ParsedCot.Chat -> messageStore.addMessage(parsed.message)
-                                is ParsedCot.Marker -> markerStore.upsert(parsed.marker)
-                                null -> Unit
-                            }
+                            ingest(data)
                         } catch (error: SocketTimeoutException) {
                             Unit
                         }
@@ -185,5 +183,57 @@ class AtakMulticastListener(
         multicastLock = null
         runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
         wakeLock = null
+    }
+
+    /**
+     * Routes one received datagram.
+     *
+     * XML goes to [StringCotParser], which is pure and therefore covered by the
+     * host gate. Protobuf stays on the legacy byte reader: a pure Kotlin string
+     * scanner cannot decode a wire-format protobuf, and routing it there anyway
+     * would silently drop every protobuf peer. Real ATAK nets send both.
+     *
+     * Framing is `0xBF <version> 0xBF`, where version 0x01 means protobuf. Only
+     * that case is diverted. An XML-framed or bare payload goes to the pure reader,
+     * which locates `<event` and so ignores any leading header bytes whatever they
+     * decode to.
+     */
+    private fun ingest(data: ByteArray) {
+        if (isProtobufFramed(data)) {
+            routeLegacy(parser.parse(data))
+            return
+        }
+
+        val event = StringCotParser.parse(String(data, Charsets.UTF_8)) ?: return
+        when (val decision = decideIngest(event, System.currentTimeMillis())) {
+            is CotIngestDecision.UpsertPli -> pliStore.upsert(decision.pli)
+            is CotIngestDecision.UpsertMarker -> markerStore.upsert(decision.marker)
+            // One legacy call, and only for chat, whose payload lives in detail
+            // elements the pure reader does not model.
+            is CotIngestDecision.DelegateToLegacyChat ->
+                (parser.parse(data) as? ParsedCot.Chat)?.let { messageStore.addMessage(it.message) }
+            is CotIngestDecision.Ignore -> Unit
+        }
+    }
+
+    private fun routeLegacy(parsed: ParsedCot?) {
+        when (parsed) {
+            is ParsedCot.Pli -> pliStore.upsert(parsed.pli)
+            is ParsedCot.Chat -> messageStore.addMessage(parsed.message)
+            is ParsedCot.Marker -> markerStore.upsert(parsed.marker)
+            null -> Unit
+        }
+    }
+
+    /** True for the `0xBF 0x01 0xBF` framing that precedes a protobuf payload. */
+    private fun isProtobufFramed(data: ByteArray): Boolean =
+        data.size >= 4 &&
+            data[0] == PROTOBUF_MAGIC &&
+            data[1] == PROTOBUF_VERSION &&
+            data[2] == PROTOBUF_MAGIC
+
+    private companion object {
+        const val PROTOBUF_MAGIC = 0xBF.toByte()
+        const val PROTOBUF_VERSION = 0x01.toByte()
     }
 }

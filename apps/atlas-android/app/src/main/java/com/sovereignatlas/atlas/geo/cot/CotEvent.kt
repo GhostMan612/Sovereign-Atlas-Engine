@@ -104,3 +104,31 @@ fun CotEvent.toCotPli(observedAtMillis: Long): CotPli = CotPli(
     altitude = hae,
     expiresAtMillis = Iso8601.parseToEpochMillis(stale),
 )
+
+/**
+ * Narrows a full [CotEvent] to a [CotMarker], for hostile, neutral, unknown and
+ * PIR/SAR contacts.
+ *
+ * The mirror of [toCotPli], and deliberately separate: a marker and a PLI are
+ * different things on a map even when their wire shape is identical, and collapsing
+ * them is how a hostile contact ends up filed as a friendly.
+ *
+ * [observedAtMillis] is the arrival instant, matching [toCotPli]. Producer `stale`
+ * again becomes the expiry, so a marker honours the same sender-declared truth a
+ * PLI does.
+ *
+ * `ce` and `le` are NOT carried. [CotMarker] has no fields for positional
+ * uncertainty, so recording them here would mean widening the symbol model and
+ * every renderer behind it. That is a deliberate deferral, not an oversight: the
+ * data survives in [CotEvent], and nothing is lost by not widening now.
+ */
+fun CotEvent.toCotMarker(observedAtMillis: Long): CotMarker = CotMarker(
+    uid = uid,
+    type = type,
+    callsign = callsign?.takeIf { it.isNotBlank() } ?: uid.takeLast(4),
+    latitude = lat,
+    longitude = lon,
+    altitude = hae,
+    timestampMillis = observedAtMillis,
+    expiresAtMillis = Iso8601.parseToEpochMillis(stale),
+)

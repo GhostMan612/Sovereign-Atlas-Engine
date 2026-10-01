@@ -94,4 +94,30 @@ final class CotEventMapperTest {
 
         assertEquals(observed, pli.timestamp)
     }
+
+    @Test
+    fun toCotMarkerCarriesIdentityGeometryAndProducerStale() {
+        val marker = event().toCotMarker(observed)
+
+        assertEquals("test-uid", marker.uid)
+        assertEquals("a-f-G-U-C", marker.type)
+        assertEquals("GHOST-1", marker.callsign)
+        assertEquals(34.1, marker.latitude, 1e-9)
+        assertEquals(-118.2, marker.longitude, 1e-9)
+        assertEquals(10.0, marker.altitude!!, 1e-9)
+        assertEquals(observed, marker.timestampMillis)
+        assertEquals(Iso8601.parseToEpochMillis("2026-10-01T00:05:00Z"), marker.expiresAtMillis)
+    }
+
+    @Test
+    fun toCotMarkerFallsBackToTheUidSuffixWhenCallsignIsAbsent() {
+        val marker = event(callsign = null, uid = "node-9f3c").toCotMarker(observed)
+
+        assertEquals("9f3c", marker.callsign)
+    }
+
+    @Test
+    fun toCotMarkerLeavesExpiryNullForAnUnreadableStale() {
+        assertNull(event(stale = "IP").toCotMarker(observed).expiresAtMillis)
+    }
 }
