@@ -8,6 +8,7 @@ package com.sovereignatlas.atlas.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -21,6 +22,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.MgrsConverter
@@ -75,6 +77,31 @@ fun WaypointEditorSheet(
                     label = { Text("Notes") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                SharingPolicySelector(
+                    // Read through the stored-string parse rather than comparing the
+                    // raw column, so a corrupt value shows as LOCAL here instead of
+                    // leaving the operator looking at an unselected list.
+                    current = com.sovereignatlas.atlas.field.WaypointSharingPolicy.fromStored(
+                        activeWaypoint.sharingPolicy,
+                    ),
+                    waypointName = name,
+                    onPolicySelected = { policy ->
+                        scope.launch {
+                            errorMessage = null
+                            try {
+                                // setSharingPolicy rather than saveWaypoint: it
+                                // re-reads the row and rewrites only the policy, so a
+                                // half-typed name in the fields above cannot be
+                                // persisted by a tap that was only meant to change
+                                // sharing.
+                                waypointRepository.setSharingPolicy(activeWaypoint.id, policy)
+                            } catch (error: Exception) {
+                                errorMessage = "Failed to change sharing: ${error.message}"
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
                 if (errorMessage != null) {
                     Text(text = errorMessage!!, color = Color.Red)
                 }
@@ -84,6 +111,11 @@ fun WaypointEditorSheet(
                             scope.launch {
                                 errorMessage = null
                                 try {
+                                    // Policy is NOT part of this copy. The sharing
+                                    // selector owns that column, and folding the
+                                    // stale `activeWaypoint` value in here would let a
+                                    // Save pressed after an unrelated edit silently
+                                    // revert a sharing change.
                                     val updated = activeWaypoint.copy(
                                         name = name,
                                         notes = notes.takeIf { it.isNotBlank() },

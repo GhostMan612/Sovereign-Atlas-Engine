@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.field.WaypointRepository
+import com.sovereignatlas.atlas.field.WaypointSharingPolicy
 import java.util.Locale
 
 @Composable
@@ -61,14 +62,27 @@ fun WaypointsDialog(
                                     )
                                 },
                                 supportingContent = {
-                                    Text(
-                                        String.format(
-                                            Locale.US,
-                                            "%.4f, %.4f",
-                                            record.latitude,
-                                            record.longitude,
-                                        ),
-                                    )
+                                    Column {
+                                        Text(
+                                            String.format(
+                                                Locale.US,
+                                                "%.4f, %.4f",
+                                                record.latitude,
+                                                record.longitude,
+                                            ),
+                                        )
+                                        // At-a-glance exposure. Placed under the
+                                        // coordinates rather than replacing them: the
+                                        // operator scanning this list is asking "what
+                                        // is this, and is it on the air", and both
+                                        // answers have to be visible at once.
+                                        SharingIndicatorCompact(
+                                            policy = WaypointSharingPolicy.fromStored(
+                                                record.sharingPolicy,
+                                            ),
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        )
+                                    }
                                 },
                                 trailingContent = {
                                     IconButton(
