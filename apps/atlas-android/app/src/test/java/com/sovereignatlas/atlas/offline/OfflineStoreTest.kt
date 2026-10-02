@@ -9,6 +9,7 @@ import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,14 +53,102 @@ final class OfflineProvidersTest {
 
     @Test
     fun cartoPositronResolvesWithSubdomain() {
-        // The {key} placeholder survives resolveTileUrl on purpose: that
-        // function is the offline prefetch path, and both CARTO descriptors set
-        // prefetchAllowed = false, so no prefetch ever requests a URL carrying an
-        // unsubstituted placeholder. The live map path substitutes the real key
-        // in AtlasMap.ensureBaseLayer before the template reaches MapLibre.
+        // The {key} placeholder survives resolveTileUrl on the RAW descriptor, on
+        // purpose. resolveTileUrl is pure and has no access to the encrypted key
+        // store, so the credential is injected by the caller via withApiKey before
+        // resolution - see the withApiKey tests below and startDownload in
+        // OfflineDialog. The raw registry must never hold a secret.
         assertEquals(
             "https://a.basemaps.cartocdn.com/light_all/10/1/2.png?key={key}",
             resolveTileUrl(OfflineBuiltinProviders.cartoPositron, 10, 1, 2),
+        )
+    }
+
+    // ---- runtime key injection ----------------------------------------------
+
+    @Test
+    fun withApiKeySubstitutesTheKeyPlaceholder() {
+        val resolved = resolveTileUrl(
+            OfflineBuiltinProviders.cartoPositron.withApiKey("secret-key-abc123"),
+            10, 1, 2,
+        )
+        assertEquals(
+            "https://a.basemaps.cartocdn.com/light_all/10/1/2.png?key=secret-key-abc123",
+            resolved,
+        )
+    }
+
+    @Test
+    fun withApiKeyPreservesTheExistingSubdomainParam() {
+        val resolved = resolveTileUrl(
+            OfflineBuiltinProviders.cartoDarkMatter.withApiKey("k"),
+            3, 4, 5,
+        )
+        assertEquals(
+            "the s param must survive alongside the injected key",
+            "https://a.basemaps.cartocdn.com/dark_all/3/4/5.png?key=k",
+            resolved,
+        )
+    }
+
+    @Test
+    fun withApiKeyDoesNothingWithoutAKey() {
+        // A blank key must leave the descriptor untouched rather than installing an
+        // empty one: `?key=` is a malformed request, while `{key}` left intact
+        // fails loudly at the provider.
+        for (absent in listOf(null, "", "   ")) {
+            assertEquals(
+                "a null/blank key must not modify the descriptor ($absent)",
+                OfflineBuiltinProviders.cartoPositron,
+                OfflineBuiltinProviders.cartoPositron.withApiKey(absent),
+            )
+        }
+        assertTrue(
+            resolveTileUrl(OfflineBuiltinProviders.cartoPositron.withApiKey(null), 1, 2, 3)!!
+                .contains("{key}"),
+        )
+    }
+
+    @Test
+    fun withApiKeyIsIgnoredByProvidersThatDoNotAskForOne() {
+        // Esri and OSM templates carry no {key}. Adding a credential to their
+        // request URL would leak a secret to a third party that never needed it.
+        for (provider in OfflineBuiltinProviders.all) {
+            val template = provider.urlTemplate ?: continue
+            if (template.contains("{key}")) continue
+            assertEquals(
+                "${provider.id} must not gain a key param",
+                provider,
+                provider.withApiKey("secret-key-abc123"),
+            )
+        }
+    }
+
+    @Test
+    fun withApiKeyNeverMutatesTheSharedRegistryEntry() {
+        // OfflineBuiltinProviders holds singletons. Mutating one in place would leak
+        // a key into every later lookup, including a call site with no store access.
+        val injected = OfflineBuiltinProviders.cartoPositron.withApiKey("secret-key-abc123")
+        assertEquals(
+            "the injected descriptor must be a copy",
+            "secret-key-abc123",
+            injected.params["key"],
+        )
+        assertNull(
+            "the registry entry must still hold no key",
+            OfflineBuiltinProviders.cartoPositron.params["key"],
+        )
+    }
+
+    @Test
+    fun anInjectedKeyIsTrimmed() {
+        val resolved = resolveTileUrl(
+            OfflineBuiltinProviders.cartoPositron.withApiKey("  spaced-key  "),
+            10, 1, 2,
+        )
+        assertTrue(
+            "a pasted key with whitespace must not carry it into the URL",
+            resolved!!.contains("key=spaced-key&") || resolved.endsWith("key=spaced-key"),
         )
     }
 }

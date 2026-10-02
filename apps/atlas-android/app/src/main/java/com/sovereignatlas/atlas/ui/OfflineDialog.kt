@@ -46,7 +46,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.core.MapNameFormatter
 import com.sovereignatlas.atlas.android.offline.AndroidHttpDownloader
+import com.sovereignatlas.atlas.core.KeyProvider
 import com.sovereignatlas.atlas.offline.DownloadResult
+import com.sovereignatlas.atlas.offline.KEY_PLACEHOLDER
+import com.sovereignatlas.atlas.offline.withApiKey
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.OfflineDownloader
 import com.sovereignatlas.atlas.offline.OfflineMapDownloader
@@ -59,6 +62,7 @@ import com.sovereignatlas.atlas.offline.PlanOutcome
 import com.sovereignatlas.atlas.offline.formatBytes
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @Composable
@@ -68,12 +72,17 @@ fun OfflineDialog(
     tileHits: () -> Long,
     basemapHits: () -> Long,
     demHits: () -> Long,
+    keyProvider: KeyProvider,
     onUsePack: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     val tab = remember { mutableStateOf(0) }
     val cancels = remember { mutableMapOf<String, AtomicBoolean>() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    // The flow itself is passed down, not its current value, so a download started
+    // from a tab composed before the key was saved still reads the key as it is at
+    // the moment of the click.
+    val cartoKey = keyProvider.cartoKey
     AlertDialog(
         onDismissRequest = {
             cancels.values.forEach { it.set(true) }
@@ -90,7 +99,7 @@ fun OfflineDialog(
                     TextButton(onClick = { tab.value = 4 }) { Text("Maps") }
                 }
                 when (tab.value) {
-                    0 -> PacksTab(store, cancels, mainHandler, onUsePack)
+                    0 -> PacksTab(store, cancels, mainHandler, cartoKey, onUsePack)
                     1 -> PlanTab(store)
                     2 -> ProvidersTab()
                     3 -> DiagnosticsTab(store, tileHits, basemapHits, demHits)
@@ -111,9 +120,13 @@ private fun PacksTab(
     store: OfflineStore,
     cancels: MutableMap<String, AtomicBoolean>,
     mainHandler: Handler,
+    cartoKey: StateFlow<String?>,
     onUsePack: (String) -> Unit,
 ) {
     val packs = store.packs()
+    // Read inside the click, not here. A download started from a tab composed
+    // before the key was saved must still use the key stored at the moment of the
+    // click, so the flow is captured and `.value` is read on demand.
     val error = store.lastErrorOrNull()
     if (error != null) Text("Store unavailable: $error")
     var totalBytes = 0L
@@ -155,7 +168,13 @@ private fun PacksTab(
                             ) {
                                 TextButton(
                                     onClick = {
-                                        startDownload(store, pack, cancels, mainHandler)
+                                        startDownload(
+                                            store,
+                                            pack,
+                                            cancels,
+                                            mainHandler,
+                                            cartoKey.value,
+                                        )
                                     },
                                 ) {
                                     Text("Get")
@@ -193,8 +212,17 @@ private fun startDownload(
     pack: OfflinePackRecord,
     cancels: MutableMap<String, AtomicBoolean>,
     mainHandler: Handler,
+    cartoKey: String?,
 ) {
-    val provider = OfflineBuiltinProviders.lookup(pack.providerId) ?: return
+    val descriptor = OfflineBuiltinProviders.lookup(pack.providerId) ?: return
+    // The credential is injected HERE, at the one place that can read the
+    // encrypted key store. The pure descriptor registry never holds a key and the
+    // pure tier never learns one exists; this is the boundary crossing, and it is
+    // the same crossing AtlasMap.kt:2297 already makes for the live renderer.
+    val provider = descriptor.withApiKey(cartoKey)
+    if (cartoKey != null && provider === descriptor && descriptor.urlTemplate?.contains(KEY_PLACEHOLDER) == true) {
+        store.log("no CARTO key stored; prefetch will be rejected by the provider")
+    }
     val cancel = AtomicBoolean(false)
     cancels[pack.packId] = cancel
     pack.lifecycle = OfflinePackLifecycle.downloading

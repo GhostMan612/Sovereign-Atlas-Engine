@@ -1628,6 +1628,7 @@ fun AtlasMapScreen(
                     tileHits = { services.tiles.tileHits() },
                     basemapHits = { services.tiles.basemapHits() },
                     demHits = { services.tiles.demHits() },
+                    keyProvider = services.keys,
                     onUsePack = { packId ->
                         basePackId.value = packId
                         styleRef.value?.let { style ->

@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.android.offline
 
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.resolveTileUrl
+import com.sovereignatlas.atlas.offline.withApiKey
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -50,20 +51,35 @@ final class AndroidHttpDownloaderTest {
 
     @Test
     fun theCartoProvidersStillCarryAnUnresolvedKeyPlaceholder() {
-        // KNOWN GAP, pinned deliberately. Both CARTO descriptors template
-        // "?key={key}" but their params map supplies only "s", so resolveTileUrl
-        // leaves {key} literal and a real request would send a placeholder as the
-        // API key. CARTO requires a caller-supplied key, which is not present in
-        // the repo and must not be invented (RULES 2.3).
+        // STILL TRUE, and still the assertion that matters — but for a different
+        // reason than when it was written. The registry descriptors carry no key
+        // because a credential must NEVER live in the pure registry: it is
+        // injected per download by withApiKey from the encrypted KeyProvider.
         //
-        // This test exists so the gap stays visible and so a future change cannot
-        // quietly "fix" it by hardcoding a key. Delete it only when a real key is
-        // supplied through a mechanism that does not commit the secret.
+        // So this now pins the SECURITY property rather than a defect: the shared
+        // singleton holds no secret, and any code path that forgets to inject gets
+        // an unsubstituted {key} that the provider rejects, rather than a request
+        // made with no credential or a guessed one.
         for (id in listOf("carto-positron", "carto-dark-matter")) {
             val provider = OfflineBuiltinProviders.lookup(id)!!
             val url = resolveTileUrl(provider, 1, 2, 3)
-            assertTrue("$id no longer has the known gap", url!!.contains("{key}"))
-            assertNull("CARTO providers declare no key param", provider.params["key"])
+            assertTrue("$id must not have a baked-in key", url!!.contains("{key}"))
+            assertNull("$id must not declare a key param", provider.params["key"])
         }
+    }
+
+    @Test
+    fun anInjectedKeyMakesThePrefetchUrlRequestable() {
+        // The counterpart: the gap above is only safe BECAUSE injection exists and
+        // works. Without this, a caller could inject a key and still send {key}.
+        val resolved = resolveTileUrl(
+            OfflineBuiltinProviders.cartoPositron.withApiKey("runtime-key"),
+            10, 1, 2,
+        )
+        assertFalse(
+            "an injected key must not leave the placeholder behind",
+            resolved!!.contains("{key}"),
+        )
+        assertTrue(resolved.contains("key=runtime-key"))
     }
 }

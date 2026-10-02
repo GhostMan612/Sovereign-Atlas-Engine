@@ -33,8 +33,48 @@ fun resolveTileUrl(
     for ((key, value) in descriptor.params) {
         url = url.replace("{$key}", value)
     }
+    // {key} is a credential placeholder and is deliberately NOT filled in here.
+    // The pure tier has no access to the encrypted key store, and baking a key
+    // into a descriptor literal would put a secret in source. A caller holding a
+    // key injects it through [withApiKey] before resolving, which keeps this
+    // function pure and the secret out of the registry.
+    //
+    // With no key supplied, {key} survives into the URL. That is the honest
+    // outcome: the request will be rejected by the provider, which is preferable to
+    // silently requesting with an empty or guessed credential.
     return url
 }
+
+/**
+ * Returns a copy of this descriptor with an API-key parameter added.
+ *
+ * Pure by construction: it takes the key as an argument and returns a value. The
+ * encrypted store, and the android tier that reads it, stay outside this function —
+ * so a key can flow from the Tink-backed `KeyProvider` into an offline prefetch
+ * without either the pure tier or the descriptor registry ever holding one.
+ *
+ * A null or blank key returns the descriptor UNCHANGED, so a descriptor with no
+ * credential keeps carrying an unsubstituted `{key}` rather than acquiring an empty
+ * one. That distinction is what
+ * `theCartoProvidersStillCarryAnUnresolvedKeyPlaceholder` pins.
+ *
+ * Only providers whose template actually contains `{key}` are given the parameter.
+ * Adding it unconditionally would put a credential into the request URL of a
+ * provider that never asked for one.
+ */
+fun OfflineProviderDescriptor.withApiKey(apiKey: String?): OfflineProviderDescriptor {
+    val template = urlTemplate ?: return this
+    if (!template.contains(KEY_PLACEHOLDER)) return this
+    val key = apiKey?.trim().orEmpty()
+    if (key.isEmpty()) return this
+    return copy(params = params + (KEY_PARAM to key))
+}
+
+/** The query parameter name CARTO expects its credential under. */
+const val KEY_PARAM = "key"
+
+/** The template placeholder a credential is substituted into. */
+const val KEY_PLACEHOLDER = "{key}"
 
 object OfflineBuiltinProviders {
     val osmStandard = OfflineProviderDescriptor(
