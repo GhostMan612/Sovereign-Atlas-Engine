@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.unit.dp
+import com.sovereignatlas.atlas.geo.los.LoSStatus
 import com.sovereignatlas.atlas.geo.los.TerrainProfile
 import kotlin.math.max
 import kotlin.math.min
@@ -25,6 +26,7 @@ fun TerrainProfileChart(profile: TerrainProfile, modifier: Modifier = Modifier) 
 
     val visibleColor = Color.Green
     val blockedColor = Color.Red
+    val undeterminedColor = Color(0xFFFFA500)
 
     val chartData = remember(profile) {
         val terrainMax = profile.points.maxOf { it.terrainElevationMeters }
@@ -65,7 +67,13 @@ fun TerrainProfileChart(profile: TerrainProfile, modifier: Modifier = Modifier) 
         val endY = height - (((profile.targetElevationMeters - minElev) / elevRange) * height * 0.8) - (height * 0.1)
 
         drawLine(
-            color = if (profile.hasLineOfSight) visibleColor.copy(alpha = 0.5f) else blockedColor.copy(alpha = 0.5f),
+            // The chord is drawn in the same colour as the verdict, so the chart and the map
+    // ray agree. An undetermined verdict is drawn amber rather than blocked-red.
+    color = when (profile.lineOfSight.status) {
+        LoSStatus.Clear -> visibleColor.copy(alpha = 0.5f)
+        LoSStatus.BlockedTerrain -> blockedColor.copy(alpha = 0.5f)
+        else -> undeterminedColor.copy(alpha = 0.5f)
+    },
             start = Offset(0f, startY.toFloat()),
             end = Offset(width, endY.toFloat()),
             strokeWidth = 2.dp.toPx(),

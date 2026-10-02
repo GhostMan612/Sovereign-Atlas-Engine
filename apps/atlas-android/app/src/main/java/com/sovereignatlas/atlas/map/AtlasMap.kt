@@ -91,8 +91,8 @@ import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.geo.GeoPoint
 import com.sovereignatlas.atlas.geo.LoSMode
 import com.sovereignatlas.atlas.geo.LoSRequest
-import com.sovereignatlas.atlas.geo.LoSResult
-import com.sovereignatlas.atlas.geo.LineOfSightEngine
+import com.sovereignatlas.atlas.geo.los.LoSStatus
+import com.sovereignatlas.atlas.geo.los.TerrainProfile
 import com.sovereignatlas.atlas.geo.cot.CotMarker
 import com.sovereignatlas.atlas.geo.cot.CotPli
 import com.sovereignatlas.atlas.core.HistoricalAsset
@@ -100,7 +100,6 @@ import com.sovereignatlas.atlas.core.HistoricalRecord
 import com.sovereignatlas.atlas.geo.graphics.DrawingMode
 import com.sovereignatlas.atlas.geo.graphics.OperationalGraphic
 import com.sovereignatlas.atlas.geo.graphics.ZoneType
-import com.sovereignatlas.atlas.geo.los.TerrainProfile
 import com.sovereignatlas.atlas.map.graphics.GraphicsGeoJsonMapper
 import com.sovereignatlas.atlas.ui.hud.TacticalDrawingToolbar
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesPack
@@ -230,7 +229,7 @@ fun AtlasMapScreen(
     }
     val cartoKey by services.keys.cartoKey.collectAsState()
     val losMode by services.losState.mode.collectAsStateWithLifecycle(initialValue = LoSMode.Inactive)
-    val losResult by services.losState.result.collectAsStateWithLifecycle(initialValue = null)
+    val losProfile by services.losState.profile.collectAsStateWithLifecycle(initialValue = null)
     val activeOfflineMap by services.maps.activeMap.collectAsState()
     val activeDem by services.maps.activeDem.collectAsState()
     val demStoreState = remember { mutableStateOf<DemTileStore?>(null) }
@@ -477,7 +476,7 @@ fun AtlasMapScreen(
             style,
             services.losState.observer.value,
             services.losState.target.value,
-            services.losState.result.value,
+            services.losState.profile.value,
         )
         applyOverlayVisibility(style, showGraticule.value, showMgrsGrid.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
         // Patents are pushed here as well as on camera idle: a style reload
@@ -565,7 +564,7 @@ fun AtlasMapScreen(
                         )
                         if (losMode == LoSMode.AwaitingObserver) {
                             services.losState.setObserver(tapped)
-                            services.losState.setResult(null)
+                            services.losState.setProfile(null)
                             services.losState.setMode(LoSMode.AwaitingTarget)
                         } else {
                             services.losState.setTarget(tapped)
@@ -579,7 +578,7 @@ fun AtlasMapScreen(
                                 style,
                                 services.losState.observer.value,
                                 services.losState.target.value,
-                                services.losState.result.value,
+                                services.losState.profile.value,
                             )
                         }
                     } else if (services.measure.isActive()) {
@@ -858,13 +857,13 @@ fun AtlasMapScreen(
                 }
             }
             launch {
-                services.losState.result.collect { result ->
+                services.losState.profile.collect { profile ->
                     styleRef.value?.let { style ->
                         pushLosState(
                             style,
                             services.losState.observer.value,
                             services.losState.target.value,
-                            result,
+                            profile,
                         )
                     }
                 }
@@ -1289,11 +1288,18 @@ fun AtlasMapScreen(
                         } else {
                             TerrainProfileChart(profile = losProfile)
                             Text(
-                                text = if (losProfile.hasLineOfSight) "CLEAR LINE OF SIGHT" else "LINE OF SIGHT BLOCKED",
-                                color = if (losProfile.hasLineOfSight) {
-                                    androidx.compose.ui.graphics.Color.Green
-                                } else {
-                                    MaterialTheme.colorScheme.error
+                                text = when (losProfile.lineOfSight.status) {
+                                    LoSStatus.Clear -> "CLEAR LINE OF SIGHT"
+                                    LoSStatus.BlockedTerrain -> "LINE OF SIGHT BLOCKED"
+                                    // Everything else was never measured. Saying
+                                    // "BLOCKED" here would assert a terrain finding
+                                    // the engine did not make.
+                                    else -> "LINE OF SIGHT UNDETERMINED"
+                                },
+                                color = when (losProfile.lineOfSight.status) {
+                                    LoSStatus.Clear -> androidx.compose.ui.graphics.Color.Green
+                                    LoSStatus.BlockedTerrain -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.tertiary
                                 },
                                 modifier = Modifier.padding(bottom = 16.dp),
                             )
@@ -1457,16 +1463,20 @@ fun AtlasMapScreen(
                     color = hudAccent,
                 )
                 LoSMode.Inactive -> {
-                    val error = losResult?.errorMessage
-                    if (error != null) {
+                    val verdict = losProfile?.lineOfSight
+                    val error = losProfile?.errorMessage
+                    if (verdict == null) {
+                        Unit
+                    } else if (error != null) {
+                        // Undetermined, not blocked. Red would claim a terrain
+                        // finding; amber says the question was not answered.
                         Text(
                             text = error,
                             fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Red,
+                            color = androidx.compose.ui.graphics.Color(0xFFFFA500),
                         )
-                    } else if (losResult != null) {
-                        val result = losResult!!
-                        if (result.isVisible) {
+                    } else {
+                        if (verdict.status == LoSStatus.Clear) {
                             Text(
                                 text = "CLEAR",
                                 fontSize = 12.sp,
@@ -1474,7 +1484,7 @@ fun AtlasMapScreen(
                             )
                         } else {
                             Text(
-                                text = "OBSTRUCTED at ${result.blockingDistanceMeters?.toInt()}m",
+                                text = "OBSTRUCTED at ${verdict.blockingDistanceMeters?.toInt()}m",
                                 fontSize = 12.sp,
                                 color = androidx.compose.ui.graphics.Color.Red,
                             )
@@ -2031,23 +2041,22 @@ suspend fun runLosCalculation(services: AtlasServices) {
     val observer = services.losState.observer.value
     val target = services.losState.target.value
     if (observer == null || target == null) return
-    val engine = DemSession.engine
-    if (engine == null) {
-        services.losState.setResult(
-            LoSResult(false, null, null, emptyList(), "DEM unavailable: activate a relief map."),
-        )
-        return
-    }
-    services.losState.setResult(
-        LineOfSightEngine.calculate(LoSRequest(observer, target), engine),
+    // One engine for both the two-tap tool and the long-press analysis sheet, so
+    // the map overlay and the profile chart cannot contradict each other. When no
+    // DEM is active the engine reports NoTerrainData itself - a distinct verdict,
+    // not a synthetic "blocked".
+    services.losState.setProfile(
+        services.lineOfSightEngine.calculateProfile(LoSRequest(observer, target)),
     )
 }
 
-fun pushLosState(    style: Style,
+fun pushLosState(
+    style: Style,
     observer: GeoPoint?,
     target: GeoPoint?,
-    result: LoSResult?,
+    profile: TerrainProfile?,
 ) {
+    val verdict = profile?.lineOfSight
     pushFeatures(
         style,
         AtlasLayerIds.LOS_OBSERVER_SOURCE,
@@ -2093,19 +2102,24 @@ fun pushLosState(    style: Style,
     pushFeatures(
         style,
         AtlasLayerIds.LOS_BLOCK_SOURCE,
-        if (result?.blockingPoint == null) {
+        if (verdict?.blockingPoint == null) {
             FeatureCollection.fromFeatures(emptyList())
         } else {
-            val block = result.blockingPoint
+            val block = verdict.blockingPoint!!
             FeatureCollection.fromFeatures(
                 listOf(Feature.fromGeometry(Point.fromLngLat(block.longitude, block.latitude))),
             )
         },
     )
     val ray = style.getLayerAs<LineLayer>(AtlasLayerIds.LOS_LAYER)
-    ray?.setProperties(
-        PropertyFactory.lineColor(if (result != null && !result.isVisible) "#FF0000" else "#39FF14"),
-    )
+    // Amber, not red, for an unmeasured verdict. Red means terrain BLOCKED the ray;
+    // painting unmeasured ground red asserts a terrain finding nobody made.
+    val rayColor = when (verdict?.status) {
+        LoSStatus.BlockedTerrain -> "#FF0000"
+        LoSStatus.Clear -> "#39FF14"
+        else -> "#FFA500"
+    }
+    ray?.setProperties(PropertyFactory.lineColor(rayColor))
 }
 
 fun mergedTrackFeatures(
