@@ -216,23 +216,29 @@ final class WaypointShareMapperTest {
 
     @Test
     fun aDefaultedRowIsUnshareableEndToEnd() {
-        // A row inserted without naming the policy takes the column default. That is
-        // the migration's backfill path, and it must land on PRIVATE.
+        // Raw SQL, deliberately. SQLDelight's generated insert names every column,
+        // so going through it would pass an explicit policy and test nothing. The
+        // column DEFAULT is what a migration or any other writer that omits the
+        // column relies on, and it has to be exercised as raw SQL to be exercised
+        // at all. This is the backfill path the whole §10.6 feature rests on.
         runBlocking {
-            val db = inMemoryDatabase()
-            db.atlasQueries.insertWaypoint(
-                id = "wp-default",
-                name = "Legacy",
-                latitude = 44.0,
-                longitude = -93.0,
-                timestamp = 1L,
-                notes = null,
+            val driver: SqlDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+            AtlasDatabase.Schema.create(driver)
+            driver.execute(
+                identifier = null,
+                sql = """
+                    INSERT INTO Waypoint (id, name, latitude, longitude, timestamp, notes)
+                    VALUES ('wp-default', 'Legacy', 44.0, -93.0, 1, NULL);
+                """.trimIndent(),
+                parameters = 0,
             )
 
-            val row = db.atlasQueries.selectAllWaypoints().executeAsList().single()
+            val row = AtlasDatabase(driver).atlasQueries
+                .selectAllWaypoints().executeAsList().single()
 
             assertEquals(WaypointSharingPolicy.Private, WaypointShareMapper.toShareable(row).policy)
             assertEquals(null, WaypointShareMapper.scopeOf(row))
+            assertTrue(!WaypointShareMapper.isShareable(row))
         }
     }
 }

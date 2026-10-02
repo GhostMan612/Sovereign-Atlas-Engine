@@ -5,6 +5,8 @@
 
 package com.sovereignatlas.atlas.geo.cot
 
+import com.sovereignatlas.atlas.field.WaypointSharingPolicy
+
 /**
  * Serializes a waypoint for the mesh. Injected, so the router can be proven not to
  * call it without needing a protobuf codec — or, more to the point, without needing

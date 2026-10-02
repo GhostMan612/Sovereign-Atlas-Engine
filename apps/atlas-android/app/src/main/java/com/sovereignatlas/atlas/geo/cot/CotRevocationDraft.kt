@@ -119,7 +119,8 @@ object CotRevocationDraft {
     private const val SECONDS_PER_MINUTE = 60L
     private const val MINUTES_PER_HOUR = 60L
     private const val MILLIS_PER_MINUTE = MINUTES_PER_HOUR * MILLIS_PER_SECOND
-    private const val MILLIS_PER_DAY = 24L * 60L * MILLIS_PER_HOUR
+    private const val MILLIS_PER_HOUR = MINUTES_PER_HOUR * MILLIS_PER_MINUTE
+    private const val MILLIS_PER_DAY = 24L * MILLIS_PER_HOUR
 
     /**
      * Epoch millis to `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`, UTC.
@@ -166,7 +167,7 @@ object CotRevocationDraft {
         val year = yearOfEra + era * 400
         val dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)
         val monthPrime = (5 * dayOfYear + 2) / 153
-        val day = (dayOfYear - (153 * monthPrime + 2) / 5 + 1)
+        val day = dayOfYear - (153 * monthPrime + 2) / 5 + 1
         val month = if (monthPrime < 10) monthPrime + 3 else monthPrime - 9
         val adjustedYear = if (month <= 2) year + 1 else year
         return Triple(adjustedYear.toInt(), month.toInt(), day.toInt())
