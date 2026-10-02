@@ -1,0 +1,23 @@
+-- ADR-007 migration: version 1 -> version 2.
+--
+-- Adds the per-waypoint sharing policy required by master blueprint Phase 10 §10.6
+-- ("Sharing is explicit and controllable"). Without a field the policy cannot be
+-- expressed, and the operator cannot tell which of their existing waypoints may be
+-- shared.
+--
+-- DEFAULT IS THE MOST RESTRICTIVE VALUE, and that is a deliberate product decision
+-- rather than a convenience. §10.6 requires EXPLICIT OPT-IN, so a waypoint that
+-- existed before this column must NOT become shared merely because the app was
+-- upgraded. Defaulting to anything more permissive would silently publish a user's
+-- existing field data to peers they never chose to share it with, and the user
+-- would have no way to learn that had happened.
+--
+-- A user who wants a waypoint shared must open it and change the policy. That is
+-- one extra action per waypoint, and it is the whole point.
+--
+-- ALTER TABLE ADD COLUMN preserves every existing row, which the destructive
+-- alternative (drop and recreate) would not. This database holds waypoints, track
+-- points, and offline pack records on hardware that may be offline and unable to
+-- restore a backup.
+
+ALTER TABLE Waypoint ADD COLUMN sharingPolicy TEXT NOT NULL DEFAULT 'PRIVATE';

@@ -111,6 +111,7 @@ import com.sovereignatlas.atlas.ui.los.TerrainProfileChart
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
+import com.sovereignatlas.atlas.field.WaypointSharingPolicy
 import com.sovereignatlas.atlas.geo.AtlasAngles
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
@@ -1388,6 +1389,11 @@ fun AtlasMapScreen(
                                                     longitude = targetDropPointState!!.longitude,
                                                     timestamp = System.currentTimeMillis(),
                                                     notes = "",
+                                                    // A waypoint dropped from a broadcast
+                                                    // marker is PRIVATE by default. Phase 10
+                                                    // §10.6 requires explicit opt-in, so
+                                                    // creating one must not also publish it.
+                                                    sharingPolicy = WaypointSharingPolicy.Private.storedValue,
                                                 ),
                                             )
                                         }

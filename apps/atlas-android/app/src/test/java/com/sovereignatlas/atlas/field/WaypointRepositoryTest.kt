@@ -31,7 +31,11 @@ final class WaypointRepositoryTest {
         return AtlasDatabase(driver)
     }
 
-    private fun waypoint(id: String, timestamp: Long): Waypoint {
+    private fun waypoint(
+        id: String,
+        timestamp: Long,
+        sharingPolicy: String = WaypointSharingPolicy.Private.storedValue,
+    ): Waypoint {
         return Waypoint(
             id = id,
             name = "wp-$id",
@@ -39,6 +43,7 @@ final class WaypointRepositoryTest {
             longitude = -93.1,
             timestamp = timestamp,
             notes = null,
+            sharingPolicy = sharingPolicy,
         )
     }
 
@@ -92,6 +97,61 @@ final class WaypointRepositoryTest {
             assertTrue(rows.any { it.id == id })
         } finally {
             second.close()
+        }
+    }
+
+    @Test
+    fun sharingPolicyRoundTrips() {
+        runBlocking {
+            val repository = WaypointRepository(database())
+            val id = UUID.randomUUID().toString()
+            repository.saveWaypoint(
+                waypoint(id, 1000L, WaypointSharingPolicy.Team.storedValue),
+            )
+            val stored = withTimeout(10_000L) {
+                repository.waypoints.first { it.any { row -> row.id == id } }
+            }
+            assertEquals(
+                WaypointSharingPolicy.Team,
+                WaypointSharingPolicy.fromStored(stored.first { it.id == id }.sharingPolicy),
+            )
+        }
+    }
+
+    @Test
+    fun aWaypointSavedWithoutAnExplicitPolicyLandsPrivate() {
+        runBlocking {
+            val repository = WaypointRepository(database())
+            val id = UUID.randomUUID().toString()
+            repository.saveWaypoint(waypoint(id, 1000L))
+            assertEquals(
+                WaypointSharingPolicy.Private,
+                repository.sharingPolicyFor(id),
+            )
+        }
+    }
+
+    @Test
+    fun changingAPolicyLeavesEveryOtherFieldIntact() {
+        // The rewrite path must not drop a column. notes is the canary here: it is
+        // nullable and easy to lose in a read-modify-write.
+        runBlocking {
+            val repository = WaypointRepository(database())
+            val id = UUID.randomUUID().toString()
+            repository.saveWaypoint(
+                waypoint(id, 1234L).copy(notes = "check the north fence line"),
+            )
+
+            repository.setSharingPolicy(id, WaypointSharingPolicy.Public)
+
+            val stored = withTimeout(10_000L) {
+                repository.waypoints.first { it.any { row -> row.id == id } }
+            }.first { it.id == id }
+            assertEquals(WaypointSharingPolicy.Public, WaypointSharingPolicy.fromStored(stored.sharingPolicy))
+            assertEquals("check the north fence line", stored.notes)
+            assertEquals("wp-$id", stored.name)
+            assertEquals(1234L, stored.timestamp)
+            assertEquals(44.9, stored.latitude, 1e-9)
         }
     }
 

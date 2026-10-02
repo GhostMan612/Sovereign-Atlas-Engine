@@ -14,6 +14,12 @@ sqldelight {
     databases {
         AtlasDatabase {
             packageName = 'com.sovereignatlas.atlas.db'
+            // ADR-007. Without an explicit version this stays 1 forever and
+            // CREATE TABLE IF NOT EXISTS is a no-op against an existing table, so a
+            // new column compiles into an insert that names a column the device
+            // does not have. Bump this in the same commit as any .sq change AND ship
+            // the matching .sqm script.
+            version = 2
         }
     }
 }

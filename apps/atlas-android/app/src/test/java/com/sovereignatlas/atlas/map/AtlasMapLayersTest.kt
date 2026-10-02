@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.map
 
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
+import com.sovereignatlas.atlas.field.WaypointSharingPolicy
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.track.trackGeometryJson
@@ -24,6 +25,7 @@ private fun waypoint(id: String, latitude: Double, longitude: Double): Waypoint 
         longitude = longitude,
         timestamp = 1000L,
         notes = null,
+        sharingPolicy = WaypointSharingPolicy.Private.storedValue,
     )
 }
 

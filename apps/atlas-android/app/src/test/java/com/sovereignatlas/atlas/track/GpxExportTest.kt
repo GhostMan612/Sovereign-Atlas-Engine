@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.track
 
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
+import com.sovereignatlas.atlas.field.WaypointSharingPolicy
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -20,6 +21,7 @@ private fun waypoint(): Waypoint {
         longitude = -93.0,
         timestamp = 0L,
         notes = "x<y>",
+        sharingPolicy = WaypointSharingPolicy.Team.storedValue,
     )
 }
 

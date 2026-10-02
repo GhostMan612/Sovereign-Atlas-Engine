@@ -1,18 +1,23 @@
+-- Schema version 2. See migrations/1.sqm for the 1 -> 2 change and ADR-007 for
+-- why versioning exists at all. The column defaults to PRIVATE here for the same
+-- reason the migration does: Phase 10 §10.6 requires explicit opt-in, so a
+-- fresh install must not start with waypoints considered shareable.
 CREATE TABLE IF NOT EXISTS Waypoint (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
     latitude REAL NOT NULL,
     longitude REAL NOT NULL,
     timestamp INTEGER NOT NULL,
-    notes TEXT
+    notes TEXT,
+    sharingPolicy TEXT NOT NULL DEFAULT 'PRIVATE'
 );
 
 selectAllWaypoints:
 SELECT * FROM Waypoint ORDER BY timestamp DESC;
 
 insertWaypoint:
-INSERT OR REPLACE INTO Waypoint (id, name, latitude, longitude, timestamp, notes)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO Waypoint (id, name, latitude, longitude, timestamp, notes, sharingPolicy)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 deleteWaypoint:
 DELETE FROM Waypoint WHERE id = ?;
