@@ -211,6 +211,79 @@ object AtlasGeoMath {
             Math.toDegrees(atan2(y, x))
     }
 
+    /**
+     * A point at [fraction] along the great-circle segment [from]-[to].
+     *
+     * Distinct from [interpolateGreatCircle], which takes an ABSOLUTE distance and
+     * a precomputed total. This one measures the segment itself, which is what a
+     * nearest-point-on-edge or distance-field query actually wants — the caller has
+     * the two endpoints and not the length.
+     */
+    fun interpolateAlongSegment(
+        from: AtlasCoordinate,
+        to: AtlasCoordinate,
+        fraction: Double,
+    ): AtlasCoordinate {
+        val totalKm = haversineKm(from, to)
+        if (totalKm <= 1e-12) return from
+        val clamped = fraction.coerceIn(0.0, 1.0)
+        return destinationPoint(from, totalKm * clamped, initialBearingDeg(from, to), totalKm.let { _ ->
+            REFERENCE_RADIUS_KM
+        })
+    }
+
+    /**
+     * Total great-circle length of a polyline, in km.
+     *
+     * A polyline is open by definition, so vertices are summed pairwise with no
+     * closing segment. Adding one would inflate the length by the gap between the
+     * last and first vertex.
+     */
+    fun polylineLengthKm(vertices: List<AtlasCoordinate>): Double {
+        if (vertices.size < 2) return 0.0
+        var total = 0.0
+        for (index in 0 until vertices.size - 1) {
+            total += haversineKm(vertices[index], vertices[index + 1])
+        }
+        return total
+    }
+
+    /**
+     * Rhumb-line (loxodromic) distance in km: constant bearing, not constant
+     * great-circle heading.
+     *
+     * Added because [haversineKm] alone makes "distance" ambiguous on a
+     * rhumb-line navigation problem, and the two diverge by up to ~0.5% at high
+     * latitude over long legs. Which one an operator wants depends on whether they
+     * are plotting a route to steer or measuring ground covered, so both are
+     * offered rather than one being silently substituted for the other.
+     */
+    fun rhumbDistanceKm(
+        from: AtlasCoordinate,
+        to: AtlasCoordinate,
+        radiusKm: Double = REFERENCE_RADIUS_KM,
+    ): Double {
+        val lat1 = radians(from.latitude)
+        val lat2 = radians(to.latitude)
+        val dLat = lat2 - lat1
+        var dLon = Math.toRadians(to.longitude - from.longitude)
+
+        // Crossing the antimeridian the short way is the intended reading.
+        if (dLon > Math.PI) dLon -= 2 * Math.PI
+        if (dLon < -Math.PI) dLon += 2 * Math.PI
+
+        val dPsi = kotlin.math.ln(
+            kotlin.math.tan(lat2 / 2 + Math.PI / 4) / kotlin.math.tan(lat1 / 2 + Math.PI / 4),
+        )
+        val q = if (dLat == 0.0 && dPsi == 0.0) {
+            0.0
+        } else {
+            dPsi / dLat
+        }
+        val distance = kotlin.math.sqrt(dLat * dLat + q * q * dLon * dLon)
+        return distance * radiusKm
+    }
+
     fun formatBearing(degrees: Double): String {
         return "BRG ${degrees.round().toString().padStart(3, '0')}°"
     }
