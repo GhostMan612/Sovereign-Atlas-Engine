@@ -1875,12 +1875,27 @@ fun ensureWaypointIcon(style: Style) {
 }
 
 fun ensureGpsPuck(style: Style, context: Context) {
-    if (style.getImage("gps-puck-icon") == null) {
+    // Both names, one drawable. The LoS observer layer asks for "user-puck" and the
+    // position layer asks for "gps-puck-icon"; they are the same puck seen from two
+    // tools, and only the second was ever registered. The observer marker therefore
+    // had features in its source and painted nothing — the standing-facts failure
+    // mode (source has data, layer silently blank) with no error anywhere to
+    // explain it.
+    //
+    // Aliased rather than given its own asset: a second drawable would be a second
+    // thing to keep in sync for no visual gain. Registering both names from one
+    // decode also means one bitmap object, not two.
+    if (style.getImage("gps-puck-icon") == null || style.getImage(AtlasLayerIds.USER_PUCK_IMAGE) == null) {
         val bitmap = BitmapFactory.decodeResource(
             context.resources,
             com.sovereignatlas.atlas.R.drawable.ic_gps_puck_sdf,
         ) ?: return
-        style.addImage("gps-puck-icon", bitmap, true)
+        if (style.getImage("gps-puck-icon") == null) {
+            style.addImage("gps-puck-icon", bitmap, true)
+        }
+        if (style.getImage(AtlasLayerIds.USER_PUCK_IMAGE) == null) {
+            style.addImage(AtlasLayerIds.USER_PUCK_IMAGE, bitmap, true)
+        }
     }
 }
 
@@ -2121,12 +2136,27 @@ fun pushLosState(
     val ray = style.getLayerAs<LineLayer>(AtlasLayerIds.LOS_LAYER)
     // Amber, not red, for an unmeasured verdict. Red means terrain BLOCKED the ray;
     // painting unmeasured ground red asserts a terrain finding nobody made.
-    val rayColor = when (verdict?.status) {
-        LoSStatus.BlockedTerrain -> "#FF0000"
-        LoSStatus.Clear -> "#39FF14"
-        else -> "#FFA500"
-    }
-    ray?.setProperties(PropertyFactory.lineColor(rayColor))
+    //
+    // The three-arm when this replaced collapsed IncompleteTerrain, NoTerrainData,
+    // DegenerateGeometry and ProviderError into one amber, undoing the Phase 9 §9.5
+    // split. LosRenderStyle now carries one entry per status, and the dash pattern is
+    // the second channel: a dashed line is visibly "partly an assumption" where a
+    // solid one reads as a finding.
+    val render = LosRenderStyle.forStatus(verdict?.status)
+    ray?.setProperties(
+        PropertyFactory.lineColor(render.lineColor),
+        PropertyFactory.lineWidth(render.lineWidth),
+    )
+    // A null dash array clears the pattern, which is why the solid states pass null
+    // rather than "no dash set": a CLEAR verdict after an INCOMPLETE one must return
+    // to a solid line, and skipping the call would leave the previous dashes up.
+    ray?.setProperties(
+        if (render.lineDashArray == null) {
+            PropertyFactory.lineDasharray(null as Array<Float>?)
+        } else {
+            PropertyFactory.lineDasharray(render.lineDashArray)
+        },
+    )
 }
 
 fun mergedTrackFeatures(

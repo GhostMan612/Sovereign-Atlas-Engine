@@ -70,6 +70,16 @@ object AtlasLayerIds {
     const val LOS_LAYER = "atlas-los-ray-layer"
     const val LOS_BLOCK_SOURCE = "atlas-los-block"
     const val LOS_BLOCK_LAYER = "atlas-los-block-layer"
+
+    /**
+     * Image name the LoS observer layer requests.
+     *
+     * Previously a bare `"user-puck"` literal in [installAtlasLayers] that nothing
+     * ever registered. Promoted to a constant so the layer and the registration
+     * cannot drift apart again — the bug was two hardcoded strings that did not
+     * match, and only one of them was in this file.
+     */
+    const val USER_PUCK_IMAGE = "user-puck"
 }
 
 fun installAtlasLayers(style: Style) {
@@ -309,7 +319,7 @@ fun installAtlasLayers(style: Style) {
     style.addLayer(
         SymbolLayer(AtlasLayerIds.LOS_OBSERVER_LAYER, AtlasLayerIds.LOS_OBSERVER_SOURCE)
             .withProperties(
-                PropertyFactory.iconImage("user-puck"),
+                PropertyFactory.iconImage(AtlasLayerIds.USER_PUCK_IMAGE),
                 PropertyFactory.iconSize(1.0f),
                 PropertyFactory.iconAllowOverlap(true),
             ),
