@@ -660,13 +660,38 @@ fun AtlasMapScreen(
                         } else {
                             map.queryRenderedFeatures(screen, AtlasLayerIds.WAYPOINTS_LAYER)
                         }
-                        // The ROOT id, not a property. MapLibreFeatureSink writes
-                        // RenderFeature.id to the root, and that is what
-                        // queryRenderedFeatures returns. Reading getStringProperty("id")
-                        // here returned null after that change and selection silently
-                        // cleared, so a tap on a waypoint did nothing.
-                        val hitId = hits.firstOrNull()?.id()
-                        if (hitId.isNullOrBlank()) {
+                        // Root id first, property bag as fallback. Writing the id to the
+                        // root alone was the right theory and it did not work on the
+                        // device, so which channel survives setGeoJson -> tile pipeline
+                        // -> queryRenderedFeatures is not something to assume. The
+                        // diagnostic below exists to tell us which one does, because
+                        // "tapping does nothing" is otherwise indistinguishable from
+                        // "the layer is not hit-testable at all".
+                        val hit = hits.firstOrNull()
+                        val rootId = hit?.id()
+                        val propertyId = hit?.getStringProperty(MapLibreFeatureSink.PROPERTY_ID)
+                        val hitId = rootId?.takeIf { it.isNotBlank() }
+                            ?: propertyId?.takeIf { it.isNotBlank() }
+                        if (hit != null) {
+                            Log.d(
+                                "AtlasMap",
+                                "waypoint tap: ${hits.size} hit(s), rootId=$rootId, " +
+                                    "propertyId=$propertyId, resolved=$hitId",
+                            )
+                            if (!rootId.isNullOrBlank() && !propertyId.isNullOrBlank() &&
+                                rootId != propertyId
+                            ) {
+                                // The two channels must agree. If they ever do not, the
+                                // duplication has started to drift and one of them is
+                                // about to stop working silently.
+                                Log.w(
+                                    "AtlasMap",
+                                    "waypoint id channels DISAGREE: root='$rootId' " +
+                                        "property='$propertyId'",
+                                )
+                            }
+                        }
+                        if (hitId == null) {
                             waypointSelection.clearWaypointSelection()
                         } else {
                             waypointSelection.selectWaypoint(hitId)

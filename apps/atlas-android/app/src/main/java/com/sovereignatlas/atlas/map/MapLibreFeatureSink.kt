@@ -117,27 +117,31 @@ class MapLibreFeatureSink(
         FeatureCollection.fromFeatures(collection.features.map { toMapLibre(it) })
 
     /**
-     * The pure id goes to MapLibre's ROOT id, not into the property bag.
+     * The pure id goes to BOTH MapLibre's root id AND the property bag.
      *
-     * THE REGRESSION THIS FIXES. [RenderFeature.id] was a first-class field, and the
-     * conversion only ever emitted the property bag — so a hit-test reading
-     * `getStringProperty("id")` got null, selection silently cleared, and tapping a
-     * waypoint did nothing. The paint was unaffected, which is why it looked like a
-     * rendering success while interaction was broken.
+     * WHY BOTH, AFTER A SINGLE-CHANNEL ATTEMPT FAILED ON HARDWARE. The root id alone
+     * was the right theory — it is what `queryRenderedFeatures` documents, and it is
+     * what the renderer uses to correlate a queried feature to its source. It did not
+     * work on the device: tapping a waypoint still did nothing, so either
+     * `setGeoJson` does not round-trip the root id through the source's tile
+     * pipeline, or the queried feature arrives with an empty id.
      *
-     * Root id is the right target, not a workaround. MapLibre's own
-     * `queryRenderedFeatures` returns the id at the root, and it is what the renderer
-     * uses to correlate a queried feature back to its source. `fromGeometry` has an
-     * overload taking `(Geometry, JsonObject, String)` where that String is the id —
-     * probed with `atlas_maplibre_probe` rather than assumed, because the three- and
-     * four-argument overloads differ only in whether a BoundingBox is present.
+     * Writing both and reading root-first-with-fallback removes the dependency on
+     * which one survives. That is a deliberate reversal of the earlier decision to
+     * write only the root and assert the property bag was clean. That assertion
+     * encoded my PREFERENCE as an invariant when the requirement was never "one
+     * source of truth" — it is "a tap must select the waypoint it hit." Two channels
+     * that must agree is a real smell, so the handler logs when they disagree.
      */
-    private fun toMapLibre(feature: RenderFeature): Feature =
-        Feature.fromGeometry(
+    private fun toMapLibre(feature: RenderFeature): Feature {
+        val properties = toJsonProperties(feature.properties)
+        properties.addProperty(PROPERTY_ID, feature.id)
+        return Feature.fromGeometry(
             toMapLibre(feature.geometry),
-            toJsonProperties(feature.properties),
+            properties,
             feature.id,
         )
+    }
 
     /**
      * Pure geometry to MapLibre geometry.
@@ -188,7 +192,16 @@ class MapLibreFeatureSink(
         return json
     }
 
-    private companion object {
+    companion object {
         const val TAG = "AtlasFeatureSink"
+
+        /**
+         * The property name the id is duplicated into.
+         *
+         * Shared with the tap handler, which reads it as a fallback. Named once so the
+         * two cannot drift into writing and reading different keys — which would
+         * reintroduce the original bug in a new form.
+         */
+        const val PROPERTY_ID = "id"
     }
 }

@@ -71,22 +71,51 @@ final class MapLibreFeatureSinkIdTest {
     }
 
     @Test
-    fun theRootIdIsNotAlsoRequiredInThePropertyBag() {
-        // The regression was a property read. Asserting the id is ABSENT from the bag
-        // is what pins the contract: a future change that writes it to both places
-        // would keep tap selection working but would reintroduce two sources of truth
-        // that can drift.
+    fun theIdIsWrittenToTheRootIdAndThePropertyBag() {
+        // REVERSES AN EARLIER ASSERTION IN THIS FILE. The previous version asserted
+        // the id was ABSENT from the property bag, on the reasoning that one source of
+        // truth cannot drift. That reasoning was wrong: the requirement is that a tap
+        // selects the waypoint it hit, not that there is exactly one place the id
+        // lives. Writing root-only was the right theory and it did not work on the
+        // device, so the requirement wins and the preference loses.
+        //
+        // The cost of two channels is that they must AGREE. The tap handler logs when
+        // they disagree, and this test pins both to the same value.
         val converted = featureFrom(
             RenderFeature(
                 geometry = RenderGeometry.Point(LngLat(longitude = -93.1, latitude = 44.9)),
-                id = "wp-root-only",
+                id = "wp-both",
             ),
         )
 
-        assertEquals("wp-root-only", converted.id())
-        assertNull(
-            "the id must not be smuggled into the property bag",
-            converted.getStringProperty("id"),
+        assertEquals("wp-both", converted.id())
+        assertEquals(
+            "the two channels must carry the same id",
+            converted.id(),
+            converted.getStringProperty(MapLibreFeatureSink.PROPERTY_ID),
+        )
+    }
+
+    @Test
+    fun anExplicitIdPropertyCannotShadowTheFirstClassId() {
+        // A mapper that put its own "id" property in would have been overwritten by
+        // the first-class field, which is the correct precedence: the field is the
+        // model's identity and a property called id is a coincidence of naming.
+        val converted = featureFrom(
+            RenderFeature(
+                geometry = RenderGeometry.Point(LngLat(longitude = -93.1, latitude = 44.9)),
+                id = "wp-authoritative",
+                properties = mapOf(
+                    MapLibreFeatureSink.PROPERTY_ID to
+                        com.sovereignatlas.atlas.geo.render.RenderProperty.Text("spoofed"),
+                ),
+            ),
+        )
+
+        assertEquals("wp-authoritative", converted.id())
+        assertEquals(
+            "wp-authoritative",
+            converted.getStringProperty(MapLibreFeatureSink.PROPERTY_ID),
         )
     }
 
@@ -221,6 +250,9 @@ final class MapLibreFeatureSinkIdTest {
                             addProperty(key, value.value)
                     }
                 }
+                // Mirrors MapLibreFeatureSink.toMapLibre exactly, including the
+                // first-class id winning over a property of the same name.
+                addProperty(MapLibreFeatureSink.PROPERTY_ID, feature.id)
             },
             feature.id,
         )
