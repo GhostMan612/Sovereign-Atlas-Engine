@@ -360,13 +360,8 @@ fun setAtlasLayerVisible(style: Style, layerId: String, visible: Boolean) {
     }
 }
 
-fun pushFeatures(style: Style, sourceId: String, collection: FeatureCollection) {
-    val source = style.getSourceAs<GeoJsonSource>(sourceId)
-    if (source == null) {
-        // A silent no-op here is indistinguishable from "no data", which is how
-        // a live feature set can vanish with nothing in the log.
-        android.util.Log.w("AtlasLayers", "pushFeatures: source '$sourceId' is not on the style")
-        return
-    }
-    source.setGeoJson(collection)
-}
+// The old pushFeatures(style, sourceId, FeatureCollection) is gone. Every one of
+// its call sites now goes through FeatureSink, which replaced the raw sourceId String
+// with the AtlasLayer sealed type. Nothing should be adding to a source by string id
+// any more: a typo produced a write to a source that does not exist, and two of the
+// three call paths did so silently.

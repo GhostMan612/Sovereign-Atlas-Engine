@@ -5,181 +5,190 @@
 
 package com.sovereignatlas.atlas.map
 
-import android.util.Log
-import com.google.gson.JsonObject
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
+import com.sovereignatlas.atlas.core.LngLat
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.db.Waypoint
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.AtlasRangeRings
-import com.sovereignatlas.atlas.geo.MgrsGrid
-import com.sovereignatlas.atlas.geo.MgrsGridLabel
 import com.sovereignatlas.atlas.geo.MgrsGridLine
+import com.sovereignatlas.atlas.geo.MgrsGridLabel
+import com.sovereignatlas.atlas.geo.render.RenderFeature
+import com.sovereignatlas.atlas.geo.render.RenderFeatureCollection
+import com.sovereignatlas.atlas.geo.render.RenderGeometry
+import com.sovereignatlas.atlas.geo.render.RenderProperty
 import com.sovereignatlas.atlas.track.parseTrackGeometry
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.LineString
-import org.maplibre.geojson.Point
 
-fun waypointToFeature(record: Waypoint): Feature? {
-    return runCatching {
-        val properties = JsonObject()
-        properties.addProperty("id", record.id)
-        properties.addProperty("name", record.name)
-        properties.addProperty("label", record.name.ifEmpty { record.id })
-        Feature.fromGeometry(
-            Point.fromLngLat(record.longitude, record.latitude),
-            properties,
-        )
-    }.onFailure {
-        Log.w("AtlasMap", "Skipping waypoint ${record.id}: ${it.message}")
-    }.getOrNull()
-}
+/**
+ * Domain objects to renderable features, in pure types.
+ *
+ * WAS A MapLibre MAPPER FILE. Every function here used to return
+ * `org.maplibre.geojson.FeatureCollection`, which meant the conversion from domain to
+ * map was written against a renderer's vocabulary — the coupling Phase 0 §0.4 exists
+ * to remove. The return types are now [RenderFeatureCollection] and the actual
+ * translation to MapLibre happens in exactly one place, [MapLibreFeatureSink].
+ *
+ * The `Log.w` calls are gone with the MapLibre dependency: the skip decisions they
+ * reported are preserved as null returns, and the reason is stated at each site
+ * rather than at runtime.
+ */
 
-fun waypointsToFeatures(records: List<Waypoint>): FeatureCollection {
-    return FeatureCollection.fromFeatures(records.mapNotNull { waypointToFeature(it) })
-}
+/** Longitude-first, matching RFC 7946 and [LngLat]. */
+private fun at(latitude: Double, longitude: Double) = LngLat(longitude, latitude)
 
-fun trackToFeature(track: Track): Feature? {
-    val points = parseTrackGeometry(track.geometry)
-    if (points == null || points.size < 2) {
-        Log.w("AtlasMap", "Skipping track ${track.id}: corrupt geometry")
-        return null
-    }
-    return runCatching {
-        val properties = JsonObject()
-        properties.addProperty("id", track.id)
-        properties.addProperty("name", track.name)
-        Feature.fromGeometry(
-            LineString.fromLngLats(
-                points.map { point -> Point.fromLngLat(point.longitude, point.latitude) },
-            ),
-            properties,
-        )
-    }.onFailure {
-        Log.w("AtlasMap", "Skipping track ${track.id}: ${it.message}")
-    }.getOrNull()
-}
+private fun AtlasCoordinate.toLngLat() = LngLat(longitude, latitude)
 
-fun tracksToFeatures(tracks: List<Track>): FeatureCollection {
-    return FeatureCollection.fromFeatures(tracks.mapNotNull { trackToFeature(it) })
-}
-
-fun mgrsLinesToFeatures(lines: List<MgrsGridLine>): FeatureCollection {
-    return FeatureCollection.fromFeatures(
-        lines.map { line ->
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    line.coordinates.map { (latitude, longitude) ->
-                        Point.fromLngLat(longitude, latitude)
-                    },
-                ),
-            )
-        },
-    )
-}
-
-fun mgrsLabelsToFeatures(labels: List<MgrsGridLabel>): FeatureCollection {
-    return FeatureCollection.fromFeatures(
-        labels.map { label ->
-            val properties = JsonObject()
-            properties.addProperty("title", label.text)
-            Feature.fromGeometry(
-                Point.fromLngLat(label.longitude, label.latitude),
-                properties,
-            )
-        },
-    )
-}
-
-fun measureToFeatures(a: AtlasCoordinate, b: AtlasCoordinate): FeatureCollection {
-    return FeatureCollection.fromFeatures(
-        listOf(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    listOf(
-                        Point.fromLngLat(a.longitude, a.latitude),
-                        Point.fromLngLat(b.longitude, b.latitude),
-                    ),
-                ),
-            ),
+/**
+ * A waypoint as a symbol feature.
+ *
+ * `label` falls back to the id because the style renders `{label}` and a waypoint with
+ * an empty name would otherwise draw an invisible symbol that still occupies the
+ * layer. `sharingPolicy` is carried as a property so a plugin reading features back
+ * out of the style can tell an exposed waypoint from a local one without a database
+ * round trip.
+ */
+fun waypointToFeature(record: Waypoint): RenderFeature? {
+    val label = record.name.ifEmpty { record.id }
+    return RenderFeature(
+        geometry = RenderGeometry.Point(at(record.latitude, record.longitude)),
+        id = record.id,
+        properties = mapOf(
+            "name" to RenderProperty.Text(record.name),
+            "label" to RenderProperty.Text(label),
+            "sharingPolicy" to RenderProperty.Text(record.sharingPolicy),
         ),
     )
 }
 
+fun waypointsToFeatures(records: List<Waypoint>): RenderFeatureCollection =
+    RenderFeatureCollection(records.mapNotNull { waypointToFeature(it) })
+
+/**
+ * A stored track as a line feature, or null when its geometry is unusable.
+ *
+ * A track with fewer than two parsed positions is skipped rather than emitted as a
+ * degenerate line: [RenderGeometry.LineString] rejects that at construction, and a
+ * corrupted track must not take down the whole layer's push.
+ */
+fun trackToFeature(track: Track): RenderFeature? {
+    val points = parseTrackGeometry(track.geometry)
+    if (points == null || points.size < 2) return null
+    return RenderFeature(
+        geometry = RenderGeometry.LineString(points.map { at(it.latitude, it.longitude) }),
+        id = track.id,
+        properties = mapOf("name" to RenderProperty.Text(track.name)),
+    )
+}
+
+fun tracksToFeatures(tracks: List<Track>): RenderFeatureCollection =
+    RenderFeatureCollection(tracks.mapNotNull { trackToFeature(it) })
+
+fun mgrsLinesToFeatures(lines: List<MgrsGridLine>): RenderFeatureCollection =
+    RenderFeatureCollection(
+        lines.map { line ->
+            RenderFeature(
+                geometry = RenderGeometry.LineString(
+                    line.coordinates.map { (latitude, longitude) -> at(latitude, longitude) },
+                ),
+                // Grid lines have no natural identity. The index is stable within one
+                // generated grid, which is all the layer needs — nothing selects on
+                // an MGRS line id.
+                id = "mgrs-line-${line.coordinates.hashCode()}",
+            )
+        },
+    )
+
+fun mgrsLabelsToFeatures(labels: List<MgrsGridLabel>): RenderFeatureCollection =
+    RenderFeatureCollection(
+        labels.map { label ->
+            RenderFeature(
+                geometry = RenderGeometry.Point(at(label.latitude, label.longitude)),
+                id = "mgrs-label-${label.text}",
+                properties = mapOf("title" to RenderProperty.Text(label.text)),
+            )
+        },
+    )
+
+fun measureToFeatures(a: AtlasCoordinate, b: AtlasCoordinate): RenderFeatureCollection =
+    RenderFeatureCollection(
+        listOf(
+            RenderFeature(
+                geometry = RenderGeometry.LineString(
+                    listOf(a.toLngLat(), b.toLngLat()),
+                ),
+                id = "measure",
+            ),
+        ),
+    )
+
 fun graticuleToFeatures(
     bounds: AtlasBoundingBox,
     interval: Double,
-): FeatureCollection {
+): RenderFeatureCollection {
     val grid = AtlasGrids.graticuleFor(bounds, interval)
-    val features = ArrayList<Feature>(grid.meridians.size + grid.parallels.size)
+    val features = ArrayList<RenderFeature>(grid.meridians.size + grid.parallels.size)
     for (meridian in grid.meridians) {
         features.add(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    listOf(
-                        Point.fromLngLat(meridian, bounds.south),
-                        Point.fromLngLat(meridian, bounds.north),
-                    ),
+            RenderFeature(
+                geometry = RenderGeometry.LineString(
+                    listOf(at(bounds.south, meridian), at(bounds.north, meridian)),
                 ),
+                id = "meridian-$meridian",
             ),
         )
     }
     for (parallel in grid.parallels) {
         features.add(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    listOf(
-                        Point.fromLngLat(bounds.west, parallel),
-                        Point.fromLngLat(bounds.east, parallel),
-                    ),
+            RenderFeature(
+                geometry = RenderGeometry.LineString(
+                    listOf(at(parallel, bounds.west), at(parallel, bounds.east)),
                 ),
+                id = "parallel-$parallel",
             ),
         )
     }
-    return FeatureCollection.fromFeatures(features)
+    return RenderFeatureCollection(features)
 }
 
 fun ringsToFeatures(
     center: AtlasCoordinate?,
     stepIndex: Int,
-): FeatureCollection {
+): RenderFeatureCollection {
     val set = AtlasRangeRings.generate(center, stepIndex)
-    if (set.isEmpty) return FeatureCollection.fromFeatures(emptyList())
-    val features = ArrayList<Feature>(set.rings.size + set.spokes.size)
-    for (ring in set.rings + set.spokes) {
+    if (set.isEmpty) return RenderFeatureCollection.EMPTY
+    val features = ArrayList<RenderFeature>(set.rings.size + set.spokes.size)
+    for ((index, ring) in (set.rings + set.spokes).withIndex()) {
         features.add(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
-                    ring.map { point ->
-                        Point.fromLngLat(point.longitude, point.latitude)
-                    },
-                ),
+            RenderFeature(
+                geometry = RenderGeometry.LineString(ring.map { it.toLngLat() }),
+                id = "ring-$index",
             ),
         )
     }
-    return FeatureCollection.fromFeatures(features)
+    return RenderFeatureCollection(features)
 }
 
-fun positionToFeature(center: AtlasCoordinate): Feature {
-    return positionToFeature(center, null)
-}
+fun positionToFeature(center: AtlasCoordinate): RenderFeature =
+    positionToFeature(center, null)
 
-fun positionToFeature(center: AtlasCoordinate, bearingDeg: Double?): Feature {
-    val properties = JsonObject()
-    properties.addProperty("bearing", bearingDeg ?: 0.0)
-    return Feature.fromGeometry(
-        Point.fromLngLat(center.longitude, center.latitude),
-        properties,
+/**
+ * Own position, with the heading as a property.
+ *
+ * The style reads `bearing` and rotates the icon by it, so the value is a NUMBER here
+ * and an expression there. Rendering it as a property rather than a fixed rotation is
+ * what lets the puck turn without a layer rebuild.
+ */
+fun positionToFeature(center: AtlasCoordinate, bearingDeg: Double?): RenderFeature =
+    RenderFeature(
+        geometry = RenderGeometry.Point(center.toLngLat()),
+        id = "position",
+        properties = mapOf("bearing" to RenderProperty.Number(bearingDeg ?: 0.0)),
     )
-}
 
-fun goToToFeature(latitude: Double, longitude: Double, label: String): Feature {
-    val properties = JsonObject()
-    properties.addProperty("label", label)
-    return Feature.fromGeometry(
-        Point.fromLngLat(longitude, latitude),
-        properties,
+fun goToToFeature(latitude: Double, longitude: Double, label: String): RenderFeature =
+    RenderFeature(
+        geometry = RenderGeometry.Point(at(latitude, longitude)),
+        id = "goto",
+        properties = mapOf("label" to RenderProperty.Text(label)),
     )
-}

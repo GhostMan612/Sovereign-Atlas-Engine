@@ -83,10 +83,17 @@ import com.sovereignatlas.atlas.AtlasServices
 import com.sovereignatlas.atlas.android.AndroidRoutingLoader
 import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.SqliteDemTileStore
+import com.sovereignatlas.atlas.geo.render.AtlasLayer
+import com.sovereignatlas.atlas.geo.render.FeatureSink
+import com.sovereignatlas.atlas.geo.render.RenderFeature
+import com.sovereignatlas.atlas.geo.render.RenderFeatureCollection
+import com.sovereignatlas.atlas.geo.render.RenderGeometry
+import com.sovereignatlas.atlas.geo.render.RenderProperty
 import com.sovereignatlas.atlas.geo.routing.LoadProfile
 import com.sovereignatlas.atlas.geo.routing.RoutingRequest
 import com.sovereignatlas.atlas.geo.routing.RoutingResult
 import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.core.LngLat
 import com.sovereignatlas.atlas.geo.DemEngine
 import com.sovereignatlas.atlas.geo.GeoPoint
 import com.sovereignatlas.atlas.geo.LoSMode
@@ -200,6 +207,10 @@ fun AtlasMapScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val styleRef = remember { mutableStateOf<Style?>(null) }
+    // One sink for the whole composable, reading the style through the state holder
+    // rather than capturing a Style. Every push site used to re-read styleRef and
+    // re-derive the source lookup; this is where that happens now, once.
+    val sink: FeatureSink = remember { MapLibreFeatureSink { styleRef.value } }
     val repoWaypoints = remember { mutableStateOf<List<Waypoint>>(emptyList()) }
     val repoTracks = remember { mutableStateOf<List<Track>>(emptyList()) }
     val showWaypoints = remember { mutableStateOf(false) }
@@ -296,10 +307,8 @@ fun AtlasMapScreen(
                 MgrsEngine.generate(box, map.cameraPosition.zoom)
             }
             mgrsCache.value = grid
-            styleRef.value?.let { style ->
-                pushFeatures(style, AtlasLayerIds.MGRS_LINE_SOURCE, mgrsLinesToFeatures(grid.lines))
-                pushFeatures(style, AtlasLayerIds.MGRS_LABEL_SOURCE, mgrsLabelsToFeatures(grid.labels))
-            }
+            sink.replace(AtlasLayer.MgrsLines, mgrsLinesToFeatures(grid.lines))
+            sink.replace(AtlasLayer.MgrsLabels, mgrsLabelsToFeatures(grid.labels))
         }
     }
     val onHaptic: () -> Unit = {
@@ -336,8 +345,8 @@ fun AtlasMapScreen(
             // leaving the previous viewport's parcels on screen would show parcels
             // outside the visible area as if they were in it.
             val collection = patents.toMapLibreFeatureCollection()
+            (sink as? MapLibreFeatureSink)?.replaceRaw(AtlasLayer.AssetParcels, collection)
             styleRef.value?.let { style ->
-                pushFeatures(style, AtlasLayerIds.HISTORICAL_PATENTS_SOURCE, collection)
                 syncHistoricalBlueprintLayers(style, blueprints)
             }
         }
@@ -462,19 +471,19 @@ fun AtlasMapScreen(
         ensureScrubIcon(style)
         ensurePliMarker(style, context)
         ensureCotTrackIcons(style, context)
-        pushScrubPoint(style, services.scrubState.activePoint.value)
-        pushPli(style, services.pli.observe().value)
-        pushMarkers(style, services.markers.observe().value)
-        pushMeshTracks(style, services.markers.observe().value)
-        pushOpsGraphics(style, displayGraphics)
-        pushRouteResult(style, services.routing.result.value)
+        pushScrubPoint(sink, services.scrubState.activePoint.value)
+        pushPli(sink, services.pli.observe().value)
+        pushMarkers(sink, services.markers.observe().value)
+        pushMeshTracks(sink, services.markers.observe().value)
+        pushOpsGraphics(sink, displayGraphics)
+        pushRouteResult(sink, services.routing.result.value)
         if (showMgrsGrid.value) {
             val cached = mgrsCache.value
-            pushFeatures(style, AtlasLayerIds.MGRS_LINE_SOURCE, mgrsLinesToFeatures(cached.lines))
-            pushFeatures(style, AtlasLayerIds.MGRS_LABEL_SOURCE, mgrsLabelsToFeatures(cached.labels))
+            sink.replace(AtlasLayer.MgrsLines, mgrsLinesToFeatures(cached.lines))
+            sink.replace(AtlasLayer.MgrsLabels, mgrsLabelsToFeatures(cached.labels))
         }
         pushLosState(
-            style,
+            sink,
             services.losState.observer.value,
             services.losState.target.value,
             services.losState.profile.value,
@@ -484,18 +493,17 @@ fun AtlasMapScreen(
         // recreates an empty source, and a camera that never moves again would
         // otherwise leave the viewport with no parcels at all.
         refreshHistoricalAssets(map)
-        pushFeatures(style, AtlasLayerIds.WAYPOINTS_SOURCE, waypointsToFeatures(repoWaypoints.value))
-        pushFeatures(
-            style,
-            AtlasLayerIds.TRACK_SOURCE,
+        sink.replace(AtlasLayer.Waypoints, waypointsToFeatures(repoWaypoints.value))
+        sink.replace(
+            AtlasLayer.Track,
             mergedTrackFeatures(repoTracks.value, services.recorder),
         )
-        pushPosition(style, services)
-        pushMeasure(style, services)
-        pushGoTo(style, services)
-        pushRings(style, services)
+        pushPosition(sink, services)
+        pushMeasure(sink, services)
+        pushGoTo(sink, services)
+        pushRings(sink, services)
         syncMbtilesPackLayers(style, services, activeMbtilesPacks.value)
-        if (showGraticule.value) pushGraticule(map, style)
+        if (showGraticule.value) pushGraticule(map, sink)
         attribution.value = if (applyOnlineBase) {
             applyBaseSource(
                 style,
@@ -574,14 +582,12 @@ fun AtlasMapScreen(
                                 runLosCalculation(services)
                             }
                         }
-                        styleRef.value?.let { style ->
-                            pushLosState(
-                                style,
-                                services.losState.observer.value,
-                                services.losState.target.value,
-                                services.losState.profile.value,
-                            )
-                        }
+                        pushLosState(
+                            sink,
+                            services.losState.observer.value,
+                            services.losState.target.value,
+                            services.losState.profile.value,
+                        )
                     } else if (services.measure.isActive()) {
                         services.measure.setB(
                             AtlasCoordinate(
@@ -677,9 +683,7 @@ fun AtlasMapScreen(
                         isIdle = true,
                     )
                     if (showMgrsGrid.value) refreshMgrsGrid(map)
-                    styleRef.value?.let { style ->
-                        if (showGraticule.value) pushGraticule(map, style)
-                    }
+                    if (showGraticule.value) pushGraticule(map, sink)
                     refreshHistoricalAssets(map)
                 }
                 val initialJson = services.maps.activeMap.value?.let { offline ->
@@ -717,8 +721,8 @@ fun AtlasMapScreen(
             val map = mapRef.value
             val style = styleRef.value
             if (map != null && style != null) {
-                pushPosition(style, services)
-                if (showRings.value) pushRings(style, services)
+                pushPosition(sink, services)
+                if (showRings.value) pushRings(sink, services)
                 if (following.value) {
                     val fix = usableFixOf(services)
                     if (fix != null) {
@@ -744,21 +748,18 @@ fun AtlasMapScreen(
         val onMeasure: () -> Unit = {
             measureActive.value = services.measure.isActive()
             measureSnapshot.value = services.measure.snapshot()
-            styleRef.value?.let { style -> pushMeasure(style, services) }
+            pushMeasure(sink, services)
         }
         val onRecorder: () -> Unit = {
             recorderTick.value += 1
-            styleRef.value?.let { style ->
-                pushFeatures(
-                    style,
-                    AtlasLayerIds.TRACK_SOURCE,
-                    mergedTrackFeatures(repoTracks.value, services.recorder),
-                )
-            }
+            sink.replace(
+                AtlasLayer.Track,
+                mergedTrackFeatures(repoTracks.value, services.recorder),
+            )
         }
         val onGoTo: () -> Unit = {
             goToTick.value += 1
-            styleRef.value?.let { style -> pushGoTo(style, services) }
+            pushGoTo(sink, services)
             val target = services.goTo.targetOrNull()
             val fix = usableFixOf(services)
             if (target != null && fix != null) {
@@ -807,68 +808,49 @@ fun AtlasMapScreen(
             launch {
                 services.waypointRepository.waypoints.collect { waypoints ->
                     repoWaypoints.value = waypoints
-                    styleRef.value?.let { style ->
-                        pushFeatures(
-                            style,
-                            AtlasLayerIds.WAYPOINTS_SOURCE,
-                            waypointsToFeatures(waypoints),
-                        )
-                    }
+                    sink.replace(AtlasLayer.Waypoints, waypointsToFeatures(waypoints))
                 }
             }
             launch {
                 services.trackRepository.tracks.collect { tracks ->
                     repoTracks.value = tracks
-                    styleRef.value?.let { style ->
-                        pushFeatures(
-                            style,
-                            AtlasLayerIds.TRACK_SOURCE,
-                            mergedTrackFeatures(tracks, services.recorder),
-                        )
-                    }
+                    sink.replace(
+                        AtlasLayer.Track,
+                        mergedTrackFeatures(tracks, services.recorder),
+                    )
                 }
             }
             launch {
                 services.scrubState.activePoint.collect { point ->
-                    styleRef.value?.let { style ->
-                        pushScrubPoint(style, point)
-                    }
+                    pushScrubPoint(sink, point)
                 }
             }
             launch {
                 services.pli.observe().collect { plis ->
-                    styleRef.value?.let { style ->
-                        pushPli(style, plis)
-                    }
+                    pushPli(sink, plis)
                 }
             }
             launch {
                 services.markers.observe().collect { markerMap ->
-                    styleRef.value?.let { style ->
-                        pushMarkers(style, markerMap)
-                        pushMeshTracks(style, markerMap)
-                    }
+                    pushMarkers(sink, markerMap)
+                    pushMeshTracks(sink, markerMap)
                 }
             }
             launch {
                 services.routing.result.collect { result ->
-                    styleRef.value?.let { style ->
-                        pushRouteResult(style, result)
-                    }
+                    pushRouteResult(sink, result)
                 }
             }
             launch {
                 services.losState.profile.collect { profile ->
-                    styleRef.value?.let { style ->
-                        pushLosState(
-                            style,
-                            services.losState.observer.value,
-                            services.losState.target.value,
-                            profile,
-                        )
-                    }
-                }
-            }
+        pushLosState(
+            sink,
+            services.losState.observer.value,
+            services.losState.target.value,
+            profile,
+        )
+    }
+}
         }
     }
     val toolsScope = rememberCoroutineScope()
@@ -1004,8 +986,7 @@ fun AtlasMapScreen(
         services.heading.ensureStarted()
     }
     LaunchedEffect(displayGraphics) {
-        val style = styleRef.value ?: return@LaunchedEffect
-        pushOpsGraphics(style, displayGraphics)
+        pushOpsGraphics(sink, displayGraphics)
     }
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -1672,9 +1653,9 @@ fun AtlasMapScreen(
                     showGraticule.value = visible
                     styleRef.value?.let { style ->
                         setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, visible)
-                        val map = mapRef.value
-                        if (visible && map != null) pushGraticule(map, style)
                     }
+                    val map = mapRef.value
+                    if (visible && map != null) pushGraticule(map, sink)
                 },
                 showMgrsGrid = showMgrsGrid.value,
                 onMgrsGridChanged = { visible ->
@@ -1692,8 +1673,8 @@ fun AtlasMapScreen(
                     showRings.value = visible
                     styleRef.value?.let { style ->
                         setAtlasLayerVisible(style, AtlasLayerIds.RINGS_LAYER, visible)
-                        if (visible) pushRings(style, services)
                     }
+                    if (visible) pushRings(sink, services)
                 },
                 showWaypoints = showWaypointsLayer.value,
                 onWaypointsChanged = { visible ->
@@ -1746,11 +1727,11 @@ fun AtlasMapScreen(
                 fence = fence.value,
                 onSet = { next ->
                     fence.value = next
-                    styleRef.value?.let { style -> pushFence(style, next) }
+                    pushFence(sink, next)
                 },
                 onClear = {
                     fence.value = null
-                    styleRef.value?.let { style -> pushFence(style, null) }
+                    pushFence(sink, null)
                 },
                 onClose = { showFence.value = false },
             )
@@ -1924,26 +1905,26 @@ fun markerColorHex(type: String): String {
     }
 }
 
-fun markersToFeatures(markers: Map<String, CotMarker>): FeatureCollection {
-    return FeatureCollection.fromFeatures(
+fun markersToFeatures(markers: Map<String, CotMarker>): RenderFeatureCollection =
+    RenderFeatureCollection(
         markers.values.map { marker ->
-            Feature.fromGeometry(
-                Point.fromLngLat(marker.longitude, marker.latitude),
-            ).apply {
-                addStringProperty("color", markerColorHex(marker.type))
-                addStringProperty("callsign", marker.callsign)
-            }
+            RenderFeature(
+                geometry = RenderGeometry.Point(LngLat(marker.longitude, marker.latitude)),
+                id = marker.uid,
+                properties = mapOf(
+                    "color" to RenderProperty.Text(markerColorHex(marker.type)),
+                    "callsign" to RenderProperty.Text(marker.callsign),
+                ),
+            )
         },
     )
+
+fun pushMarkers(sink: FeatureSink, markers: Map<String, CotMarker>) {
+    sink.replace(AtlasLayer.Marker, markersToFeatures(markers))
 }
 
-fun pushMarkers(style: Style, markers: Map<String, CotMarker>) {
-    pushFeatures(style, AtlasLayerIds.MARKER_SOURCE, markersToFeatures(markers))
-}
-
-fun pushOpsGraphics(style: Style, graphics: List<OperationalGraphic>) {
-    val source = style.getSourceAs<GeoJsonSource>(AtlasLayerIds.OPS_GRAPHICS_SOURCE) ?: return
-    source.setGeoJson(GraphicsGeoJsonMapper.toFeatureCollection(graphics))
+fun pushOpsGraphics(sink: FeatureSink, graphics: List<OperationalGraphic>) {
+    sink.replace(AtlasLayer.OpsGraphics, GraphicsGeoJsonMapper.toRenderFeatures(graphics))
 }
 
 fun ensureCotTrackIcons(style: Style, context: Context) {
@@ -1960,23 +1941,22 @@ fun ensureCotTrackIcons(style: Style, context: Context) {
     }
 }
 
-fun pushMeshTracks(style: Style, markers: Map<String, CotMarker>) {
-    val source = style.getSourceAs<GeoJsonSource>(AtlasLayerIds.MESH_TRACK_SOURCE) ?: return
-    source.setGeoJson(CotGeoJsonMapper.toFeatureCollection(markers.values.toList()))
+fun pushMeshTracks(sink: FeatureSink, markers: Map<String, CotMarker>) {
+    sink.replace(
+        AtlasLayer.MeshTrack,
+        CotGeoJsonMapper.toRenderFeatures(markers.values.toList()),
+    )
 }
 
-fun pushPli(style: Style, plis: Map<String, CotPli>) {
-    pushFeatures(
-        style,
-        AtlasLayerIds.PLI_SOURCE,
-        FeatureCollection.fromFeatures(
+fun pushPli(sink: FeatureSink, plis: Map<String, CotPli>) {
+    sink.replace(
+        AtlasLayer.Pli,
+        RenderFeatureCollection(
             plis.values.map { pli ->
-                val properties = JsonObject()
-                properties.addProperty("callsign", pli.callsign)
-                properties.addProperty("uid", pli.uid)
-                Feature.fromGeometry(
-                    Point.fromLngLat(pli.longitude, pli.latitude),
-                    properties,
+                RenderFeature(
+                    geometry = RenderGeometry.Point(LngLat(pli.longitude, pli.latitude)),
+                    id = pli.uid,
+                    properties = mapOf("callsign" to RenderProperty.Text(pli.callsign)),
                 )
             },
         ),
@@ -2001,19 +1981,24 @@ fun ensureScrubIcon(style: Style) {
     }
 }
 
-fun pushScrubPoint(style: Style, point: ProfilePoint?) {
-    val features = if (point == null) {
-        FeatureCollection.fromFeatures(emptyList())
-    } else {
-        FeatureCollection.fromFeatures(
-            listOf(
-                Feature.fromGeometry(
-                    Point.fromLngLat(point.longitude, point.latitude),
+fun pushScrubPoint(sink: FeatureSink, point: ProfilePoint?) {
+    sink.replace(
+        AtlasLayer.Scrub,
+        if (point == null) {
+            RenderFeatureCollection.EMPTY
+        } else {
+            RenderFeatureCollection(
+                listOf(
+                    RenderFeature(
+                        geometry = RenderGeometry.Point(
+                            LngLat(point.longitude, point.latitude),
+                        ),
+                        id = "scrub",
+                    ),
                 ),
-            ),
-        )
-    }
-    pushFeatures(style, AtlasLayerIds.SCRUB_SOURCE, features)
+            )
+        },
+    )
 }
 
 suspend fun refreshFootRoute(
@@ -2037,21 +2022,21 @@ suspend fun refreshFootRoute(
     services.routing.setResult(result)
 }
 
-fun pushRouteResult(style: Style, result: RoutingResult?) {
-    pushFeatures(
-        style,
-        AtlasLayerIds.ROUTE_SOURCE,
+fun pushRouteResult(sink: FeatureSink, result: RoutingResult?) {
+    sink.replace(
+        AtlasLayer.Route,
         if (result == null || result.path.size < 2) {
-            FeatureCollection.fromFeatures(emptyList())
+            RenderFeatureCollection.EMPTY
         } else {
-            FeatureCollection.fromFeatures(
+            RenderFeatureCollection(
                 listOf(
-                    Feature.fromGeometry(
-                        LineString.fromLngLats(
+                    RenderFeature(
+                        geometry = RenderGeometry.LineString(
                             result.path.map { node ->
-                                Point.fromLngLat(node.longitude, node.latitude)
+                                LngLat(node.longitude, node.latitude)
                             },
                         ),
+                        id = "route",
                     ),
                 ),
             )
@@ -2073,67 +2058,55 @@ suspend fun runLosCalculation(services: AtlasServices) {
 }
 
 fun pushLosState(
-    style: Style,
+    sink: FeatureSink,
     observer: GeoPoint?,
     target: GeoPoint?,
     profile: TerrainProfile?,
 ) {
     val verdict = profile?.lineOfSight
-    pushFeatures(
-        style,
-        AtlasLayerIds.LOS_OBSERVER_SOURCE,
-        if (observer == null) {
-            FeatureCollection.fromFeatures(emptyList())
-        } else {
-            FeatureCollection.fromFeatures(
-                listOf(Feature.fromGeometry(Point.fromLngLat(observer.longitude, observer.latitude))),
-            )
-        },
-    )
-    pushFeatures(
-        style,
-        AtlasLayerIds.LOS_TARGET_SOURCE,
-        if (target == null) {
-            FeatureCollection.fromFeatures(emptyList())
-        } else {
-            FeatureCollection.fromFeatures(
-                listOf(Feature.fromGeometry(Point.fromLngLat(target.longitude, target.latitude))),
-            )
-        },
-    )
-    pushFeatures(
-        style,
-        AtlasLayerIds.LOS_SOURCE,
+
+    fun pointFeature(id: String, at: GeoPoint?) = if (at == null) {
+        RenderFeatureCollection.EMPTY
+    } else {
+        RenderFeatureCollection(
+            listOf(
+                RenderFeature(
+                    geometry = RenderGeometry.Point(LngLat(at.longitude, at.latitude)),
+                    id = id,
+                ),
+            ),
+        )
+    }
+
+    sink.replace(AtlasLayer.LosObserver, pointFeature("los-observer", observer))
+    sink.replace(AtlasLayer.LosTarget, pointFeature("los-target", target))
+    sink.replace(
+        AtlasLayer.LosRay,
         if (observer == null || target == null) {
-            FeatureCollection.fromFeatures(emptyList())
+            RenderFeatureCollection.EMPTY
         } else {
-            FeatureCollection.fromFeatures(
+            RenderFeatureCollection(
                 listOf(
-                    Feature.fromGeometry(
-                        LineString.fromLngLats(
+                    RenderFeature(
+                        geometry = RenderGeometry.LineString(
                             listOf(
-                                Point.fromLngLat(observer.longitude, observer.latitude),
-                                Point.fromLngLat(target.longitude, target.latitude),
+                                LngLat(observer.longitude, observer.latitude),
+                                LngLat(target.longitude, target.latitude),
                             ),
                         ),
+                        id = "los-ray",
                     ),
                 ),
             )
         },
     )
-    pushFeatures(
-        style,
-        AtlasLayerIds.LOS_BLOCK_SOURCE,
-        if (verdict?.blockingPoint == null) {
-            FeatureCollection.fromFeatures(emptyList())
-        } else {
-            val block = verdict.blockingPoint!!
-            FeatureCollection.fromFeatures(
-                listOf(Feature.fromGeometry(Point.fromLngLat(block.longitude, block.latitude))),
-            )
-        },
-    )
-    val ray = style.getLayerAs<LineLayer>(AtlasLayerIds.LOS_LAYER)
+    sink.replace(AtlasLayer.LosBlock, pointFeature("los-block", verdict?.blockingPoint))
+
+    // Paint stays on the Style. Repainting a layer is a style concern with an
+    // ordering dependency on the layer existing; the sink carries features, not
+    // paint. This is the deliberate line in the interface's documentation.
+    val ray = (sink as? MapLibreFeatureSink)?.currentStyle()
+        ?.getLayerAs<LineLayer>(AtlasLayerIds.LOS_LAYER)
     // Amber, not red, for an unmeasured verdict. Red means terrain BLOCKED the ray;
     // painting unmeasured ground red asserts a terrain finding nobody made.
     //
@@ -2162,83 +2135,66 @@ fun pushLosState(
 fun mergedTrackFeatures(
     stored: List<Track>,
     recorder: TrackRecorder,
-): FeatureCollection {
-    val features = ArrayList<Feature>()
-    tracksToFeatures(stored).features()?.let { features.addAll(it) }
+): RenderFeatureCollection {
+    val features = ArrayList<RenderFeature>(tracksToFeatures(stored).features)
     val active = recorder.points()
     if (active.size >= 2) {
         features.add(
-            Feature.fromGeometry(
-                LineString.fromLngLats(
+            RenderFeature(
+                geometry = RenderGeometry.LineString(
                     active.map { fix ->
-                        Point.fromLngLat(
-                            fix.position.longitude,
-                            fix.position.latitude,
-                        )
+                        LngLat(fix.position.longitude, fix.position.latitude)
                     },
                 ),
+                id = "live-track",
             ),
         )
     }
-    return FeatureCollection.fromFeatures(features)
+    return RenderFeatureCollection(features)
 }
 
-fun pushPosition(style: Style, services: AtlasServices) {
+fun pushPosition(sink: FeatureSink, services: AtlasServices) {
     val fix = services.location.latestFixOrNull() ?: return
-    pushFeatures(
-        style,
-        AtlasLayerIds.POSITION_SOURCE,
-        FeatureCollection.fromFeatures(
-            listOf(positionToFeature(fix.position, fix.headingDeg)),
+    sink.replace(
+        AtlasLayer.Position,
+        RenderFeatureCollection(listOf(positionToFeature(fix.position, fix.headingDeg))),
+    )
+}
+
+fun pushMeasure(sink: FeatureSink, services: AtlasServices) {
+    val measure = services.measure
+    val a = measure.pointAOrNull()
+    val b = measure.pointBOrNull()
+    sink.replace(
+        AtlasLayer.Measure,
+        if (a != null && b != null) measureToFeatures(a, b) else RenderFeatureCollection.EMPTY,
+    )
+    sink.replace(
+        AtlasLayer.MeasureDots,
+        RenderFeatureCollection(
+            listOfNotNull(
+                a?.let { RenderFeature(RenderGeometry.Point(LngLat(it.longitude, it.latitude)), "measure-a") },
+                b?.let { RenderFeature(RenderGeometry.Point(LngLat(it.longitude, it.latitude)), "measure-b") },
+            ),
         ),
     )
 }
 
-fun pushMeasure(style: Style, services: AtlasServices) {    val measure = services.measure
-    val a = measure.pointAOrNull()
-    val b = measure.pointBOrNull()
-    pushFeatures(
-        style,
-        AtlasLayerIds.MEASURE_SOURCE,
-        if (a != null && b != null) {
-            measureToFeatures(a, b)
-        } else {
-            FeatureCollection.fromFeatures(emptyList())
-        },
-    )
-    val dots = ArrayList<Feature>()
-    if (a != null) {
-        dots.add(
-            Feature.fromGeometry(Point.fromLngLat(a.longitude, a.latitude)),
-        )
-    }
-    if (b != null) {
-        dots.add(
-            Feature.fromGeometry(Point.fromLngLat(b.longitude, b.latitude)),
-        )
-    }
-    pushFeatures(
-        style,
-        AtlasLayerIds.MEASURE_DOTS_SOURCE,
-        FeatureCollection.fromFeatures(dots),
-    )
-}
-
-fun pushFence(style: Style, fence: RadialFence?) {
-    pushFeatures(
-        style,
-        AtlasLayerIds.FENCE_SOURCE,
+fun pushFence(sink: FeatureSink, fence: RadialFence?) {
+    sink.replace(
+        AtlasLayer.Fence,
         if (fence == null || !fence.armed) {
-            FeatureCollection.fromFeatures(emptyList())
+            RenderFeatureCollection.EMPTY
         } else {
-            FeatureCollection.fromFeatures(
+            RenderFeatureCollection(
                 listOf(
-                    Feature.fromGeometry(
-                        LineString.fromLngLats(
+                    RenderFeature(
+                        geometry = RenderGeometry.LineString(
                             fencePolygon(fence.center, fence.radiusMeters).map { point ->
-                                Point.fromLngLat(point.longitude, point.latitude)
+                                LngLat(point.longitude, point.latitude)
                             },
                         ),
+                        id = "fence",
                     ),
                 ),
             )
@@ -2246,17 +2202,15 @@ fun pushFence(style: Style, fence: RadialFence?) {
     )
 }
 
-fun pushGoTo(style: Style, services: AtlasServices) {    val target = services.goTo.targetOrNull()
-    pushFeatures(
-        style,
-        AtlasLayerIds.GOTO_SOURCE,
+fun pushGoTo(sink: FeatureSink, services: AtlasServices) {
+    val target = services.goTo.targetOrNull()
+    sink.replace(
+        AtlasLayer.GoTo,
         if (target == null) {
-            FeatureCollection.fromFeatures(emptyList())
+            RenderFeatureCollection.EMPTY
         } else {
-            FeatureCollection.fromFeatures(
-                listOf(
-                    goToToFeature(target.latitude, target.longitude, target.label),
-                ),
+            RenderFeatureCollection(
+                listOf(goToToFeature(target.latitude, target.longitude, target.label)),
             )
         },
     )
@@ -2270,15 +2224,14 @@ fun usableFixOf(services: AtlasServices): AtlasCoordinate? {
     }
 }
 
-fun pushRings(style: Style, services: AtlasServices) {
-    pushFeatures(
-        style,
-        AtlasLayerIds.RINGS_SOURCE,
+fun pushRings(sink: FeatureSink, services: AtlasServices) {
+    sink.replace(
+        AtlasLayer.RangeRings,
         ringsToFeatures(usableFixOf(services), RING_STEP_INDEX),
     )
 }
 
-fun pushGraticule(map: MapLibreMap, style: Style) {
+fun pushGraticule(map: MapLibreMap, sink: FeatureSink) {
     val region = map.projection.visibleRegion.latLngBounds
     val box = AtlasBoundingBox(
         south = region.latitudeSouth,
@@ -2287,7 +2240,7 @@ fun pushGraticule(map: MapLibreMap, style: Style) {
         east = region.longitudeEast,
     )
     if (!box.validate().isValid) {
-        pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, FeatureCollection.fromFeatures(emptyList()))
+        sink.replace(AtlasLayer.Graticule, RenderFeatureCollection.EMPTY)
         return
     }
     val grid = AtlasGrids.graticuleFor(
@@ -2295,10 +2248,13 @@ fun pushGraticule(map: MapLibreMap, style: Style) {
         AtlasGrids.intervalForZoom(map.cameraPosition.zoom.roundToInt()),
     )
     if (grid.meridians.size + grid.parallels.size > MAX_GRATICULE_LINES) {
-        pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, FeatureCollection.fromFeatures(emptyList()))
+        sink.replace(AtlasLayer.Graticule, RenderFeatureCollection.EMPTY)
         return
     }
-    pushFeatures(style, AtlasLayerIds.GRATICULE_SOURCE, graticuleToFeatures(box, AtlasGrids.intervalForZoom(map.cameraPosition.zoom.roundToInt())))
+    sink.replace(
+        AtlasLayer.Graticule,
+        graticuleToFeatures(box, AtlasGrids.intervalForZoom(map.cameraPosition.zoom.roundToInt())),
+    )
 }
 
 fun applyOverlayVisibility(
