@@ -552,6 +552,16 @@ fun AtlasMapScreen(
                     )
                 }
                 map.addOnMapClickListener { point ->
+                    // Entry log. Added because the tap handler's own diagnostic never
+                    // fired on device, which means the tap is being consumed BEFORE the
+                    // selection branch. Without this line, "tapping does nothing" cannot
+                    // be distinguished from "the listener never ran".
+                    Log.d(
+                        "AtlasMap",
+                        "map click: drawingMode=${drawingModeFlow.value} " +
+                            "losMode=${services.losState.mode.value} " +
+                            "measureActive=${services.measure.isActive()}",
+                    )
                     // Drawing intercept runs first and consumes the tap while a
                     // mode is active; every other tap behavior below is unchanged.
                     if (drawingModeFlow.value != DrawingMode.NONE) {
@@ -667,6 +677,11 @@ fun AtlasMapScreen(
                         // diagnostic below exists to tell us which one does, because
                         // "tapping does nothing" is otherwise indistinguishable from
                         // "the layer is not hit-testable at all".
+                        Log.d(
+                            "AtlasMap",
+                            "waypoint branch: screenNull=${screen == null} " +
+                                "rawHits=${hits.size}",
+                        )
                         val hit = hits.firstOrNull()
                         val rootId = hit?.id()
                         val propertyId = hit?.getStringProperty(MapLibreFeatureSink.PROPERTY_ID)
