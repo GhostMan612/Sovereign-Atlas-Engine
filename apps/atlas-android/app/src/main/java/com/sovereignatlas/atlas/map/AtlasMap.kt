@@ -552,14 +552,17 @@ fun AtlasMapScreen(
                     )
                 }
                 map.addOnMapClickListener { point ->
-                    // Entry log. Added because the tap handler's own diagnostic never
-                    // fired on device, which means the tap is being consumed BEFORE the
-                    // selection branch. Without this line, "tapping does nothing" cannot
-                    // be distinguished from "the listener never ran".
+                    // FIRST STATEMENT, UNCONDITIONAL. The previous diagnostic lived
+                    // inside `if (hit != null)`, so a tap that hit nothing logged
+                    // nothing — which is precisely the case it was written to explain.
+                    // Two rounds of guessing followed, because the silence was
+                    // indistinguishable from the listener never firing. This line is
+                    // the answer to "did the tap even arrive", and it cannot be
+                    // suppressed by any branch below.
                     Log.d(
                         "AtlasMap",
-                        "map click: drawingMode=${drawingModeFlow.value} " +
-                            "losMode=${services.losState.mode.value} " +
+                        "map click at ${point.latitude},${point.longitude} " +
+                            "drawingMode=${drawingModeFlow.value} losMode=${services.losState.mode.value} " +
                             "measureActive=${services.measure.isActive()}",
                     )
                     // Drawing intercept runs first and consumes the tap while a
@@ -668,7 +671,22 @@ fun AtlasMapScreen(
                         val hits = if (screen == null) {
                             emptyList()
                         } else {
-                            map.queryRenderedFeatures(screen, AtlasLayerIds.WAYPOINTS_LAYER)
+                            // Layer id from the sealed class, not the raw string. The
+                            // value is byte-identical to
+                            // AtlasLayerIds.WAYPOINTS_LAYER, but taking it from the
+                            // sealed set means a rename cannot leave the query pointing
+                            // at a layer nothing installs.
+                            map.queryRenderedFeatures(screen, AtlasLayer.Waypoints.layerId)
+                        }
+                        // Unfiltered probe, diagnostic only. If the filtered query
+                        // returns nothing, this distinguishes "the waypoint layer is
+                        // not hit-testable" from "that layer id is wrong" from "the
+                        // tap landed on nothing at all" — three different bugs that
+                        // otherwise look identical from the outside.
+                        val anyHits = if (screen == null) {
+                            emptyList()
+                        } else {
+                            runCatching { map.queryRenderedFeatures(screen) }.getOrDefault(emptyList())
                         }
                         // Root id first, property bag as fallback. Writing the id to the
                         // root alone was the right theory and it did not work on the
@@ -677,34 +695,35 @@ fun AtlasMapScreen(
                         // diagnostic below exists to tell us which one does, because
                         // "tapping does nothing" is otherwise indistinguishable from
                         // "the layer is not hit-testable at all".
-                        Log.d(
-                            "AtlasMap",
-                            "waypoint branch: screenNull=${screen == null} " +
-                                "rawHits=${hits.size}",
-                        )
                         val hit = hits.firstOrNull()
                         val rootId = hit?.id()
                         val propertyId = hit?.getStringProperty(MapLibreFeatureSink.PROPERTY_ID)
                         val hitId = rootId?.takeIf { it.isNotBlank() }
                             ?: propertyId?.takeIf { it.isNotBlank() }
-                        if (hit != null) {
-                            Log.d(
+                        // UNCONDITIONAL, including on zero hits. A hit count of 0 means
+                        // the layer is not hit-testable and no id plumbing will ever fix
+                        // it; that is a completely different bug from a lost id, and
+                        // conflating them is what made this take three attempts.
+                        Log.d(
+                            "AtlasMap",
+                            "waypoint query: screen=$screen " +
+                                "layer=${AtlasLayer.Waypoints.layerId} " +
+                                "layerPresent=${styleRef.value?.getLayer(AtlasLayer.Waypoints.layerId) != null} " +
+                                "hits=${hits.size} anyHits=${anyHits.size} " +
+                                "anyIds=${anyHits.mapNotNull { it.id() }.distinct().take(5)} " +
+                                "rootId=$rootId propertyId=$propertyId resolved=$hitId",
+                        )
+                        if (!rootId.isNullOrBlank() && !propertyId.isNullOrBlank() &&
+                            rootId != propertyId
+                        ) {
+                            // The two channels must agree. If they ever do not, the
+                            // duplication has started to drift and one of them is
+                            // about to stop working silently.
+                            Log.w(
                                 "AtlasMap",
-                                "waypoint tap: ${hits.size} hit(s), rootId=$rootId, " +
-                                    "propertyId=$propertyId, resolved=$hitId",
+                                "waypoint id channels DISAGREE: root='$rootId' " +
+                                    "property='$propertyId'",
                             )
-                            if (!rootId.isNullOrBlank() && !propertyId.isNullOrBlank() &&
-                                rootId != propertyId
-                            ) {
-                                // The two channels must agree. If they ever do not, the
-                                // duplication has started to drift and one of them is
-                                // about to stop working silently.
-                                Log.w(
-                                    "AtlasMap",
-                                    "waypoint id channels DISAGREE: root='$rootId' " +
-                                        "property='$propertyId'",
-                                )
-                            }
                         }
                         if (hitId == null) {
                             waypointSelection.clearWaypointSelection()
