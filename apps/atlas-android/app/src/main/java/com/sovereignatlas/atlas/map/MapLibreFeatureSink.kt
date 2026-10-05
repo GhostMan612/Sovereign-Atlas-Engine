@@ -116,10 +116,27 @@ class MapLibreFeatureSink(
     private fun toMapLibre(collection: RenderFeatureCollection): FeatureCollection =
         FeatureCollection.fromFeatures(collection.features.map { toMapLibre(it) })
 
+    /**
+     * The pure id goes to MapLibre's ROOT id, not into the property bag.
+     *
+     * THE REGRESSION THIS FIXES. [RenderFeature.id] was a first-class field, and the
+     * conversion only ever emitted the property bag — so a hit-test reading
+     * `getStringProperty("id")` got null, selection silently cleared, and tapping a
+     * waypoint did nothing. The paint was unaffected, which is why it looked like a
+     * rendering success while interaction was broken.
+     *
+     * Root id is the right target, not a workaround. MapLibre's own
+     * `queryRenderedFeatures` returns the id at the root, and it is what the renderer
+     * uses to correlate a queried feature back to its source. `fromGeometry` has an
+     * overload taking `(Geometry, JsonObject, String)` where that String is the id —
+     * probed with `atlas_maplibre_probe` rather than assumed, because the three- and
+     * four-argument overloads differ only in whether a BoundingBox is present.
+     */
     private fun toMapLibre(feature: RenderFeature): Feature =
         Feature.fromGeometry(
             toMapLibre(feature.geometry),
             toJsonProperties(feature.properties),
+            feature.id,
         )
 
     /**

@@ -660,8 +660,13 @@ fun AtlasMapScreen(
                         } else {
                             map.queryRenderedFeatures(screen, AtlasLayerIds.WAYPOINTS_LAYER)
                         }
-                        val hitId = hits.firstOrNull()?.getStringProperty("id")
-                        if (hitId == null) {
+                        // The ROOT id, not a property. MapLibreFeatureSink writes
+                        // RenderFeature.id to the root, and that is what
+                        // queryRenderedFeatures returns. Reading getStringProperty("id")
+                        // here returned null after that change and selection silently
+                        // cleared, so a tap on a waypoint did nothing.
+                        val hitId = hits.firstOrNull()?.id()
+                        if (hitId.isNullOrBlank()) {
                             waypointSelection.clearWaypointSelection()
                         } else {
                             waypointSelection.selectWaypoint(hitId)
