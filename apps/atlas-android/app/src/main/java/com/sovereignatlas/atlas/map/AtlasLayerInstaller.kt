@@ -125,9 +125,20 @@ fun installAtlasLayers(style: Style) {
         ).withProperties(
             PropertyFactory.iconImage("wp-icon"),
             PropertyFactory.iconSize(1.0f),
+            // Allow-overlap matters for SELECTION, not just looks. Without it
+            // MapLibre drops colliding symbols during placement, and a dropped symbol
+            // is not painted and therefore not returned by queryRenderedFeatures —
+            // so a waypoint could exist in the source, be listed in the waypoints
+            // dialog, and still be untappable on the map because a neighbour won the
+            // placement contest.
+            PropertyFactory.iconAllowOverlap(true),
+            PropertyFactory.iconIgnorePlacement(true),
             PropertyFactory.textField("{label}"),
             PropertyFactory.textSize(12.0f),
             PropertyFactory.textOpacity(0.9f),
+            PropertyFactory.textAllowOverlap(true),
+            // Without this a label is a placement participant and can be suppressed.
+            PropertyFactory.textIgnorePlacement(true),
         ),
     )
     style.addLayer(

@@ -13,6 +13,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
@@ -671,12 +672,33 @@ fun AtlasMapScreen(
                         val hits = if (screen == null) {
                             emptyList()
                         } else {
-                            // Layer id from the sealed class, not the raw string. The
-                            // value is byte-identical to
-                            // AtlasLayerIds.WAYPOINTS_LAYER, but taking it from the
-                            // sealed set means a rename cannot leave the query pointing
-                            // at a layer nothing installs.
-                            map.queryRenderedFeatures(screen, AtlasLayer.Waypoints.layerId)
+                            // A RectF SLOP BOX, NOT A POINT.
+                            //
+                            // WHY. `queryRenderedFeatures` on a SymbolLayer returns a
+                            // hit only where the icon's painted quad is under the
+                            // query region. A point query asks for the exact
+                            // coordinate the tap was projected to, and a fingertip
+                            // reliably lands a few pixels off the icon's centre — and
+                            // the wp-icon is a 24px circle, so at low zoom its
+                            // rendered quad is barely larger than the tap itself. The
+                            // point query returned 0 hits while the feature was plainly
+                            // on screen.
+                            //
+                            // 32dp of slop is the standard Mapbox/MapLibre
+                            // recommendation for touch targets and is comfortably
+                            // inside the 48dp minimum touch target, so it cannot make
+                            // a neighbouring waypoint reachable by accident at any
+                            // realistic separation.
+                            val slop = 32f * resources.displayMetrics.density
+                            map.queryRenderedFeatures(
+                                RectF(
+                                    screen.x - slop,
+                                    screen.y - slop,
+                                    screen.x + slop,
+                                    screen.y + slop,
+                                ),
+                                AtlasLayer.Waypoints.layerId,
+                            )
                         }
                         // Unfiltered probe, diagnostic only. If the filtered query
                         // returns nothing, this distinguishes "the waypoint layer is
@@ -686,7 +708,17 @@ fun AtlasMapScreen(
                         val anyHits = if (screen == null) {
                             emptyList()
                         } else {
-                            runCatching { map.queryRenderedFeatures(screen) }.getOrDefault(emptyList())
+                            val slop = 32f * resources.displayMetrics.density
+                            runCatching {
+                                map.queryRenderedFeatures(
+                                    RectF(
+                                        screen.x - slop,
+                                        screen.y - slop,
+                                        screen.x + slop,
+                                        screen.y + slop,
+                                    ),
+                                )
+                            }.getOrDefault(emptyList())
                         }
                         // Root id first, property bag as fallback. Writing the id to the
                         // root alone was the right theory and it did not work on the
