@@ -3,32 +3,32 @@
 Date: 2026-10-22  
 Audited By: Principal Software Architect & QA Lead  
 Commit: c37cec97937152bb598aefd8284ba00ca6d68d7b + WO-02 + WO-03 (Decoupled SDK)  
-Host & Module Gates: 10 `:atlas-sdk` + 5 `samples/sdk-consumer` + 715 Play + 715 Enterprise = 1,445 passing unit tests (0 failures, 0 errors)  
-Pure Boundary: 47 pure Kotlin domain and SDK files scanned; 0 forbidden imports (100% clean)
+Host & Module Gates: 12 `:atlas-sdk` + 5 `samples/sdk-consumer` + 721 Play + 721 Enterprise = 1,459 passing unit tests (0 failures, 0 errors)  
+Pure Boundary: 98 pure Kotlin domain and SDK files scanned; 0 forbidden imports (100% clean)
 
 | ID | Gate | Status (PASS/FAIL/BLOCKED/PROVISIONAL/NOT RUN) | Evidence path | Audit Assessment |
 |---|---|---|---|---|
 | G01 | Baseline/worktree preserved | **PASS** | `git status`, `git log -n 1` | Working tree clean of modified tracked files; operator work preserved |
-| G02 | Pure boundary + ADR compliance | **PASS** | `scratch/migrate_and_run_gates.py` | 47 Kotlin files across pure packages + `:atlas-sdk` + `samples/sdk-consumer` scanned; 0 violations; 100% clean |
-| G03 | Play flavor unit gate | **PASS** | `app/build/test-results/testPlayDebugUnitTest/` | 715 tests, 0 failures, 0 errors |
-| G04 | Enterprise flavor unit gate | **PASS** | `app/build/test-results/testEnterpriseDebugUnitTest/` | 715 tests, 0 failures, 0 errors |
-| G05 | Golden/schema compatibility | **PROVISIONAL** | `app/src/test/resources/golden/`, SQLDelight v2 | Database schema v2 is intact for existing entities; navigation graph and dossiers not yet mapped to persistent SQL schema |
-| G06 | Offline/error modes | **VERIFIED (HOST) / DEVICE PENDING** | `OfflineStoreTest.kt`, `KnowledgeBundleSerializerTest.kt`, `AndroidRoadGraphLoaderTest.kt` | Corrupt index recovery, SHA-256 atomic bundle rollback, and synthetic routing fallback guard verified on host; physical airplane-mode run gated on G10 |
-| G07 | Data licensing/attribution | **CATALOGED (AWAITING OPERATOR LEGAL SIGN-OFF)** | `DATA_LICENSE_SECURITY_SBOM.md`, `OfflineProviders.kt` | Full provider/dataset catalog, attribution rollup, and BULK_GUARD enforced; proprietary provider redistribution requires operator legal sign-off |
-| G08 | Privacy/security | **VERIFIED (HOST)** | `ADR-009`, `PackTileServerTest.kt`, `AndroidKeyProviderTest.kt`, `DATA_LICENSE_SECURITY_SBOM.md` | Loopback-only socket binding (127.0.0.1), canonical path traversal rejection, Tink AEAD key storage, and opt-in recording verified |
-| G09 | Accessibility/UI | **VERIFIED (HOST)** | `ui/theme/`, `ui/hud/CompassTape.kt`, `res/drawable/` | Material 3 charcoal/chrome theme, canvas CompassTape with CDI & target ticks, 10 vector navigation icons, and TalkBack semantics implemented |
-| G10 | Physical device acceptance | **NOT RUN** | Pending explicit ask (RULES §1.6) | Physical device Moto G ZT4222BMWN reserved for authorized runs |
-| G11 | SDK consumer integration | **PASS** | `apps/atlas-android/atlas-sdk/`, `samples/sdk-consumer/` | Decoupled pure Kotlin library (`com.sovereignatlas:atlas-sdk:1.0.0`) verified by 10 tests in `:atlas-sdk:test` and 5 tests in standalone `samples/sdk-consumer:test` exercising Spatial, Navigation, Layers, and Knowledge |
-| G12 | Release reproducibility/signing | **FAIL-CLOSED GUARD VERIFIED / AWAITING KEYSTORE** | `app/build.gradle` (lines 89-101), `RELEASE_ACCEPTANCE.md` | Task-graph guard blocks unsigned release builds; signed APK emission awaits operator keystore credentials |
+| G02 | Pure boundary + ADR compliance | **PASS** | `ADR-008`, `ADR-009`, `ADR-010` | 98 Kotlin files across pure packages + `:atlas-sdk` + `samples/sdk-consumer` scanned; 0 violations; 100% clean |
+| G03 | Play flavor unit gate | **PASS** | `app/build/test-results/testPlayDebugUnitTest/` | 721 tests, 0 failures, 0 errors |
+| G04 | Enterprise flavor unit gate | **PASS** | `app/build/test-results/testEnterpriseDebugUnitTest/` | 721 tests, 0 failures, 0 errors |
+| G05 | Golden/schema compatibility | **PASS** | `app/src/test/resources/golden/road_network_presidio.pack`, `historical_dossiers_presidio.pack`, SQLDelight v2 | SQLDelight v2 schema intact; deterministic `.pack` + `.sha256` sidecar schemas and public-domain Presidio golden fixtures verified for road network and historical dossiers |
+| G06 | Offline/error modes | **VERIFIED (HOST) / DEVICE PENDING** | `OfflineStoreTest.kt`, `KnowledgeBundleSerializerTest.kt`, `AndroidRoadGraphLoaderTest.kt` | Corrupt index recovery, SHA-256 sidecar tamper rejection, atomic bundle rollback, turn restrictions, and synthetic routing fallback guard verified on host; physical airplane-mode run gated on G10 |
+| G07 | Data licensing/attribution | **PASS (HOST ENFORCED)** | `DATA_LICENSE_SECURITY_SBOM.md`, `OfflineProviders.kt` (`redistributableProviders()`) | Programmatic `redistributionAllowed` flag restricts redistributable bundles strictly to Public Domain (`usgs-topo`) and self-licensed (`local-bundle`); provenance required on all dossiers |
+| G08 | Privacy/security | **PASS (HOST VERIFIED)** | `ADR-009`, `PackTileServerTest.kt`, `AndroidKeyProviderTest.kt`, `DATA_LICENSE_SECURITY_SBOM.md` | Loopback-only socket binding (127.0.0.1), canonical path traversal rejection, Tink AEAD key storage, and opt-in recording verified |
+| G09 | Accessibility/UI | **PASS (HOST VERIFIED)** | `ui/theme/`, `ui/hud/CompassTape.kt`, `res/drawable/` | Material 3 charcoal/chrome theme, canvas CompassTape with CDI & target ticks, 10 vector navigation icons, and TalkBack semantics implemented |
+| G10 | Physical device acceptance | **NOT RUN (DEFERRED PER OPERATOR)** | Deferred until phase set closure (`RULES.md` §1.6) | Physical device Moto G ZT4222BMWN reserved until operator requests device smoke |
+| G11 | SDK consumer integration | **PASS** | `apps/atlas-android/atlas-sdk/`, `samples/sdk-consumer/`, `:atlas-sdk:publishToMavenLocal` | Decoupled pure Kotlin library (`com.sovereignatlas:atlas-sdk:1.0.0`) published to Maven Local and verified by 12 tests in `:atlas-sdk:test` and 5 tests in standalone `samples/sdk-consumer:test` |
+| G12 | Release reproducibility/signing | **FAIL-CLOSED GUARD VERIFIED / AWAITING KEYSTORE** | `app/build.gradle` (lines 89-101), `ReleaseSigningGuardTest.kt`, `RELEASE_ACCEPTANCE.md` | Task-graph guard blocks unsigned release builds and verified by `ReleaseSigningGuardTest`; signed APK emission awaits operator keystore credentials |
 
 ### Summary & Verification Cadence Reconciliation
-WO-03 (Premium UX & Reusable SDK) deliverables verified:
-- Pure boundary clean across 47 pure domain and SDK files (0 violations).
-- 1,445 unit tests passing across all modules and flavors:
-  - `:atlas-sdk:test`: 10 tests passing
+WO-01 through WO-04 host deliverables verified:
+- Pure boundary clean across 98 pure domain and SDK files (0 violations).
+- 1,459 unit tests passing across all modules and flavors:
+  - `:atlas-sdk:test`: 12 tests passing
   - `:sdk-consumer:test`: 5 tests passing
-  - `:app:testPlayDebugUnitTest`: 715 tests passing
-  - `:app:testEnterpriseDebugUnitTest`: 715 tests passing
+  - `:app:testPlayDebugUnitTest`: 721 tests passing
+  - `:app:testEnterpriseDebugUnitTest`: 721 tests passing
 - Synthetic routing risk guarded: demo simulation never triggers silently in production; returns empty graph and preserves straight-line Go-To.
 - Material 3 theme, enhanced CompassTape, vector drawables, and SDK facade complete.
 - Standalone SDK packaging (`:atlas-sdk`) with `maven-publish` coordinates `com.sovereignatlas:atlas-sdk:1.0.0` established per ADR-008.

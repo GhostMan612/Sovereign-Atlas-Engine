@@ -43,6 +43,7 @@ import com.sovereignatlas.atlas.core.knowledge.ConfidenceScore
 import com.sovereignatlas.atlas.core.knowledge.EntityType
 import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
 import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
+import com.sovereignatlas.atlas.core.knowledge.KnowledgeBundleSerializer
 import com.sovereignatlas.atlas.core.knowledge.SourceCitation
 import com.sovereignatlas.atlas.core.knowledge.TemporalInterval
 import com.sovereignatlas.atlas.geo.navigation.RoadNavigationState
@@ -229,6 +230,8 @@ class AppServices(private val context: Context) {
                 tags = listOf("survey", "plaza", "alta-california", "municipal"),
             ),
         )
+        KnowledgeBundleSerializer.loadVerifiedDirectory(File(appContext.filesDir, "knowledge"), this)
+        KnowledgeBundleSerializer.loadVerifiedDirectory(appContext.getExternalFilesDir("knowledge"), this)
     }
 
     val historicalAssets = LocalHistoricalAssetRepository(

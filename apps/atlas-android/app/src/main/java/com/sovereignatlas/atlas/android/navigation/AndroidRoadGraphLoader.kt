@@ -9,7 +9,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.util.Log
+import com.sovereignatlas.atlas.geo.navigation.RestrictionType
 import com.sovereignatlas.atlas.geo.navigation.RoadClass
+import com.sovereignatlas.atlas.geo.navigation.RoadGraphBundleSerializer
 import com.sovereignatlas.atlas.geo.navigation.RoadNetworkGraph
 import com.sovereignatlas.atlas.geo.navigation.SurfaceType
 import java.io.File
@@ -19,6 +21,7 @@ import kotlinx.coroutines.withContext
 object AndroidRoadGraphLoader {
     const val NAVIGATION_DIR = "navigation"
     const val ROADS_FILE = "roads.db"
+    const val ROADS_PACK_FILE = "roads.pack"
 
     suspend fun load(
         context: Context,
@@ -27,25 +30,42 @@ object AndroidRoadGraphLoader {
         loadSynchronousOrEmpty(context, allowDemoSimulation)
     }
 
+    fun loadFromDirectory(dir: File?): RoadNetworkGraph? {
+        if (dir == null || !dir.isDirectory) return null
+        val packFile = File(dir, ROADS_PACK_FILE)
+        if (packFile.isFile) {
+            val bundle = RoadGraphBundleSerializer.loadVerifiedFile(packFile)
+            if (bundle != null && bundle.graph.nodes.isNotEmpty()) {
+                return bundle.graph
+            }
+        }
+        val dbFile = File(dir, ROADS_FILE)
+        if (dbFile.isFile && RoadGraphBundleSerializer.verifyFileWithSidecar(dbFile)) {
+            val dbGraph = loadFromDatabase(dbFile)
+            if (dbGraph != null && dbGraph.nodes.isNotEmpty()) {
+                return dbGraph
+            }
+        }
+        return null
+    }
+
+    fun isRoutableDirectoryAvailable(dir: File?): Boolean {
+        if (dir == null || !dir.isDirectory) return false
+        val packFile = File(dir, ROADS_PACK_FILE)
+        if (packFile.isFile && packFile.length() > 0 && RoadGraphBundleSerializer.verifyFileWithSidecar(packFile)) {
+            return true
+        }
+        val dbFile = File(dir, ROADS_FILE)
+        return dbFile.isFile && dbFile.length() > 0 && RoadGraphBundleSerializer.verifyFileWithSidecar(dbFile)
+    }
+
     fun loadSynchronousOrEmpty(
         context: Context,
         allowDemoSimulation: Boolean = false,
     ): RoadNetworkGraph {
-        val externalDir = context.getExternalFilesDir(NAVIGATION_DIR)
-        val externalFile = if (externalDir != null) File(externalDir, ROADS_FILE) else null
-        if (externalFile != null && externalFile.isFile) {
-            val dbGraph = loadFromDatabase(externalFile)
-            if (dbGraph != null && dbGraph.nodes.isNotEmpty()) {
-                return dbGraph
-            }
-        }
-        val internalFile = File(context.filesDir, ROADS_FILE)
-        if (internalFile.isFile) {
-            val dbGraph = loadFromDatabase(internalFile)
-            if (dbGraph != null && dbGraph.nodes.isNotEmpty()) {
-                return dbGraph
-            }
-        }
+        loadFromDirectory(context.getExternalFilesDir(NAVIGATION_DIR))?.let { return it }
+        loadFromDirectory(File(context.filesDir, NAVIGATION_DIR))?.let { return it }
+        loadFromDirectory(context.filesDir)?.let { return it }
         return if (allowDemoSimulation) {
             buildDemoSimulationGraph()
         } else {
@@ -54,11 +74,9 @@ object AndroidRoadGraphLoader {
     }
 
     fun isRoutableDataAvailable(context: Context): Boolean {
-        val externalDir = context.getExternalFilesDir(NAVIGATION_DIR)
-        val externalFile = if (externalDir != null) File(externalDir, ROADS_FILE) else null
-        if (externalFile != null && externalFile.isFile && externalFile.length() > 0) return true
-        val internalFile = File(context.filesDir, ROADS_FILE)
-        return internalFile.isFile && internalFile.length() > 0
+        if (isRoutableDirectoryAvailable(context.getExternalFilesDir(NAVIGATION_DIR))) return true
+        if (isRoutableDirectoryAvailable(File(context.filesDir, NAVIGATION_DIR))) return true
+        return isRoutableDirectoryAvailable(context.filesDir)
     }
 
     private fun loadFromDatabase(file: File): RoadNetworkGraph? {
@@ -95,6 +113,24 @@ object AndroidRoadGraphLoader {
                         isOneWay = cursor.getInt(7) == 1,
                         surface = surface,
                     )
+                }
+            }
+            runCatching {
+                db.rawQuery(
+                    "SELECT fromEdgeId, viaNodeId, toEdgeId, restrictionType FROM TurnRestriction",
+                    null,
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val typeStr = cursor.getString(3) ?: "NO_LEFT_TURN"
+                        val restrictionType = runCatching { RestrictionType.valueOf(typeStr) }
+                            .getOrDefault(RestrictionType.NO_LEFT_TURN)
+                        builder.addTurnRestriction(
+                            fromEdgeId = cursor.getLong(0),
+                            viaNodeId = cursor.getLong(1),
+                            toEdgeId = cursor.getLong(2),
+                            type = restrictionType,
+                        )
+                    }
                 }
             }
             builder.build()

@@ -5,6 +5,9 @@
 
 package com.sovereignatlas.atlas.geo.navigation
 
+import java.io.File
+import java.security.MessageDigest
+
 enum class RoadClass(val baseSpeedKmh: Double, val defaultPriority: Double) {
     MOTORWAY(110.0, 1.0),
     TRUNK(90.0, 1.1),
@@ -62,6 +65,132 @@ data class TurnRestriction(
     val toEdgeId: Long,
     val type: RestrictionType,
 )
+
+data class RoadGraphBundle(
+    val bundleId: String,
+    val license: String,
+    val attribution: String,
+    val graph: RoadNetworkGraph,
+)
+
+object RoadGraphBundleSerializer {
+
+    fun computeSha256(content: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(content).joinToString("") { "%02x".format(it) }
+    }
+
+    fun verifyFileWithSidecar(file: File): Boolean {
+        if (!file.isFile) return false
+        val sidecar = File(file.parentFile, "${file.name}.sha256")
+        if (!sidecar.isFile) return true
+        val expected = sidecar.readText(Charsets.UTF_8).trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+        if (expected.length != 64) return false
+        val actual = computeSha256(file.readBytes())
+        return actual.equals(expected, ignoreCase = true)
+    }
+
+    fun renderPack(bundle: RoadGraphBundle): String {
+        val sb = StringBuilder()
+        sb.append("META|")
+            .append(bundle.bundleId.replace("|", " "))
+            .append("|")
+            .append(bundle.license.replace("|", " "))
+            .append("|")
+            .append(bundle.attribution.replace("|", " "))
+            .append("\n")
+        for (node in bundle.graph.nodes.values.sortedBy { it.id }) {
+            sb.append("NODE|")
+                .append(node.id).append("|")
+                .append(node.latitude).append("|")
+                .append(node.longitude).append("\n")
+        }
+        for (edge in bundle.graph.edges.values.filter { it.id > 0L }.sortedBy { it.id }) {
+            sb.append("EDGE|")
+                .append(edge.id).append("|")
+                .append(edge.fromNodeId).append("|")
+                .append(edge.toNodeId).append("|")
+                .append(edge.lengthMeters).append("|")
+                .append(edge.speedKmh).append("|")
+                .append(edge.name.replace("|", " ")).append("|")
+                .append(edge.roadClass.name).append("|")
+                .append(if (edge.isOneWay) "1" else "0").append("|")
+                .append(edge.surface.name).append("\n")
+        }
+        for (tr in bundle.graph.turnRestrictions) {
+            sb.append("TURN|")
+                .append(tr.fromEdgeId).append("|")
+                .append(tr.viaNodeId).append("|")
+                .append(tr.toEdgeId).append("|")
+                .append(tr.type.name).append("\n")
+        }
+        return sb.toString()
+    }
+
+    fun parsePack(raw: String): RoadGraphBundle? {
+        var bundleId = "unknown"
+        var license = "unknown"
+        var attribution = "unknown"
+        var hasMeta = false
+        val builder = RoadNetworkGraph.Builder()
+        for (line in raw.lineSequence()) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+            val parts = trimmed.split("|")
+            when (parts[0]) {
+                "META" -> {
+                    if (parts.size < 4) return null
+                    bundleId = parts[1]
+                    license = parts[2]
+                    attribution = parts[3]
+                    hasMeta = true
+                }
+                "NODE" -> {
+                    if (parts.size < 4) return null
+                    val id = parts[1].toLongOrNull() ?: return null
+                    val lat = parts[2].toDoubleOrNull() ?: return null
+                    val lon = parts[3].toDoubleOrNull() ?: return null
+                    builder.addNode(id, lat, lon)
+                }
+                "EDGE" -> {
+                    if (parts.size < 10) return null
+                    val id = parts[1].toLongOrNull() ?: return null
+                    val fromId = parts[2].toLongOrNull() ?: return null
+                    val toId = parts[3].toLongOrNull() ?: return null
+                    val len = parts[4].toDoubleOrNull() ?: return null
+                    val speed = parts[5].toDoubleOrNull() ?: return null
+                    val name = parts[6]
+                    val roadClass = runCatching { RoadClass.valueOf(parts[7]) }.getOrNull() ?: return null
+                    val oneWay = parts[8] == "1" || parts[8].equals("true", ignoreCase = true)
+                    val surface = runCatching { SurfaceType.valueOf(parts[9]) }.getOrNull() ?: return null
+                    builder.addEdge(id, fromId, toId, len, speed, name, roadClass, oneWay, surface)
+                }
+                "TURN" -> {
+                    if (parts.size < 5) return null
+                    val fromEdge = parts[1].toLongOrNull() ?: return null
+                    val viaNode = parts[2].toLongOrNull() ?: return null
+                    val toEdge = parts[3].toLongOrNull() ?: return null
+                    val rType = runCatching { RestrictionType.valueOf(parts[4]) }.getOrNull() ?: return null
+                    builder.addTurnRestriction(fromEdge, viaNode, toEdge, rType)
+                }
+                else -> return null
+            }
+        }
+        if (!hasMeta) return null
+        val graph = builder.build()
+        if (graph.nodes.isEmpty()) return null
+        return RoadGraphBundle(bundleId, license, attribution, graph)
+    }
+
+    fun loadVerifiedFile(file: File): RoadGraphBundle? {
+        if (!verifyFileWithSidecar(file)) return null
+        return try {
+            parsePack(file.readText(Charsets.UTF_8))
+        } catch (error: Throwable) {
+            null
+        }
+    }
+}
 
 class RoadNetworkGraph(
     val nodes: Map<Long, RoadNode>,

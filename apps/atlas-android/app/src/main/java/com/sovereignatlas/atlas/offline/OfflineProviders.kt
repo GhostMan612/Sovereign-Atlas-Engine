@@ -17,6 +17,7 @@ data class OfflineProviderDescriptor(
     val license: String,
     val prefetchAllowed: Boolean,
     val bulkGuard: String? = null,
+    val redistributionAllowed: Boolean = false,
 )
 
 fun resolveTileUrl(
@@ -146,6 +147,7 @@ object OfflineBuiltinProviders {
         attribution = "USGS The National Map",
         license = "Public domain (USGS)",
         prefetchAllowed = true,
+        redistributionAllowed = true,
     )
     val localBundle = OfflineProviderDescriptor(
         id = "local-bundle",
@@ -154,6 +156,7 @@ object OfflineBuiltinProviders {
         attribution = "Local bundle (provider attribution travels with data)",
         license = "Bundle license (travels with data)",
         prefetchAllowed = false,
+        redistributionAllowed = true,
     )
     val cartoPositron = OfflineProviderDescriptor(
         id = "carto-positron",
@@ -191,4 +194,6 @@ object OfflineBuiltinProviders {
     )
 
     fun lookup(id: String): OfflineProviderDescriptor? = all.firstOrNull { it.id == id }
+
+    fun redistributableProviders(): List<OfflineProviderDescriptor> = all.filter { it.redistributionAllowed }
 }

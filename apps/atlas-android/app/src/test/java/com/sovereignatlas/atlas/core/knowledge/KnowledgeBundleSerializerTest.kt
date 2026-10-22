@@ -9,6 +9,8 @@ import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -79,5 +81,53 @@ class KnowledgeBundleSerializerTest {
         assertTrue(json.contains("\"validFromYear\": 1849"))
         assertTrue(json.contains("\"validToYear\": 1858"))
         assertTrue(json.contains("\"confidence\": \"CONFIRMED\""))
+    }
+
+    @Test
+    fun loadVerifiedDirectoryIngestsGoldenPresidioPackAndEnforcesProvenance() {
+        val stream = javaClass.classLoader!!.getResourceAsStream("golden/historical_dossiers_presidio.pack")
+        assertNotNull(stream)
+        val packBytes = stream!!.readBytes()
+        val sha256 = KnowledgeBundleSerializer.computeSha256(packBytes)
+
+        val dir = Files.createTempDirectory("atlas-knowledge-pack").toFile()
+        val packFile = File(dir, "historical_dossiers_presidio.pack")
+        val sidecarFile = File(dir, "historical_dossiers_presidio.pack.sha256")
+        packFile.writeBytes(packBytes)
+        sidecarFile.writeText("$sha256  historical_dossiers_presidio.pack\n", Charsets.UTF_8)
+
+        val index = HistoricalKnowledgeIndex()
+        val count = KnowledgeBundleSerializer.loadVerifiedDirectory(dir, index)
+        assertEquals(3, count)
+
+        val d1 = index.get("hd-presidio-001")
+        assertNotNull(d1)
+        assertEquals("HABS-CA-1230", d1!!.primaryCitation.citationId)
+        assertEquals("Public Domain", d1.primaryCitation.license)
+
+        val activeIn1910 = index.queryTemporal(1910)
+        assertEquals(3, activeIn1910.size)
+    }
+
+    @Test
+    fun loadVerifiedDirectoryRejectsTamperedPackAndMissingProvenance() {
+        val stream = javaClass.classLoader!!.getResourceAsStream("golden/historical_dossiers_presidio.pack")
+        val packBytes = stream!!.readBytes()
+
+        val dir = Files.createTempDirectory("atlas-knowledge-tamper").toFile()
+        val packFile = File(dir, "historical_dossiers_presidio.pack")
+        val sidecarFile = File(dir, "historical_dossiers_presidio.pack.sha256")
+        packFile.writeBytes(packBytes)
+        sidecarFile.writeText("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", Charsets.UTF_8)
+
+        val index = HistoricalKnowledgeIndex()
+        val count = KnowledgeBundleSerializer.loadVerifiedDirectory(dir, index)
+        assertEquals(0, count)
+
+        val missingCitationRaw = """
+            BUNDLE|bad-bundle|Invalid Bundle|1|Public Domain
+            DOSSIER|hd-bad|Mystery Site|PLACE|1900|1950|37.8|-122.4|Desc|UNCERTAIN||||1900||Public Domain|tag
+        """.trimIndent()
+        assertNull(KnowledgeBundleSerializer.parsePack(missingCitationRaw))
     }
 }

@@ -490,4 +490,13 @@ final class OfflineStoreTest {
         assertTrue(target.packs().isEmpty())
         assertTrue(target.lastErrorOrNull() != null)
     }
+
+    @Test
+    fun redistributableProvidersExcludesProprietaryAndFairUseTileServers() {
+        val redistributableIds = OfflineBuiltinProviders.redistributableProviders().map { it.id }.toSet()
+        assertEquals(setOf("usgs-topo", "local-bundle"), redistributableIds)
+        assertTrue(!OfflineBuiltinProviders.osmStandard.redistributionAllowed)
+        assertTrue(!OfflineBuiltinProviders.esriImagery.redistributionAllowed)
+        assertTrue(!OfflineBuiltinProviders.cartoPositron.redistributionAllowed)
+    }
 }

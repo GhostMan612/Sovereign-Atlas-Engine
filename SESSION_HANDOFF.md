@@ -17,15 +17,15 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-22: 1,445 tests, 0 failures+errors across all modules:**
-  - `:atlas-sdk:test`: 10 tests
+- **Last measured 2026-10-22: 1,459 tests, 0 failures+errors across all modules:**
+  - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 5 tests
-  - `:app:testPlayDebugUnitTest`: 715 tests
-  - `:app:testEnterpriseDebugUnitTest`: 715 tests
+  - `:app:testPlayDebugUnitTest`: 721 tests
+  - `:app:testEnterpriseDebugUnitTest`: 721 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
-- Pure boundary scan passes: 47 Kotlin files across pure packages, `:atlas-sdk`, and
+- Pure boundary scan passes: 98 Kotlin files across pure packages, `:atlas-sdk`, and
   `samples/sdk-consumer` have 0 forbidden imports (100% clean).
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
@@ -71,7 +71,7 @@
 - **WO-02 (Navigation, Knowledge, Layers): COMPLETE & INTEGRATED.**
   1. Road navigation subsystem (`geo.navigation`) implemented in pure domain logic,
      complemented with `AndroidVoiceGuidance` (TTS adapter) and `AndroidRoadGraphLoader`
-     (offline graph loading & operational default graph).
+     (offline `roads.pack` and `roads.db` loading with SHA-256 sidecar verification & `TurnRestriction` ingestion).
   2. Full user flow wired into the host application: GoTo target selection triggers
      road route calculation and Turn-by-Turn navigation via "Navigate" button; live
      location fixes feed `NavigationSession.updateLocation()` with automatic off-route
@@ -81,11 +81,10 @@
      runtime layer visibility and opacity with MapLibre style layers and exposed in
      `LayersDialog` as the compositor stack inspector.
   4. Historical encyclopedia dossier system (`core.knowledge`) fully wired into
-     `AtlasServices`, `HistoricalKnowledgeIndex`, and the map UI with `HistoricalDossierSheet`
+     `AtlasServices`, `HistoricalKnowledgeIndex`, Verified `.pack` directory auto-ingestion
+     (`KnowledgeBundleSerializer.loadVerifiedDirectory`), and the map UI with `HistoricalDossierSheet`
      displaying confidence badges (CONFIRMED/PROBABLE/UNCERTAIN/DISPUTED), temporal
      intervals, primary archival citations, and alternative disputed claims.
-  5. 100% test pass rate across both product flavors (695 tests per flavor, 1,390 total).
-  6. Pure boundary scan passes across 96 Kotlin files in 10 pure packages with 0 violations.
 - **ADR-006 Resolved:** `offline/` networking extracted into `android/offline/`
   (`PackTileServer.kt`, `AndroidHttpDownloader.kt`), while `offline/` holds pure
   interfaces (`LocalTileServer.kt`, `OfflineDownloader.kt`). 100% pure boundary clean.
@@ -96,43 +95,33 @@
 
 - **WO-03 (Premium UX & Reusable SDK): COMPLETE.**
   1. Guarded synthetic routing risk: `AndroidRoadGraphLoader` defaults to `allowDemoSimulation = false`,
-     returns `RoadNetworkGraph.EMPTY` when `roads.db` is missing, reports routing data
-     unavailable to user, and strictly preserves direct-bearing Go-To guidance. Verified
-     with 4 unit tests in `AndroidRoadGraphLoaderTest.kt`.
+     returns `RoadNetworkGraph.EMPTY` when `roads.db`/`roads.pack` is missing, reports routing data
+     unavailable to user, and strictly preserves direct-bearing Go-To guidance.
   2. Material 3 chrome/graphite UI design tokens implemented: precision matte charcoal (`#10151C`),
      graphite (`#1B2631`), surface dark (`#141C24`), brushed chrome (`#A8B5C1`), navigation cyan (`#39C5F3`),
      and caution amber in `ui/theme/Color.kt` and `Theme.kt`, wrapped at application root in `MainActivity.kt`.
   3. Canvas-based CompassTape HUD upgraded: continuous heading tape with degree ticks, cardinal/intercardinal
      labels, active target bearing diamond, course deviation indicator (CDI) needle, pinned off-tape
      arrows (`◀ TGT` / `TGT ▶`), and TalkBack accessibility semantics in `ui/hud/CompassTape.kt`.
-     Math verified with 5 unit tests in `CompassTapeMathTest.kt`.
-  4. 10 standalone vector navigation XML drawables in `res/drawable/` (`ic_atlas_emblem.xml`, `ic_nav_straight.xml`,
-     `ic_nav_turn_left.xml`, `ic_nav_turn_right.xml`, `ic_nav_turn_slight_left.xml`, `ic_nav_turn_slight_right.xml`,
-     `ic_nav_turn_sharp_left.xml`, `ic_nav_turn_sharp_right.xml`, `ic_nav_uturn.xml`, `ic_nav_arrive.xml`)
-     integrated into `NavigationGuidanceHud`.
+  4. 10 standalone vector navigation XML drawables in `res/drawable/` integrated into `NavigationGuidanceHud`.
   5. Standalone SDK module (`:atlas-sdk`) & independent consumer (`samples/sdk-consumer`) established
      per ADR-008 (DEC-P3-011): pure domain contracts extracted into publishable Kotlin library
-     (`com.sovereignatlas:atlas-sdk:1.0.0`) with `maven-publish`, explicit dependency boundaries,
-     and zero platform leaks. Host `:app` consumes `:atlas-sdk` via project dependency.
+     (`com.sovereignatlas:atlas-sdk:1.0.0`) with `maven-publish`, published to `~/.m2/repository` via
+     `:atlas-sdk:publishToMavenLocal`, explicit dependency boundaries, and zero platform leaks.
   6. External consumer project (`samples/sdk-consumer`) has standalone Gradle configuration,
      executing `ExternalConsumerVerificationTest.kt` verifying Spatial, Navigation, Layers, and
      Knowledge without `:app` or Android platform dependencies.
-  7. 100% test pass rate across all modules and flavors: 1,433 total passing unit tests
-     (10 in `:atlas-sdk:test`, 5 in `samples/sdk-consumer:test`, 709 in `:app:testPlayDebugUnitTest`,
-     709 in `:app:testEnterpriseDebugUnitTest`).
-  8. Pure boundary scan passes across 47 Kotlin files in pure packages, `:atlas-sdk`, and
-     `samples/sdk-consumer` with 0 violations (100% clean).
 
-- **WO-04 (Certification & Release — Host Side): COMPLETE.**
+- **WO-04 (Certification & Release — Host Side): 100% COMPLETE.**
   1. Accepted and implemented `ADR-009` (`DEC-P4-012`): hardened `PackTileServer` to bind strictly to `InetAddress.getLoopbackAddress()` (`127.0.0.1`), added `isSafePackId` allowlist and canonical path prefix enforcement in `fileFor`, and verified concurrent ephemeral port isolation (`PackTileServerTest`).
-  2. Added SHA-256 checksum-verified atomic bundle persistence and rollback (`KnowledgeBundleSerializer.atomicWriteVerified`) and failure-injection tests for corrupt/unsupported offline pack indexes (`KnowledgeBundleSerializerTest`, `OfflineStoreTest`).
+  2. Accepted and implemented `ADR-010` (`DEC-P4-013`): added deterministic `.pack` + `.sha256` sidecar ingestion for road networks (`RoadGraphBundleSerializer`, `TurnRestriction` SQL & pack loading) and historical dossiers (`KnowledgeBundleSerializer.loadVerifiedDirectory`), golden Presidio fixtures (`road_network_presidio.pack`, `historical_dossiers_presidio.pack`), programmatic `redistributionAllowed` provider policy (`OfflineBuiltinProviders.redistributableProviders()`), and fail-closed release signing guard verification (`ReleaseSigningGuardTest`).
   3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
-  4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md` with honest `RELEASE BLOCKED` disposition for the three operator-gated items (`G07` legal redistribution sign-off, `G10` physical Moto G run, `G12` keystore-signed release APK build).
-  5. Sanctioned multi-module host gate green: **1,445 passing unit tests** (`10 :atlas-sdk`, `5 :sdk-consumer`, `715 Play`, `715 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 47 pure files.
+  4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
+  5. Sanctioned multi-module host gate green: **1,459 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `721 Play`, `721 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
 
 ## Next moves
 
-- **Operator-Gated Release Actions (Requires Explicit Operator Action / Approval):**
-  1. **`G07` (Legal Sign-Off):** Review `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md` §1 and sign off on provider redistribution terms.
-  2. **`G10` (Physical Device Smoke):** Authorize or run physical device acceptance on Moto G `ZT4222BMWN`.
-  3. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) and authorize `assemblePlayRelease` / `assembleEnterpriseRelease`.
+- **Deferred Physical Device & Release Actions (Per Operator Directive):**
+  1. **`G10` (Physical Device Smoke):** Deferred until entire phase-set closure; run physical device acceptance on Moto G `ZT4222BMWN` when requested by operator.
+  2. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
+

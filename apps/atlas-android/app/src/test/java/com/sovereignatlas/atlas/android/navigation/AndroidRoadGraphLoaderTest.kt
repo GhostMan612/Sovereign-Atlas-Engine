@@ -5,11 +5,15 @@
 
 package com.sovereignatlas.atlas.android.navigation
 
+import com.sovereignatlas.atlas.geo.navigation.RoadGraphBundleSerializer
 import com.sovereignatlas.atlas.geo.navigation.RoadNetworkGraph
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
 import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
 import com.sovereignatlas.atlas.geo.navigation.TravelProfile
+import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -65,5 +69,52 @@ class AndroidRoadGraphLoaderTest {
         )
         assertNotNull(route)
         assertTrue(route!!.coordinates.size >= 2)
+    }
+
+    @Test
+    fun loadFromDirectoryIngestsGoldenPresidioPackAndEnforcesTurnRestrictions() {
+        val stream = javaClass.classLoader!!.getResourceAsStream("golden/road_network_presidio.pack")
+        assertNotNull(stream)
+        val packBytes = stream!!.readBytes()
+        val sha256 = RoadGraphBundleSerializer.computeSha256(packBytes)
+
+        val dir = Files.createTempDirectory("atlas-road-pack").toFile()
+        val packFile = File(dir, AndroidRoadGraphLoader.ROADS_PACK_FILE)
+        val sidecarFile = File(dir, "${AndroidRoadGraphLoader.ROADS_PACK_FILE}.sha256")
+        packFile.writeBytes(packBytes)
+        sidecarFile.writeText("$sha256  roads.pack\n", Charsets.UTF_8)
+
+        assertTrue(AndroidRoadGraphLoader.isRoutableDirectoryAvailable(dir))
+        val graph = AndroidRoadGraphLoader.loadFromDirectory(dir)
+        assertNotNull(graph)
+        assertEquals(5, graph!!.nodes.size)
+        assertEquals(1, graph.turnRestrictions.size)
+
+        val engine = RoadRoutingEngine(graph)
+        val route = engine.calculateRoute(
+            RoadRouteRequest(
+                startNodeId = 1001L,
+                targetNodeId = 1003L,
+                profile = TravelProfile.DRIVING,
+            ),
+        )
+        assertNotNull(route)
+        assertEquals(listOf(5001L, 5003L, 5004L), route!!.edges.map { it.id })
+        assertEquals(785.0, route.totalDistanceMeters, 0.01)
+    }
+
+    @Test
+    fun loadFromDirectoryRejectsTamperedPackWhenSidecarFails() {
+        val stream = javaClass.classLoader!!.getResourceAsStream("golden/road_network_presidio.pack")
+        val packBytes = stream!!.readBytes()
+
+        val dir = Files.createTempDirectory("atlas-road-tamper").toFile()
+        val packFile = File(dir, AndroidRoadGraphLoader.ROADS_PACK_FILE)
+        val sidecarFile = File(dir, "${AndroidRoadGraphLoader.ROADS_PACK_FILE}.sha256")
+        packFile.writeBytes(packBytes)
+        sidecarFile.writeText("0000000000000000000000000000000000000000000000000000000000000000", Charsets.UTF_8)
+
+        assertFalse(AndroidRoadGraphLoader.isRoutableDirectoryAvailable(dir))
+        assertNull(AndroidRoadGraphLoader.loadFromDirectory(dir))
     }
 }
