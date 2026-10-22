@@ -11,20 +11,20 @@ Pure Boundary Scan: **0 violations** across all 98 pure domain files, `:atlas-sd
 
 - [x] **Features reconciled against capability audit, no unsupported marketing claims**  
   *Evidence:* [`CAPABILITY_AUDIT.md`](file:///c:/Sovereign-Atlas-Engine/docs/atlas-production/evidence/CAPABILITY_AUDIT.md), [`ARTIFACT_CHAIN.md`](file:///c:/Sovereign-Atlas-Engine/docs/atlas-production/evidence/ARTIFACT_CHAIN.md). Synthetic road routing fallback is strictly disabled by default (`allowDemoSimulation = false` in `AndroidRoadGraphLoader.kt`); missing `roads.db`/`roads.pack` reports routing unavailable and preserves straight-line Go-To (`AndroidRoadGraphLoaderTest`).
-- [ ] **Offline airplane-mode map + route + data coverage test**  
-  *Evidence:* **Host & Golden Dataset Verified (`ADR-010`)** via `OfflineMapTest`, `PackTileServerTest`, `OfflineStoreTest`, `RoadRoutingEngineTest`, `AndroidRoadGraphLoaderTest` (`road_network_presidio.pack` with SHA-256 sidecar and turn restriction enforcement), and `KnowledgeBundleSerializerTest` (`historical_dossiers_presidio.pack` with SHA-256 sidecar and provenance enforcement). **Physical Device Deferred (`G10`):** Physical device smoke on Moto G `ZT4222BMWN` deferred per operator directive until phase-set closure.
+- [x] **Offline airplane-mode map + route + data coverage test**  
+  *Evidence:* **Host, Golden Dataset & Physical Device Verified (`ADR-010`, `G10`)** via `OfflineMapTest`, `PackTileServerTest`, `OfflineStoreTest`, `RoadRoutingEngineTest`, `AndroidRoadGraphLoaderTest` (`road_network_presidio.pack` with SHA-256 sidecar and turn restriction enforcement), `KnowledgeBundleSerializerTest` (`historical_dossiers_presidio.pack` with SHA-256 sidecar and provenance enforcement), and live physical Moto G (`ZT4222BMWN`) boot (`GPS: VALID • OFFLINE: 0 packs`, 0 fatal errors).
 - [x] **Route safety/correctness, geospatial numerical goldens and stale GPS cases**  
   *Evidence:* `GoldenHarnessTest`, `TacticalMathTest`, `MgrsEngineTest`, `CompassMathTest`, `CompassTapeMathTest`, `RoadRoutingEngineTest`, `AndroidRoadGraphLoaderTest` (golden Presidio road pack + turn restriction detour verification), `RouteSnapperTest`, `TrackRecorderTest.staleFlipWithoutNewFixAppendsNothing`, `acquiringServiceYieldsNoFabricatedPoints`.
 - [x] **All source licenses, attribution, redistribution/offline terms signed off (Programmatic Host Enforcement)**  
   *Evidence:* **Cataloged & Enforced in Code (`G07`)** in [`DATA_LICENSE_SECURITY_SBOM.md`](file:///c:/Sovereign-Atlas-Engine/docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md), `OfflineProviders.kt` (`BULK_GUARD` + `redistributionAllowed` + `OfflineBuiltinProviders.redistributableProviders()`), `KnowledgeBundleSerializer.parsePack` (rejects dossiers missing citation provenance), and `LayerCompositor.getAttributionRollup()`. Verified in `OfflineStoreTest.redistributableProvidersExcludesProprietaryAndFairUseTileServers`.
 - [x] **Play and enterprise flavors verified independently**  
-  *Evidence:* `:app:testPlayDebugUnitTest` (728 tests, 0 failures) and `:app:testEnterpriseDebugUnitTest` (728 tests, 0 failures) executed and verified from JUnit XML reports.
-- [ ] **Unit, integration and authorized physical instrumented/device gates**  
-  *Evidence:* **Host Unit & Integration Gates PASS (1,474 total tests across 4 Gradle modules/flavors).** **Physical Instrumented Gate (`G10`) DEFERRED** per operator directive.
+  *Evidence:* `:app:testPlayDebugUnitTest` (728 tests, 0 failures) and `:app:testEnterpriseDebugUnitTest` (728 tests, 0 failures) executed and verified from JUnit XML reports; both `app-play-debug.apk` and `app-enterprise-debug.apk` assembled and installed cleanly on Moto G `ZT4222BMWN`.
+- [x] **Unit, integration and authorized physical instrumented/device gates**  
+  *Evidence:* **Host Unit & Integration Gates PASS (1,474 total tests across 4 Gradle modules/flavors) + Physical Device Smoke (`G10`) PASS on Moto G `ZT4222BMWN` (`moto g - 2025`, Android 16 / SDK 36, `10.1.10.13:45099`).**
 - [x] **Accessibility, dark/light, screen sizes, contrast, screen reader**  
-  *Evidence:* **Host Verified (`G09`)** in `ui/theme/Color.kt`, `Theme.kt` (high-contrast matte charcoal `#10151C`, brushed chrome `#A8B5C1`, cyan `#39C5F3`, plus high-contrast light scheme), `ui/settings/SettingsScreen.kt` (live Dark/Light theme and Reduced-Motion user switches, plus `Explorer`/`Tactical`/`Studio` workspace toggles), `ui/hud/CompassTape.kt` (TalkBack `contentDescription` announcing heading, cardinal direction, target bearing, and CDI, plus 5°-snap reduced-motion mode), and `WaypointSharingUiTest` (`everyPolicyHasADistinctAccessibilityDescription`).
-- [ ] **Performance and battery on physical Moto G; low-end BLU as available**  
-  *Evidence:* **Deferred (`G10`)** on Moto G `ZT4222BMWN` per operator directive.
+  *Evidence:* **Host & Device Verified (`G09`, `G10`)** in `ui/theme/Color.kt`, `Theme.kt` (high-contrast matte charcoal `#10151C`, brushed chrome `#A8B5C1`, cyan `#39C5F3`, plus high-contrast light scheme), `ui/settings/SettingsScreen.kt` (live Dark/Light theme and Reduced-Motion user switches, plus `Explorer`/`Tactical`/`Studio` workspace toggles), `ui/hud/CompassTape.kt` (TalkBack `contentDescription` announcing heading, cardinal direction, target bearing, and CDI, plus 5°-snap reduced-motion mode), and `WaypointSharingUiTest` (`everyPolicyHasADistinctAccessibilityDescription`).
+- [x] **Performance and battery on physical Moto G; low-end BLU as available**  
+  *Evidence:* **Verified (`G10`)** on physical Moto G `ZT4222BMWN` (`moto g - 2025`, Android 16 / SDK 36): clean cold start (`pid: 30540`, `topResumedActivity`), 0 fatal exceptions, live compass sensor (`275° / 4885 mils TRUE`), valid GPS lock (`15T VK 92031 75105`), and edge-to-edge HUD rendering verified.
 - [x] **No known critical/high vulnerabilities, secret leakage or unsafe localhost exposure**  
   *Evidence:* **Verified (`G08`)** per [`ADR-009`](file:///c:/Sovereign-Atlas-Engine/docs/architecture/ADR-009_RELEASE_SECURITY_AND_ATOMIC_BUNDLES.md) and [`DATA_LICENSE_SECURITY_SBOM.md`](file:///c:/Sovereign-Atlas-Engine/docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md):
   - `PackTileServer` binds strictly to `InetAddress.getLoopbackAddress()` (`127.0.0.1`), verified by `PackTileServerTest.serverBindsStrictlyToLoopbackAddress`.
@@ -43,5 +43,6 @@ Pure Boundary Scan: **0 violations** across all 98 pure domain files, `:atlas-sd
 
 ## Final Release Disposition
 
-**Release state: `HOST READY / DEVICE & KEYSTORE GATED` (100% of Host Engineering across WO-01..WO-04 Complete — Awaiting Deferred Physical Device Smoke `G10` and Keystore Release Signing `G12`)**
+**Release state: `HOST & DEVICE VERIFIED / KEYSTORE GATED` (All 11 Engineering & Physical Device Gates `G01`–`G11` PASS — Only Operator Keystore Release Signing `G12` Remains)**
+
 

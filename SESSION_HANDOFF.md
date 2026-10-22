@@ -132,11 +132,12 @@
   3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
   4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
   5. Sanctioned multi-module host gate green: **1,474 passing unit tests** (`12 :atlas-sdk`, `6 :sdk-consumer`, `728 Play`, `728 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
+  6. **Physical Device Smoke (`G10`) Verified on Moto G `ZT4222BMWN` (`moto g - 2025`, Android 16 / SDK 36, `10.1.10.13:45099`):** Both `app-play-debug.apk` and `app-enterprise-debug.apk` assembled and installed via wireless ADB (`Success`); `com.sovereignatlas.atlas/.MainActivity` launched (`pid: 30540`, `topResumedActivity`), 0 fatal logcat exceptions, and live `CompassTape`, `MGRS` (`15T VK 92031 75105`), `GPS: VALID • OFFLINE: 0 packs`, `TacNavHud` (`275° / 4885 mils TRUE`), and multi-source attribution rollup verified on screen.
 
 ## Next moves
 
-- **Deferred Physical Device & Release Actions (Per Operator Directive):**
-  1. **`G10` (Physical Device Smoke):** Deferred until entire phase-set closure; run physical device acceptance on Moto G `ZT4222BMWN` when requested by operator.
-  2. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
+- **Remaining Release Action (`G12`):**
+  1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
+
 
 
