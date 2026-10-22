@@ -279,4 +279,59 @@ final class PackTileServerTest {
             server.stop()
         }
     }
+
+    @Test
+    fun serverBindsStrictlyToLoopbackAddress() {
+        val server = PackTileServer(packsDir = { seededDir() })
+        server.start()
+        try {
+            val bound = server.boundAddress()
+            assertTrue(bound != null && bound.isLoopbackAddress)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun encodedAndDotPrefixTraversalVariantsAreRejectedWith404() {
+        val server = PackTileServer(packsDir = { seededDir() })
+        val port = server.start()
+        try {
+            val attempts = listOf(
+                "http://127.0.0.1:$port/.hidden/10/1/2.png",
+                "http://127.0.0.1:$port/..%2fpack/10/1/2.png",
+                "http://127.0.0.1:$port/pack..id/10/1/2.png",
+                "http://127.0.0.1:$port/pack\$bad/10/1/2.png",
+            )
+            for (url in attempts) {
+                val (code, _) = get(url)
+                assertEquals(404, code)
+            }
+            assertEquals(0L, server.tileHits())
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun restartAndConcurrentInstancesIsolateEphemeralLoopbackPorts() {
+        val first = PackTileServer(packsDir = { seededDir() })
+        val second = PackTileServer(packsDir = { seededDir() })
+        val firstPortA = first.start()
+        val firstPortRepeat = first.start()
+        val secondPort = second.start()
+        try {
+            assertEquals(firstPortA, firstPortRepeat)
+            assertTrue(firstPortA > 0 && secondPort > 0 && firstPortA != secondPort)
+        } finally {
+            first.stop()
+            second.stop()
+        }
+        val restartedPort = first.start()
+        try {
+            assertTrue(restartedPort > 0)
+        } finally {
+            first.stop()
+        }
+    }
 }

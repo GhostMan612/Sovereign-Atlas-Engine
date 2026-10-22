@@ -466,4 +466,28 @@ final class OfflineStoreTest {
         )
         assertEquals(140L, slept)
     }
+
+    @Test
+    fun corruptedIndexJsonSetsErrorWithoutCrashing() {
+        val dir = tempDir()
+        val indexFile = File(File(dir, PACK_JOURNAL_DIR), PACK_INDEX_FILE)
+        indexFile.parentFile?.mkdirs()
+        indexFile.writeText("{not-valid-json")
+        val target = store(dir)
+        target.restore()
+        assertTrue(target.packs().isEmpty())
+        assertTrue(target.lastErrorOrNull() != null)
+    }
+
+    @Test
+    fun unsupportedIndexVersionIsRejectedGracefully() {
+        val dir = tempDir()
+        val indexFile = File(File(dir, PACK_JOURNAL_DIR), PACK_INDEX_FILE)
+        indexFile.parentFile?.mkdirs()
+        indexFile.writeText("{\"version\":999,\"packs\":[]}")
+        val target = store(dir)
+        target.restore()
+        assertTrue(target.packs().isEmpty())
+        assertTrue(target.lastErrorOrNull() != null)
+    }
 }

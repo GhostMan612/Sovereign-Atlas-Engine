@@ -1,9 +1,9 @@
-# Capability Audit — Sovereign Atlas Baseline (Audited Post-WO-03)
+# Capability Audit — Sovereign Atlas Baseline (Audited Post-WO-04 Host Certification)
 
-Date: 2026-10-14  
+Date: 2026-10-22  
 Audited By: Principal Software Architect & QA Lead  
 Commit: c37cec97937152bb598aefd8284ba00ca6d68d7b + WO-02 + WO-03 (Decoupled SDK)  
-Unit Gate: 10 :atlas-sdk + 5 samples/sdk-consumer + 709 Play + 709 Enterprise = 1,433 passing unit tests (0 failures, 0 errors)  
+Unit Gate: 10 :atlas-sdk + 5 samples/sdk-consumer + 715 Play + 715 Enterprise = 1,445 passing unit tests (0 failures, 0 errors)  
 Pure Boundary: 47 pure Kotlin domain and SDK files; 0 violations (100% clean)
 
 | Capability | Source paths | Behavior demonstrated | Tests | Device proof | Status (VERIFIED / PARTIAL / PROVISIONAL / PENDING) | Gap / Reality |

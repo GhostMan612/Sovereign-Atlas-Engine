@@ -56,6 +56,8 @@ class PackTileServer(
 
     override fun port(): Int = socket?.localPort ?: -1
 
+    fun boundAddress(): java.net.InetAddress? = socket?.inetAddress
+
     override fun isRunning(): Boolean = running.get()
 
     override fun tileHits(): Long = baseHits + demHits
@@ -66,7 +68,7 @@ class PackTileServer(
 
     override fun start(): Int {
         if (running.get()) return port()
-        val server = ServerSocket(port, 4)
+        val server = ServerSocket(port, 4, java.net.InetAddress.getLoopbackAddress())
         socket = server
         running.set(true)
         thread(isDaemon = true, name = "atlas-tiles") {
@@ -235,19 +237,29 @@ class PackTileServer(
     private fun fileFor(path: String, bucket: TileBucket): File? {
         val parts = path.trimStart('/').split("/")
         if (parts.size != 4) return null
+        val root = packsDir().canonicalFile
         if (bucket == TileBucket.DEM) {
             val (_, z, x, y) = parts
             if (!y.endsWith(".png")) return null
             val tile = y.removeSuffix(".png")
             if (!isTileRef(z) || !isTileRef(x) || !isTileRef(tile)) return null
-            return File(File(File(packsDir(), DEM_DIR_NAME), z), "$x/$tile.png")
+            val target = File(File(File(root, DEM_DIR_NAME), z), "$x/$tile.png").canonicalFile
+            if (!target.path.startsWith(root.path + File.separator)) return null
+            return target
         }
         val (packId, z, x, y) = parts
         if (!y.endsWith(".png")) return null
-        if (packId.isEmpty() || packId.contains("..")) return null
+        if (!isSafePackId(packId)) return null
         val tile = y.removeSuffix(".png")
         if (!isTileRef(z) || !isTileRef(x) || !isTileRef(tile)) return null
-        return File(File(packsDir(), packId), "$z/$x/$tile.png")
+        val target = File(File(root, packId), "$z/$x/$tile.png").canonicalFile
+        if (!target.path.startsWith(root.path + File.separator)) return null
+        return target
+    }
+
+    private fun isSafePackId(raw: String): Boolean {
+        if (raw.isEmpty() || raw.startsWith(".") || raw.contains("..")) return false
+        return raw.all { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
     }
 
     private fun isTileRef(raw: String): Boolean {

@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-14: 1,433 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-22: 1,445 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 10 tests
   - `:sdk-consumer:test`: 5 tests
-  - `:app:testPlayDebugUnitTest`: 709 tests
-  - `:app:testEnterpriseDebugUnitTest`: 709 tests
+  - `:app:testPlayDebugUnitTest`: 715 tests
+  - `:app:testEnterpriseDebugUnitTest`: 715 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -123,11 +123,16 @@
   8. Pure boundary scan passes across 47 Kotlin files in pure packages, `:atlas-sdk`, and
      `samples/sdk-consumer` with 0 violations (100% clean).
 
+- **WO-04 (Certification & Release — Host Side): COMPLETE.**
+  1. Accepted and implemented `ADR-009` (`DEC-P4-012`): hardened `PackTileServer` to bind strictly to `InetAddress.getLoopbackAddress()` (`127.0.0.1`), added `isSafePackId` allowlist and canonical path prefix enforcement in `fileFor`, and verified concurrent ephemeral port isolation (`PackTileServerTest`).
+  2. Added SHA-256 checksum-verified atomic bundle persistence and rollback (`KnowledgeBundleSerializer.atomicWriteVerified`) and failure-injection tests for corrupt/unsupported offline pack indexes (`KnowledgeBundleSerializerTest`, `OfflineStoreTest`).
+  3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
+  4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md` with honest `RELEASE BLOCKED` disposition for the three operator-gated items (`G07` legal redistribution sign-off, `G10` physical Moto G run, `G12` keystore-signed release APK build).
+  5. Sanctioned multi-module host gate green: **1,445 passing unit tests** (`10 :atlas-sdk`, `5 :sdk-consumer`, `715 Play`, `715 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 47 pure files.
+
 ## Next moves
 
-- **Ready for Operator Authorization to Advance to Work Order 04 (Production Release Certification):**
-  1. Multi-flavor release build verification (`assemblePlayRelease`, `assembleEnterpriseRelease`).
-  2. Fail-closed release signing checks and key security audits.
-  3. Artifact chain integrity and SHA-256 verification against `OVERLAY_SHA256.json`.
-  4. Physical device smoking on Moto G `ZT4222BMWN` (upon explicit operator request per RULES.md §1.6).
-  5. Final release documentation, capability audit sign-off, and production deployment handoff.
+- **Operator-Gated Release Actions (Requires Explicit Operator Action / Approval):**
+  1. **`G07` (Legal Sign-Off):** Review `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md` §1 and sign off on provider redistribution terms.
+  2. **`G10` (Physical Device Smoke):** Authorize or run physical device acceptance on Moto G `ZT4222BMWN`.
+  3. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) and authorize `assemblePlayRelease` / `assembleEnterpriseRelease`.

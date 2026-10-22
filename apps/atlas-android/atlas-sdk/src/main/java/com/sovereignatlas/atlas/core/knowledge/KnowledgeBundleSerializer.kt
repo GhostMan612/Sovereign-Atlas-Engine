@@ -5,6 +5,9 @@
 
 package com.sovereignatlas.atlas.core.knowledge
 
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 data class KnowledgeBundle(
@@ -27,6 +30,35 @@ object KnowledgeBundleSerializer {
     fun verifyChecksum(content: ByteArray, expectedSha256: String): Boolean {
         val computed = computeSha256(content)
         return computed.equals(expectedSha256, ignoreCase = true)
+    }
+
+    fun atomicWriteVerified(
+        targetFile: File,
+        content: ByteArray,
+        expectedSha256: String,
+    ): Boolean {
+        if (!verifyChecksum(content, expectedSha256)) return false
+        val parent = targetFile.parentFile
+        if (parent != null && !parent.exists()) parent.mkdirs()
+        val stagingFile = File(parent, "${targetFile.name}.tmp")
+        return try {
+            stagingFile.writeBytes(content)
+            val diskBytes = stagingFile.readBytes()
+            if (!verifyChecksum(diskBytes, expectedSha256)) {
+                stagingFile.delete()
+                false
+            } else {
+                Files.move(
+                    stagingFile.toPath(),
+                    targetFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+                true
+            }
+        } catch (error: Throwable) {
+            stagingFile.delete()
+            false
+        }
     }
 
     fun renderJson(bundle: KnowledgeBundle): String {

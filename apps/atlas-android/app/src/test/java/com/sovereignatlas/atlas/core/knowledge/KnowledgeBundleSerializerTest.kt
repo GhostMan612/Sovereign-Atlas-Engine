@@ -5,6 +5,8 @@
 
 package com.sovereignatlas.atlas.core.knowledge
 
+import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,6 +24,23 @@ class KnowledgeBundleSerializerTest {
 
         val tampered = "Sovereign Atlas Knowledge Bundle v2".toByteArray(Charsets.UTF_8)
         assertFalse(KnowledgeBundleSerializer.verifyChecksum(tampered, hash))
+    }
+
+    @Test
+    fun atomicWriteVerifiedCommitsValidBundleAndPreservesOriginalOnTamperedUpdate() {
+        val dir = Files.createTempDirectory("atlas-bundle-test").toFile()
+        val target = File(dir, "knowledge-v1.json")
+        val initialBytes = "{\"version\":1}".toByteArray(Charsets.UTF_8)
+        val initialSha = KnowledgeBundleSerializer.computeSha256(initialBytes)
+
+        assertTrue(KnowledgeBundleSerializer.atomicWriteVerified(target, initialBytes, initialSha))
+        assertTrue(target.exists())
+        assertTrue(target.readBytes().contentEquals(initialBytes))
+
+        val tamperedBytes = "{\"version\":2,\"corrupt\":true}".toByteArray(Charsets.UTF_8)
+        assertFalse(KnowledgeBundleSerializer.atomicWriteVerified(target, tamperedBytes, initialSha))
+        assertFalse(File(dir, "knowledge-v1.json.tmp").exists())
+        assertTrue(target.readBytes().contentEquals(initialBytes))
     }
 
     @Test
