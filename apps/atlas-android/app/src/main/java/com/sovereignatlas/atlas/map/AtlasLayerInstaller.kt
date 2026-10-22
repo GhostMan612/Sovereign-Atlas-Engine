@@ -12,6 +12,7 @@ import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -62,6 +63,10 @@ object AtlasLayerIds {
     const val HISTORICAL_PATENTS_BORDER = "historical-patents-border"
     const val HISTORICAL_RASTER_SOURCE_PREFIX = "historical-raster-source-"
     const val HISTORICAL_RASTER_LAYER_PREFIX = "historical-raster-layer-"
+    const val HISTORICAL_DOSSIERS_SOURCE = "atlas-historical-dossiers"
+    const val HISTORICAL_DOSSIERS_LAYER = "atlas-historical-dossiers-layer"
+    const val BLEND_SOURCE_PREFIX = "atlas-blend-source-"
+    const val BLEND_LAYER_PREFIX = "atlas-blend-layer-"
     const val LOS_OBSERVER_SOURCE = "atlas-los-observer"
     const val LOS_OBSERVER_LAYER = "atlas-los-observer-layer"
     const val LOS_TARGET_SOURCE = "atlas-los-target"
@@ -105,6 +110,7 @@ fun installAtlasLayers(style: Style) {
             GeoJsonOptions().withSynchronousUpdate(true),
         ),
     )
+    style.addSource(GeoJsonSource(AtlasLayerIds.HISTORICAL_DOSSIERS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.GOTO_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.FENCE_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.MGRS_LINE_SOURCE))
@@ -228,6 +234,16 @@ fun installAtlasLayers(style: Style) {
             .withProperties(
                 PropertyFactory.lineColor("#8A5F13"),
                 PropertyFactory.lineWidth(2.0f),
+            ),
+    )
+    style.addLayer(
+        CircleLayer(AtlasLayerIds.HISTORICAL_DOSSIERS_LAYER, AtlasLayerIds.HISTORICAL_DOSSIERS_SOURCE)
+            .withProperties(
+                PropertyFactory.circleColor("#E5A93C"),
+                PropertyFactory.circleRadius(7.0f),
+                PropertyFactory.circleStrokeColor("#141C24"),
+                PropertyFactory.circleStrokeWidth(2.0f),
+                PropertyFactory.circleOpacity(1.0f),
             ),
     )
     // These three were previously added below WAYPOINTS_LAYER. Both forms render
@@ -368,6 +384,23 @@ fun setAtlasLayerVisible(style: Style, layerId: String, visible: Boolean) {
         is SymbolLayer -> layer.setProperties(PropertyFactory.visibility(value))
         is LineLayer -> layer.setProperties(PropertyFactory.visibility(value))
         is CircleLayer -> layer.setProperties(PropertyFactory.visibility(value))
+        is FillLayer -> layer.setProperties(PropertyFactory.visibility(value))
+        is RasterLayer -> layer.setProperties(PropertyFactory.visibility(value))
+    }
+}
+
+fun setAtlasLayerOpacity(style: Style, layerId: String, opacity: Float) {
+    val layer = style.getLayer(layerId) ?: return
+    val clamped = opacity.coerceIn(0.0f, 1.0f)
+    when (layer) {
+        is RasterLayer -> layer.setProperties(PropertyFactory.rasterOpacity(clamped))
+        is LineLayer -> layer.setProperties(PropertyFactory.lineOpacity(clamped))
+        is FillLayer -> layer.setProperties(PropertyFactory.fillOpacity(clamped))
+        is CircleLayer -> layer.setProperties(PropertyFactory.circleOpacity(clamped))
+        is SymbolLayer -> layer.setProperties(
+            PropertyFactory.iconOpacity(clamped),
+            PropertyFactory.textOpacity(clamped),
+        )
     }
 }
 

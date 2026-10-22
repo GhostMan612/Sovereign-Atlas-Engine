@@ -114,12 +114,122 @@ class AppServices(private val context: Context) {
     val compositor: LayerCompositor = LayerCompositor().apply {
         registerLayer(
             LayerDescriptor(
+                id = "blend-usgs-hillshade",
+                title = "USGS 3DEP Shaded Relief",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.40f,
+                defaultZIndex = 2,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS 3DEP Elevation Program"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-usgs-hydrography",
+                title = "USGS NHD Hydrography",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.75f,
+                defaultZIndex = 3,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS National Hydrography Dataset"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-usgs-topo",
+                title = "USGS Topo Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 4,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS The National Map"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-usgs-imagery-topo",
+                title = "USGS Imagery + Topo Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 5,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS The National Map (NAIP + Topo)"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-opentopomap",
+                title = "OpenTopoMap Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 6,
+                attribution = LayerAttribution("OpenTopoMap", "CC-BY-SA", "© OpenStreetMap contributors, SRTM | style: © OpenTopoMap (CC-BY-SA)"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-esri-imagery",
+                title = "Esri World Imagery Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 7,
+                attribution = LayerAttribution("Esri", "Esri Terms of Use", "Esri, Maxar, Earthstar Geographics, and the GIS User Community"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-osm-standard",
+                title = "OpenStreetMap Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.40f,
+                defaultZIndex = 8,
+                attribution = LayerAttribution("OpenStreetMap", "ODbL", "© OpenStreetMap contributors"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-carto-positron",
+                title = "CARTO Positron Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.40f,
+                defaultZIndex = 9,
+                attribution = LayerAttribution("CARTO", "CC-BY-SA", "© OpenStreetMap contributors © CARTO"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-carto-dark-matter",
+                title = "CARTO Dark Matter Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.40f,
+                defaultZIndex = 9,
+                attribution = LayerAttribution("CARTO", "CC-BY-SA", "© OpenStreetMap contributors © CARTO"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-openseamap-nautical",
+                title = "OpenSeaMap Nautical Marks",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.85f,
+                defaultZIndex = 10,
+                attribution = LayerAttribution("OpenSeaMap", "CC-BY-SA", "© OpenSeaMap contributors"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
                 id = "graticule",
                 title = "Graticule",
                 type = LayerType.VECTOR_OVERLAY,
                 defaultVisibility = false,
                 defaultOpacity = 0.8f,
-                defaultZIndex = 10,
+                defaultZIndex = 15,
                 attribution = LayerAttribution("USGS", "Public Domain", "USGS Graticule"),
             ),
         )
@@ -141,7 +251,40 @@ class AppServices(private val context: Context) {
                 type = LayerType.VECTOR_OVERLAY,
                 defaultVisibility = false,
                 defaultOpacity = 0.9f,
-                defaultZIndex = 30,
+                defaultZIndex = 25,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "historical-dossiers",
+                title = "Historical Dossier Pins",
+                type = LayerType.HISTORICAL_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 32,
+                attribution = LayerAttribution("NPS / HABS", "Public Domain", "National Park Service / HABS / GGNRA"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "historical-patents",
+                title = "BLM Land Patent Parcels",
+                type = LayerType.HISTORICAL_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 0.70f,
+                defaultZIndex = 34,
+                attribution = LayerAttribution("BLM GLO", "Public Domain", "Bureau of Land Management GLO"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "historical-blueprints",
+                title = "Sanborn Fire Insurance Blueprints",
+                type = LayerType.HISTORICAL_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 0.85f,
+                defaultZIndex = 36,
+                attribution = LayerAttribution("Library of Congress", "Public Domain", "Library of Congress Sanborn Maps"),
             ),
         )
         registerLayer(
@@ -156,12 +299,52 @@ class AppServices(private val context: Context) {
         )
         registerLayer(
             LayerDescriptor(
+                id = "fence",
+                title = "Radial Geofence",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 0.9f,
+                defaultZIndex = 48,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
                 id = "track",
                 title = "Track",
                 type = LayerType.GEOJSON_OVERLAY,
                 defaultVisibility = true,
                 defaultOpacity = 1.0f,
                 defaultZIndex = 50,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "ops-graphics",
+                title = "Operational Graphics (Zones/Lines)",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 0.9f,
+                defaultZIndex = 52,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "cot-markers",
+                title = "CoT Tactical Markers",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 55,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "pli-mesh",
+                title = "Blue-Force PLI & Mesh Tracks",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 58,
             ),
         )
         registerLayer(

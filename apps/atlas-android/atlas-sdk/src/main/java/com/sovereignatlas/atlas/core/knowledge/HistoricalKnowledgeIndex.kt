@@ -25,6 +25,10 @@ class HistoricalKnowledgeIndex {
         return dossiersById[id]
     }
 
+    fun getAll(): List<HistoricalDossier> {
+        return dossiersById.values.toList()
+    }
+
     fun count(): Int = dossiersById.size
 
     fun querySpatial(box: AtlasBoundingBox): List<HistoricalDossier> {

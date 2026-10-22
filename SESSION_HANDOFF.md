@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-22: 1,459 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-22: 1,463 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 5 tests
-  - `:app:testPlayDebugUnitTest`: 721 tests
-  - `:app:testEnterpriseDebugUnitTest`: 721 tests
+  - `:app:testPlayDebugUnitTest`: 723 tests
+  - `:app:testEnterpriseDebugUnitTest`: 723 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -77,14 +77,20 @@
      location fixes feed `NavigationSession.updateLocation()` with automatic off-route
      rerouting; active maneuver instructions, distances, and ETAs render in
      `NavigationGuidanceHud`; route geometry renders onto MapLibre `Route` layer.
-  3. Multi-layer compositor (`layers.compositor`) wired into `AtlasServices`, synchronizing
-     runtime layer visibility and opacity with MapLibre style layers and exposed in
-     `LayersDialog` as the compositor stack inspector.
+  3. Multi-layer compositor (`layers.compositor`) wired into `AtlasServices` with
+     simultaneous multi-map raster blending (`USGS 3DEP Hillshade`, `USGS NHD Hydrography`,
+     `USGS Topo`, `USGS Imagery+Topo Hybrid`, `OpenTopoMap`, `Esri Imagery`, `OSM Standard`,
+     `CARTO Positron/Dark Matter`, `OpenSeaMap Nautical`), historical overlays (`Historical Dossier Pins`,
+     `BLM Land Patents`, `Sanborn Blueprints`), tactical/field overlays (`CoT Markers`, `PLI & Mesh Tracks`,
+     `Operational Graphics`, `Radial Geofence`, `Graticule`, `MGRS Grid`, `Range Rings`, `Waypoints`,
+     `Track`, `Measure`, `Route`), per-layer interactive opacity sliders (`10%–100%`), and 6 curated
+     one-tap combination presets (`AtlasLayerPresets`) in `LayersDialog`.
   4. Historical encyclopedia dossier system (`core.knowledge`) fully wired into
      `AtlasServices`, `HistoricalKnowledgeIndex`, Verified `.pack` directory auto-ingestion
-     (`KnowledgeBundleSerializer.loadVerifiedDirectory`), and the map UI with `HistoricalDossierSheet`
-     displaying confidence badges (CONFIRMED/PROBABLE/UNCERTAIN/DISPUTED), temporal
-     intervals, primary archival citations, and alternative disputed claims.
+     (`KnowledgeBundleSerializer.loadVerifiedDirectory`), map pin rendering (`HISTORICAL_DOSSIERS_LAYER`),
+     and the map UI with `HistoricalDossierSheet` displaying confidence badges
+     (CONFIRMED/PROBABLE/UNCERTAIN/DISPUTED), temporal intervals, primary archival citations,
+     and alternative disputed claims.
 - **ADR-006 Resolved:** `offline/` networking extracted into `android/offline/`
   (`PackTileServer.kt`, `AndroidHttpDownloader.kt`), while `offline/` holds pure
   interfaces (`LocalTileServer.kt`, `OfflineDownloader.kt`). 100% pure boundary clean.
@@ -117,7 +123,7 @@
   2. Accepted and implemented `ADR-010` (`DEC-P4-013`): added deterministic `.pack` + `.sha256` sidecar ingestion for road networks (`RoadGraphBundleSerializer`, `TurnRestriction` SQL & pack loading) and historical dossiers (`KnowledgeBundleSerializer.loadVerifiedDirectory`), golden Presidio fixtures (`road_network_presidio.pack`, `historical_dossiers_presidio.pack`), programmatic `redistributionAllowed` provider policy (`OfflineBuiltinProviders.redistributableProviders()`), and fail-closed release signing guard verification (`ReleaseSigningGuardTest`).
   3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
   4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
-  5. Sanctioned multi-module host gate green: **1,459 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `721 Play`, `721 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
+  5. Sanctioned multi-module host gate green: **1,463 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `723 Play`, `723 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
 
 ## Next moves
 

@@ -65,4 +65,141 @@ class LayerCompositor {
 
         return attributions.joinToString(" | ")
     }
+
+    fun applyCombinationPreset(preset: LayerCombinationPreset) {
+        val configuredIds = preset.entries.map { it.layerId }.toSet()
+        for (state in layerMap.values) {
+            if (state.descriptor.id !in configuredIds &&
+                (state.descriptor.type == LayerType.RASTER_OVERLAY ||
+                    state.descriptor.type == LayerType.VECTOR_OVERLAY)
+            ) {
+                state.isVisible = false
+            }
+        }
+        for (entry in preset.entries) {
+            setVisibility(entry.layerId, entry.isVisible)
+            setOpacity(entry.layerId, entry.opacity)
+        }
+    }
+}
+
+data class LayerBlendEntry(
+    val layerId: String,
+    val isVisible: Boolean,
+    val opacity: Float = 1.0f,
+)
+
+data class LayerCombinationPreset(
+    val presetId: String,
+    val title: String,
+    val description: String,
+    val baseProviderId: String,
+    val entries: List<LayerBlendEntry>,
+)
+
+object AtlasLayerPresets {
+    val satelliteTopoRelief = LayerCombinationPreset(
+        presetId = "satellite-topo-relief",
+        title = "Satellite + Topo + Hillshade",
+        description = "Blends Esri World Imagery with USGS Topographic contours and 3DEP shaded relief",
+        baseProviderId = "esri-imagery",
+        entries = listOf(
+            LayerBlendEntry("blend-usgs-topo", isVisible = true, opacity = 0.45f),
+            LayerBlendEntry("blend-usgs-hillshade", isVisible = true, opacity = 0.35f),
+            LayerBlendEntry("waypoints", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("track", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("route", isVisible = true, opacity = 1.0f),
+        ),
+    )
+
+    val terrainHydroSurvey = LayerCombinationPreset(
+        presetId = "terrain-hydro-survey",
+        title = "Topo + 3DEP Relief + NHD Waterways",
+        description = "Combines OpenTopoMap with USGS 3DEP hillshade, NHD hydrography, and lat/lon graticule",
+        baseProviderId = "opentopomap",
+        entries = listOf(
+            LayerBlendEntry("blend-usgs-hillshade", isVisible = true, opacity = 0.40f),
+            LayerBlendEntry("blend-usgs-hydrography", isVisible = true, opacity = 0.75f),
+            LayerBlendEntry("graticule", isVisible = true, opacity = 0.80f),
+            LayerBlendEntry("waypoints", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("track", isVisible = true, opacity = 1.0f),
+        ),
+    )
+
+    val historicalArchival = LayerCombinationPreset(
+        presetId = "historical-archival",
+        title = "Historical Dossiers + Patents + Blueprints",
+        description = "Displays USGS Topo with NAIP hybrid imagery, archival dossiers, BLM land patents, and Sanborn blueprints",
+        baseProviderId = "usgs-topo",
+        entries = listOf(
+            LayerBlendEntry("blend-usgs-imagery-topo", isVisible = true, opacity = 0.45f),
+            LayerBlendEntry("historical-dossiers", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("historical-patents", isVisible = true, opacity = 0.75f),
+            LayerBlendEntry("historical-blueprints", isVisible = true, opacity = 0.85f),
+            LayerBlendEntry("graticule", isVisible = true, opacity = 0.70f),
+        ),
+    )
+
+    val tacticalFullSpectrum = LayerCombinationPreset(
+        presetId = "tactical-full-spectrum",
+        title = "Tactical C2 + MGRS + Nautical + Relief",
+        description = "High-contrast Dark Matter basemap with MGRS grid, range rings, CoT markers, PLI mesh, ops graphics, and nautical marks",
+        baseProviderId = "carto-dark-matter",
+        entries = listOf(
+            LayerBlendEntry("blend-usgs-hillshade", isVisible = true, opacity = 0.30f),
+            LayerBlendEntry("blend-openseamap-nautical", isVisible = true, opacity = 0.85f),
+            LayerBlendEntry("mgrs", isVisible = true, opacity = 0.85f),
+            LayerBlendEntry("rings", isVisible = true, opacity = 0.90f),
+            LayerBlendEntry("cot-markers", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("pli-mesh", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("ops-graphics", isVisible = true, opacity = 0.90f),
+            LayerBlendEntry("fence", isVisible = true, opacity = 0.90f),
+            LayerBlendEntry("route", isVisible = true, opacity = 1.0f),
+        ),
+    )
+
+    val dualStreetImagery = LayerCombinationPreset(
+        presetId = "dual-street-imagery",
+        title = "Hybrid Street + Satellite + Parcels",
+        description = "Blends Esri World Imagery with OpenStreetMap streets, CARTO labels, and BLM land patent boundaries",
+        baseProviderId = "esri-imagery",
+        entries = listOf(
+            LayerBlendEntry("blend-osm-standard", isVisible = true, opacity = 0.40f),
+            LayerBlendEntry("blend-carto-positron", isVisible = true, opacity = 0.35f),
+            LayerBlendEntry("historical-patents", isVisible = true, opacity = 0.65f),
+            LayerBlendEntry("waypoints", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("route", isVisible = true, opacity = 1.0f),
+        ),
+    )
+
+    val standardNavigation = LayerCombinationPreset(
+        presetId = "standard-navigation",
+        title = "Standard Navigation (Reset Overlays)",
+        description = "Resets optional raster and historical overlays to clean navigation defaults",
+        baseProviderId = "osm-standard",
+        entries = listOf(
+            LayerBlendEntry("waypoints", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("track", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("measure", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("route", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("cot-markers", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("pli-mesh", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("ops-graphics", isVisible = true, opacity = 0.90f),
+            LayerBlendEntry("fence", isVisible = true, opacity = 0.90f),
+            LayerBlendEntry("historical-dossiers", isVisible = true, opacity = 1.0f),
+            LayerBlendEntry("historical-patents", isVisible = true, opacity = 0.70f),
+            LayerBlendEntry("historical-blueprints", isVisible = true, opacity = 0.85f),
+        ),
+    )
+
+    val all: List<LayerCombinationPreset> = listOf(
+        satelliteTopoRelief,
+        terrainHydroSurvey,
+        historicalArchival,
+        tacticalFullSpectrum,
+        dualStreetImagery,
+        standardNavigation,
+    )
+
+    fun lookup(presetId: String): LayerCombinationPreset? = all.firstOrNull { it.presetId == presetId }
 }

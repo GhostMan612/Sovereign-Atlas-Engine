@@ -149,6 +149,53 @@ object OfflineBuiltinProviders {
         prefetchAllowed = true,
         redistributionAllowed = true,
     )
+    val usgsHillshade = OfflineProviderDescriptor(
+        id = "usgs-hillshade",
+        title = "USGS 3DEP Shaded Relief (Hillshade)",
+        urlTemplate = "https://basemap.nationalmap.gov/arcgis/rest/services/" +
+            "USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}",
+        minZoom = 0,
+        maxZoom = 16,
+        attribution = "USGS 3DEP Elevation Program",
+        license = "Public domain (USGS)",
+        prefetchAllowed = true,
+        redistributionAllowed = true,
+    )
+    val usgsHydrography = OfflineProviderDescriptor(
+        id = "usgs-hydrography",
+        title = "USGS NHD Hydrography (Waterways)",
+        urlTemplate = "https://basemap.nationalmap.gov/arcgis/rest/services/" +
+            "USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
+        minZoom = 0,
+        maxZoom = 16,
+        attribution = "USGS National Hydrography Dataset",
+        license = "Public domain (USGS)",
+        prefetchAllowed = true,
+        redistributionAllowed = true,
+    )
+    val usgsImageryTopo = OfflineProviderDescriptor(
+        id = "usgs-imagery-topo",
+        title = "USGS Imagery + Topo Hybrid",
+        urlTemplate = "https://basemap.nationalmap.gov/arcgis/rest/services/" +
+            "USGSImageryTopo/MapServer/tile/{z}/{y}/{x}",
+        minZoom = 0,
+        maxZoom = 16,
+        attribution = "USGS The National Map (NAIP + Topo)",
+        license = "Public domain (USGS)",
+        prefetchAllowed = true,
+        redistributionAllowed = true,
+    )
+    val openSeaMap = OfflineProviderDescriptor(
+        id = "openseamap-nautical",
+        title = "OpenSeaMap Nautical Marks",
+        urlTemplate = "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+        minZoom = 0,
+        maxZoom = 18,
+        attribution = "© OpenSeaMap contributors",
+        license = "CC-BY-SA (openseamap.org)",
+        prefetchAllowed = false,
+        redistributionAllowed = false,
+    )
     val localBundle = OfflineProviderDescriptor(
         id = "local-bundle",
         title = "Local Bundle (file tree)",
@@ -188,6 +235,10 @@ object OfflineBuiltinProviders {
         esriDarkGray,
         openTopoMap,
         usgsTopo,
+        usgsHillshade,
+        usgsHydrography,
+        usgsImageryTopo,
+        openSeaMap,
         cartoPositron,
         cartoDarkMatter,
         localBundle,
@@ -196,4 +247,6 @@ object OfflineBuiltinProviders {
     fun lookup(id: String): OfflineProviderDescriptor? = all.firstOrNull { it.id == id }
 
     fun redistributableProviders(): List<OfflineProviderDescriptor> = all.filter { it.redistributionAllowed }
+
+    fun blendableMapProviders(): List<OfflineProviderDescriptor> = all.filter { it.urlTemplate != null }
 }

@@ -136,4 +136,78 @@ class LayerCompositorTest {
         assertTrue(rollup.contains("USGS National Map"))
         assertEquals(1, rollup.split("© OpenStreetMap contributors").size - 1)
     }
+
+    @Test
+    fun combinationPresetsConfigureSimultaneousMultiLayerStacks() {
+        val compositor = LayerCompositor()
+        for (id in listOf(
+            "blend-usgs-topo",
+            "blend-usgs-hillshade",
+            "blend-usgs-hydrography",
+            "blend-usgs-imagery-topo",
+            "blend-openseamap-nautical",
+            "blend-osm-standard",
+            "blend-carto-positron",
+        )) {
+            compositor.registerLayer(
+                LayerDescriptor(
+                    id = id,
+                    title = id,
+                    type = LayerType.RASTER_OVERLAY,
+                    defaultVisibility = false,
+                ),
+            )
+        }
+        for (id in listOf("graticule", "mgrs", "rings")) {
+            compositor.registerLayer(
+                LayerDescriptor(
+                    id = id,
+                    title = id,
+                    type = LayerType.VECTOR_OVERLAY,
+                    defaultVisibility = false,
+                ),
+            )
+        }
+        for (id in listOf("historical-dossiers", "historical-patents", "historical-blueprints")) {
+            compositor.registerLayer(
+                LayerDescriptor(
+                    id = id,
+                    title = id,
+                    type = LayerType.HISTORICAL_OVERLAY,
+                    defaultVisibility = true,
+                ),
+            )
+        }
+        for (id in listOf("waypoints", "track", "measure", "route", "cot-markers", "pli-mesh", "ops-graphics", "fence")) {
+            compositor.registerLayer(
+                LayerDescriptor(
+                    id = id,
+                    title = id,
+                    type = LayerType.GEOJSON_OVERLAY,
+                    defaultVisibility = true,
+                ),
+            )
+        }
+
+        assertEquals(6, AtlasLayerPresets.all.size)
+        assertNotNull(AtlasLayerPresets.lookup("satellite-topo-relief"))
+
+        compositor.applyCombinationPreset(AtlasLayerPresets.satelliteTopoRelief)
+        assertTrue(compositor.getLayer("blend-usgs-topo")!!.isVisible)
+        assertEquals(0.45f, compositor.getLayer("blend-usgs-topo")!!.opacity, 0.001f)
+        assertTrue(compositor.getLayer("blend-usgs-hillshade")!!.isVisible)
+        assertEquals(0.35f, compositor.getLayer("blend-usgs-hillshade")!!.opacity, 0.001f)
+        assertFalse(compositor.getLayer("blend-usgs-hydrography")!!.isVisible)
+
+        compositor.applyCombinationPreset(AtlasLayerPresets.tacticalFullSpectrum)
+        assertTrue(compositor.getLayer("blend-openseamap-nautical")!!.isVisible)
+        assertTrue(compositor.getLayer("mgrs")!!.isVisible)
+        assertTrue(compositor.getLayer("rings")!!.isVisible)
+        assertFalse(compositor.getLayer("blend-usgs-topo")!!.isVisible)
+
+        compositor.applyCombinationPreset(AtlasLayerPresets.standardNavigation)
+        assertFalse(compositor.getLayer("blend-openseamap-nautical")!!.isVisible)
+        assertFalse(compositor.getLayer("mgrs")!!.isVisible)
+        assertTrue(compositor.getLayer("waypoints")!!.isVisible)
+    }
 }

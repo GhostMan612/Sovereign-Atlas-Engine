@@ -17,7 +17,9 @@ import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
 import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
 import com.sovereignatlas.atlas.geo.navigation.VoiceGuidance
+import com.sovereignatlas.atlas.layers.compositor.AtlasLayerPresets
 import com.sovereignatlas.atlas.layers.compositor.LayerAttribution
+import com.sovereignatlas.atlas.layers.compositor.LayerCombinationPreset
 import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
 import com.sovereignatlas.atlas.layers.compositor.LayerDescriptor
 import com.sovereignatlas.atlas.layers.compositor.LayerType
@@ -80,6 +82,10 @@ object AtlasSdk {
     object Layers {
         fun createCompositor(): LayerCompositor {
             return LayerCompositor()
+        }
+
+        fun presets(): List<LayerCombinationPreset> {
+            return AtlasLayerPresets.all
         }
 
         fun createDescriptor(

@@ -494,9 +494,32 @@ final class OfflineStoreTest {
     @Test
     fun redistributableProvidersExcludesProprietaryAndFairUseTileServers() {
         val redistributableIds = OfflineBuiltinProviders.redistributableProviders().map { it.id }.toSet()
-        assertEquals(setOf("usgs-topo", "local-bundle"), redistributableIds)
+        assertEquals(
+            setOf("usgs-topo", "usgs-hillshade", "usgs-hydrography", "usgs-imagery-topo", "local-bundle"),
+            redistributableIds,
+        )
         assertTrue(!OfflineBuiltinProviders.osmStandard.redistributionAllowed)
         assertTrue(!OfflineBuiltinProviders.esriImagery.redistributionAllowed)
         assertTrue(!OfflineBuiltinProviders.cartoPositron.redistributionAllowed)
+        assertTrue(!OfflineBuiltinProviders.openSeaMap.redistributionAllowed)
+    }
+
+    @Test
+    fun blendableMapProvidersExcludesLocalBundleAndIncludesAllTileMaps() {
+        val blendableIds = OfflineBuiltinProviders.blendableMapProviders().map { it.id }.toSet()
+        assertTrue("local-bundle" !in blendableIds)
+        assertTrue(blendableIds.containsAll(setOf(
+            "osm-standard",
+            "esri-imagery",
+            "opentopomap",
+            "usgs-topo",
+            "usgs-hillshade",
+            "usgs-hydrography",
+            "usgs-imagery-topo",
+            "openseamap-nautical",
+            "carto-positron",
+            "carto-dark-matter",
+        )))
+        assertEquals(12, blendableIds.size)
     }
 }

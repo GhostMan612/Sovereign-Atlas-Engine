@@ -504,6 +504,7 @@ fun AtlasMapScreen(
             services.losState.target.value,
             services.losState.profile.value,
         )
+        pushHistoricalDossiers(sink, services.historicalIndex)
         applyOverlayVisibility(
             style = style,
             compositor = services.compositor,
@@ -513,6 +514,7 @@ fun AtlasMapScreen(
             showWaypoints = showWaypointsLayer.value,
             showTrack = showTrackLayer.value,
             showMeasure = showMeasureLayer.value,
+            cartoKey = services.keys.cartoKey.value,
         )
         // Patents are pushed here as well as on camera idle: a style reload
         // recreates an empty source, and a camera that never moves again would
@@ -529,7 +531,7 @@ fun AtlasMapScreen(
         pushRings(sink, services)
         syncMbtilesPackLayers(style, services, activeMbtilesPacks.value)
         if (showGraticule.value) pushGraticule(map, sink)
-        attribution.value = if (applyOnlineBase) {
+        val baseAttr = if (applyOnlineBase) {
             applyBaseSource(
                 style,
                 services,
@@ -540,6 +542,7 @@ fun AtlasMapScreen(
         } else {
             "Offline map (MBTiles)"
         }
+        attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
         services.behavior.startupCamera()?.let { intent ->
             applyCameraIntent(map, intent)
         }
@@ -1896,13 +1899,14 @@ fun AtlasMapScreen(
                     baseProviderId.value = id
                     basePackId.value = null
                     styleRef.value?.let { style ->
-                        attribution.value = applyBaseSource(
+                        val baseAttr = applyBaseSource(
                             style,
                             services,
                             id,
                             null,
                             services.keys.cartoKey.value,
                         )
+                        attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
                     }
                 },
                 showGraticule = showGraticule.value,
@@ -1956,6 +1960,23 @@ fun AtlasMapScreen(
                     }
                 },
                 compositor = services.compositor,
+                onCompositorChanged = {
+                    styleRef.value?.let { style ->
+                        applyOverlayVisibility(
+                            style = style,
+                            compositor = services.compositor,
+                            showGraticule = showGraticule.value,
+                            showMgrsGrid = showMgrsGrid.value,
+                            showRings = showRings.value,
+                            showWaypoints = showWaypointsLayer.value,
+                            showTrack = showTrackLayer.value,
+                            showMeasure = showMeasureLayer.value,
+                            cartoKey = services.keys.cartoKey.value,
+                        )
+                        val baseAttr = OfflineBuiltinProviders.lookup(baseProviderId.value)?.attribution ?: ""
+                        attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
+                    }
+                },
                 onClose = { showLayers.value = false },
             )
         }
@@ -2541,6 +2562,86 @@ fun pushGraticule(map: MapLibreMap, sink: FeatureSink) {
     )
 }
 
+fun pushHistoricalDossiers(
+    sink: FeatureSink,
+    index: com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex,
+) {
+    val allDossiers = index.getAll()
+    val features = allDossiers.map { dossier ->
+        RenderFeature(
+            geometry = RenderGeometry.Point(LngLat(dossier.longitude, dossier.latitude)),
+            id = dossier.id,
+            properties = mapOf(
+                "name" to RenderProperty.Text(dossier.name),
+                "entityType" to RenderProperty.Text(dossier.entityType.name),
+            ),
+        )
+    }
+    (sink as? MapLibreFeatureSink)?.replaceSourceFeatures(
+        AtlasLayerIds.HISTORICAL_DOSSIERS_SOURCE,
+        RenderFeatureCollection(features),
+    )
+}
+
+fun syncBlendedProviderLayers(
+    style: Style,
+    compositor: LayerCompositor,
+    cartoKey: String? = null,
+) {
+    for (layerState in compositor.getAllLayers()) {
+        val compId = layerState.descriptor.id
+        if (!compId.startsWith("blend-")) continue
+        val providerId = compId.removePrefix("blend-")
+        val descriptor = OfflineBuiltinProviders.lookup(providerId) ?: continue
+        var template = descriptor.urlTemplate ?: continue
+        for ((param, value) in descriptor.params) {
+            template = template.replace("{$param}", value)
+        }
+        template = template.replace("{key}", cartoKey ?: "")
+
+        val sourceId = AtlasLayerIds.BLEND_SOURCE_PREFIX + providerId
+        val layerId = AtlasLayerIds.BLEND_LAYER_PREFIX + providerId
+
+        if (layerState.isVisible) {
+            if (style.getSource(sourceId) == null) {
+                val tileSet = TileSet("2.2.0", template)
+                tileSet.minZoom = descriptor.minZoom.toFloat()
+                tileSet.maxZoom = descriptor.maxZoom.toFloat()
+                style.addSource(RasterSource(sourceId, tileSet, 256))
+            }
+            if (style.getLayer(layerId) == null) {
+                val rasterLayer = RasterLayer(layerId, sourceId).withProperties(
+                    PropertyFactory.rasterOpacity(layerState.opacity.coerceIn(0.0f, 1.0f)),
+                    PropertyFactory.visibility(Property.VISIBLE),
+                )
+                rasterLayer.minZoom = descriptor.minZoom.toFloat()
+                if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+                    style.addLayerBelow(rasterLayer, AtlasLayerIds.WAYPOINTS_LAYER)
+                } else {
+                    style.addLayer(rasterLayer)
+                }
+            } else {
+                setAtlasLayerVisible(style, layerId, true)
+                setAtlasLayerOpacity(style, layerId, layerState.opacity)
+            }
+        } else {
+            if (style.getLayer(layerId) != null) {
+                setAtlasLayerVisible(style, layerId, false)
+            }
+        }
+    }
+}
+
+fun combineAttribution(baseAttribution: String, compositorRollup: String): String {
+    val parts = buildList {
+        if (baseAttribution.isNotBlank()) add(baseAttribution)
+        if (compositorRollup.isNotBlank()) {
+            addAll(compositorRollup.split(" | ").map { it.trim() }.filter { it.isNotBlank() })
+        }
+    }.distinct()
+    return parts.joinToString(" | ")
+}
+
 fun applyOverlayVisibility(
     style: Style,
     compositor: LayerCompositor? = null,
@@ -2550,7 +2651,15 @@ fun applyOverlayVisibility(
     showWaypoints: Boolean,
     showTrack: Boolean,
     showMeasure: Boolean,
+    cartoKey: String? = null,
 ) {
+    compositor?.setVisibility("graticule", showGraticule)
+    compositor?.setVisibility("mgrs", showMgrsGrid)
+    compositor?.setVisibility("rings", showRings)
+    compositor?.setVisibility("waypoints", showWaypoints)
+    compositor?.setVisibility("track", showTrack)
+    compositor?.setVisibility("measure", showMeasure)
+
     compositor?.setVisibility(AtlasLayerIds.GRATICULE_LAYER, showGraticule)
     compositor?.setVisibility(AtlasLayerIds.MGRS_LINE_LAYER, showMgrsGrid)
     compositor?.setVisibility(AtlasLayerIds.MGRS_LABEL_LAYER, showMgrsGrid)
@@ -2568,6 +2677,71 @@ fun applyOverlayVisibility(
     setAtlasLayerVisible(style, AtlasLayerIds.TRACK_LAYER, showTrack)
     setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_LAYER, showMeasure)
     setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, showMeasure)
+
+    if (compositor != null) {
+        compositor.getLayer("graticule")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.GRATICULE_LAYER, it.opacity)
+        }
+        compositor.getLayer("mgrs")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.MGRS_LINE_LAYER, it.opacity)
+            setAtlasLayerOpacity(style, AtlasLayerIds.MGRS_LABEL_LAYER, it.opacity)
+        }
+        compositor.getLayer("rings")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.RINGS_LAYER, it.opacity)
+        }
+        compositor.getLayer("waypoints")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.WAYPOINTS_LAYER, it.opacity)
+        }
+        compositor.getLayer("track")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.TRACK_LAYER, it.opacity)
+        }
+        compositor.getLayer("measure")?.let {
+            setAtlasLayerOpacity(style, AtlasLayerIds.MEASURE_LAYER, it.opacity)
+            setAtlasLayerOpacity(style, AtlasLayerIds.MEASURE_DOTS_LAYER, it.opacity)
+        }
+        compositor.getLayer("historical-dossiers")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.HISTORICAL_DOSSIERS_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.HISTORICAL_DOSSIERS_LAYER, it.opacity)
+        }
+        compositor.getLayer("historical-patents")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.HISTORICAL_PATENTS_FILL, it.isVisible)
+            setAtlasLayerVisible(style, AtlasLayerIds.HISTORICAL_PATENTS_BORDER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.HISTORICAL_PATENTS_FILL, it.opacity * 0.45f)
+            setAtlasLayerOpacity(style, AtlasLayerIds.HISTORICAL_PATENTS_BORDER, it.opacity)
+        }
+        compositor.getLayer("historical-blueprints")?.let { blueprintState ->
+            for (layer in style.layers) {
+                if (layer.id.startsWith(AtlasLayerIds.HISTORICAL_RASTER_LAYER_PREFIX)) {
+                    setAtlasLayerVisible(style, layer.id, blueprintState.isVisible)
+                    setAtlasLayerOpacity(style, layer.id, blueprintState.opacity)
+                }
+            }
+        }
+        compositor.getLayer("cot-markers")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.MARKER_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.MARKER_LAYER, it.opacity)
+        }
+        compositor.getLayer("pli-mesh")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.PLI_LAYER, it.isVisible)
+            setAtlasLayerVisible(style, AtlasLayerIds.MESH_TRACK_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.PLI_LAYER, it.opacity)
+            setAtlasLayerOpacity(style, AtlasLayerIds.MESH_TRACK_LAYER, it.opacity)
+        }
+        compositor.getLayer("ops-graphics")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.OPS_ZONE_LAYER, it.isVisible)
+            setAtlasLayerVisible(style, AtlasLayerIds.OPS_LINE_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.OPS_LINE_LAYER, it.opacity)
+        }
+        compositor.getLayer("fence")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.FENCE_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.FENCE_LAYER, it.opacity)
+        }
+        compositor.getLayer("route")?.let {
+            setAtlasLayerVisible(style, AtlasLayerIds.ROUTE_LAYER, it.isVisible)
+            setAtlasLayerOpacity(style, AtlasLayerIds.ROUTE_LAYER, it.opacity)
+        }
+        syncBlendedProviderLayers(style, compositor, cartoKey)
+    }
 }
 
 fun ensureBaseLayer(style: Style, providerId: String, key: String? = null) {

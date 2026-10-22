@@ -87,6 +87,12 @@ class MapLibreFeatureSink(
         source.setGeoJson(collection)
     }
 
+    fun replaceSourceFeatures(sourceId: String, features: RenderFeatureCollection) {
+        val style = styleProvider() ?: return
+        val source = style.getSourceAs<GeoJsonSource>(sourceId) ?: return
+        source.setGeoJson(toMapLibre(features))
+    }
+
     override fun replace(layer: AtlasLayer, features: RenderFeatureCollection) {
         val style = styleProvider()
         if (style == null) {
