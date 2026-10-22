@@ -1,0 +1,3 @@
+# Overlay installation — non-destructive
+
+Extract into a temporary folder first. Compare proposed relative paths with local repo. All files are new under `blueprints/atlas-production/`, `docs/atlas-production/`, and `ATLAS_OVERLAY_README.md`. If ANY destination exists, stop and diff it; do not blindly overwrite. This package contains no `RULES.md`, `AGENTS.md`, `SESSION_HANDOFF.md`, application code, build configuration, or existing ADRs. Preserve dirty worktree and stage only explicit paths if operator authorizes commit. Do not push without approval. Treat these plans as proposed until repo-local code audit and decisions are verified.

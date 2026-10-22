@@ -27,6 +27,7 @@ import com.sovereignatlas.atlas.map.AtlasMapScreen
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.track.TrackRecorder
+import com.sovereignatlas.atlas.ui.theme.AtlasTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
 
@@ -90,6 +91,11 @@ final class MainActivity : ComponentActivity() {
             atakBroadcaster = appServices.atakBroadcaster,
             mbtilesScanner = appServices.mbtilesScanner,
             historicalAssets = appServices.historicalAssets,
+            roadNavigation = appServices.roadNavigation,
+            roadRoutingEngine = appServices.roadRoutingEngine,
+            voiceGuidance = appServices.voiceGuidance,
+            compositor = appServices.compositor,
+            historicalIndex = appServices.historicalIndex,
         )
     }
 
@@ -164,7 +170,7 @@ final class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         initializeTacticalMesh()
         setContent {
-            MaterialTheme {
+            AtlasTheme {
                 AtlasMapScreen(
                     services,
                     onFirstStyle = { mapReady.value = true },

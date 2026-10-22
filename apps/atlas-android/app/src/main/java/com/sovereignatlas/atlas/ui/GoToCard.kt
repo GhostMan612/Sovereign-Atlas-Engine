@@ -5,9 +5,12 @@
 
 package com.sovereignatlas.atlas.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -24,6 +27,8 @@ fun GoToCard(
     goTo: GoToState,
     usableFix: AtlasCoordinate?,
     onClear: () -> Unit,
+    onNavigate: (() -> Unit)? = null,
+    navigationMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val target = goTo.targetOrNull() ?: return
@@ -58,11 +63,32 @@ fun GoToCard(
                 AtlasGeoMath.formatBearing(bearingDeg)
             },
         )
-        Button(
-            onClick = onClear,
-            modifier = Modifier.testTag("go-to-clear"),
+        if (navigationMessage != null) {
+            Text(
+                text = navigationMessage,
+                color = MaterialTheme.colorScheme.tertiary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp).testTag("go-to-nav-message"),
+            )
+        }
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Clear")
+            Button(
+                onClick = onClear,
+                modifier = Modifier.testTag("go-to-clear"),
+            ) {
+                Text("Clear")
+            }
+            if (onNavigate != null) {
+                Button(
+                    onClick = onNavigate,
+                    modifier = Modifier.testTag("go-to-navigate"),
+                ) {
+                    Text("Navigate")
+                }
+            }
         }
     }
 }

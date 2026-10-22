@@ -1,0 +1,139 @@
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
+package com.sovereignatlas.atlas.layers.compositor
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class LayerCompositorTest {
+
+    @Test
+    fun layerRegistrationAndOpacityClamping() {
+        val compositor = LayerCompositor()
+        val desc = LayerDescriptor(
+            id = "layer-1",
+            title = "Topographic Overlay",
+            type = LayerType.RASTER_OVERLAY,
+            defaultOpacity = 1.5f,
+        )
+
+        val state = compositor.registerLayer(desc)
+        assertEquals(1.0f, state.opacity, 0.001f)
+
+        compositor.setOpacity("layer-1", -0.5f)
+        assertEquals(0.0f, compositor.getLayer("layer-1")!!.opacity, 0.001f)
+    }
+
+    @Test
+    fun renderStackSortedByZIndex() {
+        val compositor = LayerCompositor()
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "high-z",
+                title = "Waypoints",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultZIndex = 10,
+            ),
+        )
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "low-z",
+                title = "Basemap",
+                type = LayerType.BASEMAP,
+                defaultZIndex = 0,
+            ),
+        )
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "mid-z",
+                title = "Parcels",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultZIndex = 5,
+            ),
+        )
+
+        val stack = compositor.getRenderStack()
+        assertEquals(3, stack.size)
+        assertEquals("low-z", stack[0].descriptor.id)
+        assertEquals("mid-z", stack[1].descriptor.id)
+        assertEquals("high-z", stack[2].descriptor.id)
+    }
+
+    @Test
+    fun zoomAndTemporalFilteringGovernsEffectiveVisibility() {
+        val compositor = LayerCompositor()
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "detailed-parcels",
+                title = "Parcels",
+                type = LayerType.GEOJSON_OVERLAY,
+                zoomRange = ZoomRange(minZoom = 14.0, maxZoom = 22.0),
+            ),
+        )
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "historical-1910",
+                title = "1910 Survey",
+                type = LayerType.HISTORICAL_OVERLAY,
+                timeRange = TimeRange(
+                    startEpochMs = -1893456000000L,
+                    endEpochMs = -1577923200000L,
+                ),
+            ),
+        )
+
+        val lowZoomStack = compositor.getRenderStack(zoom = 10.0)
+        assertFalse(lowZoomStack.any { it.descriptor.id == "detailed-parcels" })
+
+        val highZoomStack = compositor.getRenderStack(zoom = 15.0)
+        assertTrue(highZoomStack.any { it.descriptor.id == "detailed-parcels" })
+
+        val epoch1905 = -2051222400000L
+        val outsideTimeStack = compositor.getRenderStack(currentEpochMs = epoch1905)
+        assertFalse(outsideTimeStack.any { it.descriptor.id == "historical-1910" })
+
+        val epoch1915 = -1735689600000L
+        val insideTimeStack = compositor.getRenderStack(currentEpochMs = epoch1915)
+        assertTrue(insideTimeStack.any { it.descriptor.id == "historical-1910" })
+    }
+
+    @Test
+    fun attributionRollupAggregatesUniqueSources() {
+        val compositor = LayerCompositor()
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "osm-base",
+                title = "OpenStreetMap",
+                type = LayerType.BASEMAP,
+                attribution = LayerAttribution("OpenStreetMap", "ODbL", "© OpenStreetMap contributors"),
+            ),
+        )
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "osm-transport",
+                title = "OSM Transport",
+                type = LayerType.RASTER_OVERLAY,
+                attribution = LayerAttribution("OpenStreetMap", "ODbL", "© OpenStreetMap contributors"),
+            ),
+        )
+        compositor.registerLayer(
+            LayerDescriptor(
+                id = "usgs-topo",
+                title = "USGS Topo",
+                type = LayerType.RASTER_OVERLAY,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS National Map"),
+            ),
+        )
+
+        val rollup = compositor.getAttributionRollup()
+        assertTrue(rollup.contains("© OpenStreetMap contributors"))
+        assertTrue(rollup.contains("USGS National Map"))
+        assertEquals(1, rollup.split("© OpenStreetMap contributors").size - 1)
+    }
+}

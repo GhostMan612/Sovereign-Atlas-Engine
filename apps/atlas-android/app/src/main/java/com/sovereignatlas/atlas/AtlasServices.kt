@@ -32,6 +32,11 @@ import com.sovereignatlas.atlas.location.LocationService
 import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.offline.OfflineStore
+import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
+import com.sovereignatlas.atlas.geo.navigation.RoadNavigationState
+import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
+import com.sovereignatlas.atlas.geo.navigation.VoiceGuidance
+import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
 import com.sovereignatlas.atlas.offline.LocalTileServer
 import com.sovereignatlas.atlas.track.TrackRecorder
 
@@ -64,6 +69,11 @@ class AtlasServices(
     val atakBroadcaster: AtakBroadcaster,
     val mbtilesScanner: MbtilesScanner,
     val historicalAssets: HistoricalAssetRepository,
+    val roadNavigation: RoadNavigationState = RoadNavigationState(),
+    val roadRoutingEngine: RoadRoutingEngine? = null,
+    val voiceGuidance: VoiceGuidance? = null,
+    val compositor: LayerCompositor = LayerCompositor(),
+    val historicalIndex: HistoricalKnowledgeIndex = HistoricalKnowledgeIndex(),
 ) {
     val lineOfSightEngine = LineOfSightEngine(
         elevationProvider = object : ElevationProvider {

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -143,6 +144,14 @@ import com.sovereignatlas.atlas.ui.hud.CompassTape
 import com.sovereignatlas.atlas.ui.hud.TacNavHud
 import com.sovereignatlas.atlas.ui.historical.HistoricalAssetSheet
 import com.sovereignatlas.atlas.ui.historical.HistoricalRecordSheet
+import com.sovereignatlas.atlas.ui.historical.HistoricalDossierSheet
+import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
+import com.sovereignatlas.atlas.geo.navigation.ManeuverType
+import com.sovereignatlas.atlas.geo.navigation.NavigationUpdate
+import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
+import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
+import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
+import kotlin.math.roundToInt
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
@@ -401,6 +410,12 @@ fun AtlasMapScreen(
     // feature of an offline pack, which is lossy; this one is the domain object.
     val selectedHistoricalAsset = remember { MutableStateFlow<HistoricalAsset?>(null) }
     val selectedAsset by selectedHistoricalAsset.collectAsStateWithLifecycle()
+    val selectedHistoricalDossier = remember { MutableStateFlow<HistoricalDossier?>(null) }
+    val selectedDossier by selectedHistoricalDossier.collectAsStateWithLifecycle()
+    val isNavigating by services.roadNavigation.isNavigating.collectAsStateWithLifecycle()
+    val navUpdate by services.roadNavigation.update.collectAsStateWithLifecycle()
+    val isMuted by services.roadNavigation.isMuted.collectAsStateWithLifecycle()
+    val navigationFeedbackMessage = remember { mutableStateOf<String?>(null) }
     // Bumped on every tap and on every dismissal so a catalogue lookup that
     // completes late cannot resurrect a sheet the operator already closed.
     val patentTapToken = remember { java.util.concurrent.atomic.AtomicInteger(0) }
@@ -489,7 +504,16 @@ fun AtlasMapScreen(
             services.losState.target.value,
             services.losState.profile.value,
         )
-        applyOverlayVisibility(style, showGraticule.value, showMgrsGrid.value, showRings.value, showWaypointsLayer.value, showTrackLayer.value, showMeasureLayer.value)
+        applyOverlayVisibility(
+            style = style,
+            compositor = services.compositor,
+            showGraticule = showGraticule.value,
+            showMgrsGrid = showMgrsGrid.value,
+            showRings = showRings.value,
+            showWaypoints = showWaypointsLayer.value,
+            showTrack = showTrackLayer.value,
+            showMeasure = showMeasureLayer.value,
+        )
         // Patents are pushed here as well as on camera idle: a style reload
         // recreates an empty source, and a camera that never moves again would
         // otherwise leave the viewport with no parcels at all.
@@ -669,6 +693,20 @@ fun AtlasMapScreen(
                         // bump also cancels a lookup still in flight from a prior tap.
                         patentTapToken.incrementAndGet()
                         selectedHistoricalAsset.value = null
+                        val dossierHit = services.historicalIndex.querySpatial(
+                            com.sovereignatlas.atlas.core.AtlasBoundingBox(
+                                south = point.latitude - 0.005,
+                                west = point.longitude - 0.005,
+                                north = point.latitude + 0.005,
+                                east = point.longitude + 0.005,
+                            ),
+                        ).firstOrNull()
+                        if (dossierHit != null) {
+                            selectedHistoricalDossier.value = dossierHit
+                            return@addOnMapClickListener true
+                        } else {
+                            selectedHistoricalDossier.value = null
+                        }
                         val hits = if (screen == null) {
                             emptyList()
                         } else {
@@ -814,13 +852,16 @@ fun AtlasMapScreen(
     DisposableEffect(services) {
         val onLocation = {
             positionTick.value += 1
+            val fix = usableFixOf(services)
+            if (fix != null) {
+                services.roadNavigation.updateLocation(fix)
+            }
             val map = mapRef.value
             val style = styleRef.value
             if (map != null && style != null) {
                 pushPosition(sink, services)
                 if (showRings.value) pushRings(sink, services)
                 if (following.value) {
-                    val fix = usableFixOf(services)
                     if (fix != null) {
                         val followed = AtlasCameraState(
                             center = fix,
@@ -864,6 +905,7 @@ fun AtlasMapScreen(
                 }
             } else {
                 services.routing.setResult(null)
+                services.roadNavigation.stopNavigation()
             }
         }
         val onOffline: () -> Unit = {
@@ -934,7 +976,18 @@ fun AtlasMapScreen(
             }
             launch {
                 services.routing.result.collect { result ->
-                    pushRouteResult(sink, result)
+                    if (services.roadNavigation.activeRoute.value == null) {
+                        pushRouteResult(sink, result)
+                    }
+                }
+            }
+            launch {
+                services.roadNavigation.activeRoute.collect { roadRoute ->
+                    if (roadRoute != null) {
+                        pushRoadRouteResult(sink, roadRoute)
+                    } else {
+                        pushRouteResult(sink, services.routing.result.value)
+                    }
                 }
             }
             launch {
@@ -1518,10 +1571,46 @@ fun AtlasMapScreen(
                 .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val activeTargetBearing = if (isNavigating) {
+                navUpdate?.currentManeuver?.bearingAfterManeuverDeg
+            } else if (services.goTo.isActive()) {
+                services.goTo.bearingDegTo(usableFixOf(services))
+            } else {
+                null
+            }
+            val activeTargetLabel = if (isNavigating) {
+                navUpdate?.currentManeuver?.maneuverType?.name
+            } else if (services.goTo.isActive()) {
+                services.goTo.targetOrNull()?.label ?: "GOTO"
+            } else {
+                null
+            }
             CompassTape(
                 bearing = currentBearing?.toDouble() ?: bearingHud,
+                targetBearing = activeTargetBearing,
+                targetLabel = activeTargetLabel,
+                courseDeviationDeg = navUpdate?.snappedPosition?.let {
+                    val desired = navUpdate?.currentManeuver?.bearingAfterManeuverDeg
+                    val current = currentBearing?.toDouble() ?: bearingHud
+                    if (desired != null) (current - desired + 540.0) % 360.0 - 180.0 else null
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+        if (isNavigating) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                    .padding(top = 48.dp),
+            ) {
+                NavigationGuidanceHud(
+                    navUpdate = navUpdate,
+                    isMuted = isMuted,
+                    onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
+                    onStopNavigation = { services.roadNavigation.stopNavigation() },
+                )
+            }
         }
         // Left column: MGRS readout plus the LoS status line, both inset below
         // the black band so they never collide with it.
@@ -1630,7 +1719,79 @@ fun AtlasMapScreen(
                             } else {
                                 null
                             },
-                            onClear = { services.goTo.clear() },
+                            onClear = {
+                                services.goTo.clear()
+                                services.roadNavigation.stopNavigation()
+                                navigationFeedbackMessage.value = null
+                            },
+                            onNavigate = {
+                                val target = services.goTo.targetOrNull()
+                                val fix = usableFixOf(services)
+                                if (target != null && fix != null) {
+                                    mapScope.launch {
+                                        val engine = services.roadRoutingEngine
+                                        if (engine == null || engine.graph.nodes.isEmpty()) {
+                                            navigationFeedbackMessage.value = "Road network data unavailable"
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Road network data unavailable for this area. Direct-bearing guidance active.",
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@launch
+                                        }
+                                        val startNode = engine.findNearestNode(fix.latitude, fix.longitude)
+                                        val targetNode = engine.findNearestNode(target.latitude, target.longitude)
+                                        if (startNode == null || targetNode == null) {
+                                            navigationFeedbackMessage.value = "Location outside road coverage"
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Location outside road network coverage. Direct-bearing guidance active.",
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@launch
+                                        }
+                                        val result = engine.calculateRoute(
+                                            RoadRouteRequest(
+                                                startNodeId = startNode.id,
+                                                targetNodeId = targetNode.id,
+                                                profile = services.roadNavigation.profile.value,
+                                            ),
+                                        )
+                                        if (result != null) {
+                                            navigationFeedbackMessage.value = null
+                                            services.roadNavigation.startNavigation(
+                                                route = result,
+                                                voice = services.voiceGuidance,
+                                                onRerouteNeeded = { offRouteCoord ->
+                                                    mapScope.launch {
+                                                        val newStart = engine.findNearestNode(offRouteCoord.latitude, offRouteCoord.longitude)
+                                                        if (newStart != null) {
+                                                            val reroute = engine.calculateRoute(
+                                                                RoadRouteRequest(
+                                                                    startNodeId = newStart.id,
+                                                                    targetNodeId = targetNode.id,
+                                                                    profile = services.roadNavigation.profile.value,
+                                                                ),
+                                                            )
+                                                            if (reroute != null) {
+                                                                services.roadNavigation.updateRoute(reroute)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        } else {
+                                            navigationFeedbackMessage.value = "No road route found"
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "No road route found between points. Direct-bearing guidance active.",
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            },
+                            navigationMessage = navigationFeedbackMessage.value,
                         )
                     }
                 }
@@ -1794,6 +1955,7 @@ fun AtlasMapScreen(
                         setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, visible)
                     }
                 },
+                compositor = services.compositor,
                 onClose = { showLayers.value = false },
             )
         }
@@ -1870,6 +2032,10 @@ fun AtlasMapScreen(
             patentTapToken.incrementAndGet()
             selectedHistoricalAsset.value = null
         },
+    )
+    HistoricalDossierSheet(
+        dossier = selectedDossier,
+        onDismissRequest = { selectedHistoricalDossier.value = null },
     )
 }
 
@@ -2140,6 +2306,28 @@ fun pushRouteResult(sink: FeatureSink, result: RoutingResult?) {
     )
 }
 
+fun pushRoadRouteResult(sink: FeatureSink, route: RoadRouteResult?) {
+    sink.replace(
+        AtlasLayer.Route,
+        if (route == null || route.coordinates.size < 2) {
+            RenderFeatureCollection.EMPTY
+        } else {
+            RenderFeatureCollection(
+                listOf(
+                    RenderFeature(
+                        geometry = RenderGeometry.LineString(
+                            route.coordinates.map { coord ->
+                                LngLat(coord.longitude, coord.latitude)
+                            },
+                        ),
+                        id = "road_route",
+                    ),
+                ),
+            )
+        },
+    )
+}
+
 suspend fun runLosCalculation(services: AtlasServices) {
     val observer = services.losState.observer.value
     val target = services.losState.target.value
@@ -2355,6 +2543,7 @@ fun pushGraticule(map: MapLibreMap, sink: FeatureSink) {
 
 fun applyOverlayVisibility(
     style: Style,
+    compositor: LayerCompositor? = null,
     showGraticule: Boolean,
     showMgrsGrid: Boolean,
     showRings: Boolean,
@@ -2362,6 +2551,15 @@ fun applyOverlayVisibility(
     showTrack: Boolean,
     showMeasure: Boolean,
 ) {
+    compositor?.setVisibility(AtlasLayerIds.GRATICULE_LAYER, showGraticule)
+    compositor?.setVisibility(AtlasLayerIds.MGRS_LINE_LAYER, showMgrsGrid)
+    compositor?.setVisibility(AtlasLayerIds.MGRS_LABEL_LAYER, showMgrsGrid)
+    compositor?.setVisibility(AtlasLayerIds.RINGS_LAYER, showRings)
+    compositor?.setVisibility(AtlasLayerIds.WAYPOINTS_LAYER, showWaypoints)
+    compositor?.setVisibility(AtlasLayerIds.TRACK_LAYER, showTrack)
+    compositor?.setVisibility(AtlasLayerIds.MEASURE_LAYER, showMeasure)
+    compositor?.setVisibility(AtlasLayerIds.MEASURE_DOTS_LAYER, showMeasure)
+
     setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, showGraticule)
     setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LINE_LAYER, showMgrsGrid)
     setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LABEL_LAYER, showMgrsGrid)
@@ -2667,3 +2865,104 @@ private const val BLANK_STYLE_TERRAIN = """
   ]
 }
 """
+
+private fun maneuverIconRes(type: ManeuverType?): Int {
+    return when (type) {
+        ManeuverType.DEPART, ManeuverType.CONTINUE_STRAIGHT -> com.sovereignatlas.atlas.R.drawable.ic_nav_straight
+        ManeuverType.TURN_SLIGHT_LEFT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_slight_left
+        ManeuverType.TURN_LEFT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_left
+        ManeuverType.TURN_SHARP_LEFT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_sharp_left
+        ManeuverType.TURN_SLIGHT_RIGHT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_slight_right
+        ManeuverType.TURN_RIGHT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_right
+        ManeuverType.TURN_SHARP_RIGHT -> com.sovereignatlas.atlas.R.drawable.ic_nav_turn_sharp_right
+        ManeuverType.U_TURN -> com.sovereignatlas.atlas.R.drawable.ic_nav_uturn
+        ManeuverType.ARRIVE -> com.sovereignatlas.atlas.R.drawable.ic_nav_arrive
+        null -> com.sovereignatlas.atlas.R.drawable.ic_nav_straight
+    }
+}
+
+@Composable
+fun NavigationGuidanceHud(
+    navUpdate: NavigationUpdate?,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
+    onStopNavigation: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = androidx.compose.ui.graphics.Color(0xF0141C24),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    val maneuver = navUpdate?.currentManeuver
+                    val iconRes = maneuverIconRes(maneuver?.maneuverType)
+                    androidx.compose.material3.Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = iconRes),
+                        contentDescription = maneuver?.instruction ?: "Turn",
+                        tint = androidx.compose.ui.graphics.Color(0xFF39C5F3),
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Column {
+                        val instruction = maneuver?.instruction ?: "Proceed along route"
+                        val distManeuver = navUpdate?.distanceToManeuverMeters?.roundToInt() ?: 0
+                        Text(
+                            text = if (distManeuver > 0) "In $distManeuver m" else "Now",
+                            fontSize = 13.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFF39C5F3),
+                        )
+                        Text(
+                            text = instruction,
+                            fontSize = 15.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            color = androidx.compose.ui.graphics.Color.White,
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onToggleMute) {
+                        Text(
+                            text = if (isMuted) "Unmute" else "Mute",
+                            color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                        )
+                    }
+                    Button(
+                        onClick = onStopNavigation,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
+                        ),
+                    ) {
+                        Text("Stop")
+                    }
+                }
+            }
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
+            val distRemainingKm = (navUpdate?.remainingDistanceMeters ?: 0.0) / 1000.0
+            val durRemainingMin = (navUpdate?.remainingDurationSeconds ?: 0.0) / 60.0
+            Text(
+                text = "%.1f km remaining  \u00B7  %.0f min  \u00B7  %s".format(
+                    distRemainingKm,
+                    durRemainingMin,
+                    navUpdate?.status?.name ?: "NAVIGATING",
+                ),
+                fontSize = 12.sp,
+                color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+            )
+        }
+    }
+}
+

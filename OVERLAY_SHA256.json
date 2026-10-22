@@ -1,0 +1,21 @@
+{
+  "ATLAS_OVERLAY_README.md": "1c1203780f9c6900ea4fe3dbebe7d83de1c206871e1c945c140a0952e2f3e338",
+  "blueprints/atlas-production/00_MASTER_PLAN.md": "ddce07cf652120d9907cf3d8f78ca688311aa4f83634d8c27f4a2c64cb5088d0",
+  "blueprints/atlas-production/01_EXECUTOR_MASTER_ORDER.md": "38bbf26947cfc3336b98c036d574b7c2aa98332879b67892a1178ba3d3d84016",
+  "blueprints/atlas-production/02_INSTALL_AND_COLLISION_POLICY.md": "6e4a74645e331a1f7031db0ecf299a31ad96b9fd4691b379e4c4e6e05d86a0a8",
+  "blueprints/atlas-production/specs/DESIGN_SYSTEM_AND_BLENDER.md": "caccaa2533d27d3aca9af30443344c2a8f13b8894992edfdb46d00b3fcb4f632",
+  "blueprints/atlas-production/specs/LAYERS_HISTORICAL_TACTICAL.md": "71520dfc5646b360ae4cbb5b5e61724739ff6a4d6e1e93a97c42a0da5dfbba97",
+  "blueprints/atlas-production/specs/NAVIGATION_AND_COMPASS.md": "0ad0a21518498b8fa379c2de51f2dacb3fadc4a9ffad824ddb573b5749f92025",
+  "blueprints/atlas-production/specs/OFFLINE_DATA_LICENSE_SECURITY.md": "a1cc4d7d5d6e55e3dc43404450fc38582f83b5be216a668b048a8c706ca95cb6",
+  "blueprints/atlas-production/specs/SDK_CONTRACT.md": "d7c553dac5eba297e775518e820b4290fff0f3473d57687ea512c532dfc8a57e",
+  "blueprints/atlas-production/work-orders/WO-01_CONVERGENCE_AND_HARDENING.md": "ddff305cbb475da1da27e4472c9b1f07fb4905e7f26b93ebaf61fecbf04b4490",
+  "blueprints/atlas-production/work-orders/WO-02_NAVIGATION_KNOWLEDGE_LAYERS.md": "ca298bbbc1a774c86cd661e223f7018aeb064557d04d903fa6bfddd1c3fe1f83",
+  "blueprints/atlas-production/work-orders/WO-03_PREMIUM_UX_AND_SDK.md": "0295f378818124d072c031802a1e5a5fb7561bd70aadf16bbbb9ab407d4b03a5",
+  "blueprints/atlas-production/work-orders/WO-04_CERTIFICATION_AND_RELEASE.md": "ca394da0c003142f1b0bb7c775231acd23db06b69a6bd80b9b5c32971ca0534c",
+  "docs/atlas-production/evidence/README.md": "2401e10f235f7ef6fe1ed4082a6d14acc5eac2ab5cf8de273e7dd0590c8ccc8a",
+  "docs/atlas-production/templates/ARTIFACT_CHAIN.md": "861933f219f114ba60fef0ed6a69571a76f092412908c0c981d6d911846be591",
+  "docs/atlas-production/templates/CAPABILITY_AUDIT.md": "b2e04897ff95c109e65c035ba86cc2519df07208b20c5cf3eeace5be1215fdc4",
+  "docs/atlas-production/templates/DECISION_REGISTER.md": "bbb22b72bf885c279d3bed14bcf2feb7f3bb3b96b59c433e453d8db41f69731a",
+  "docs/atlas-production/templates/GATE_MATRIX.md": "0e736a21821073ef2ddf77b0e9651d7d4cda11e86dd3d279e36693c825655b43",
+  "docs/atlas-production/templates/RELEASE_ACCEPTANCE.md": "7d6bc021c9742e7959f609bf8483ff83711900bb77fac0e91c2077384d9ce1c2"
+}

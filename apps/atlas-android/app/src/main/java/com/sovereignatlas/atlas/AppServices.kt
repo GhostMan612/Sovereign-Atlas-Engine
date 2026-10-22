@@ -37,6 +37,21 @@ import com.sovereignatlas.atlas.offline.mbtiles.DefaultMbtilesScanner
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
+import com.sovereignatlas.atlas.android.navigation.AndroidRoadGraphLoader
+import com.sovereignatlas.atlas.android.navigation.AndroidVoiceGuidance
+import com.sovereignatlas.atlas.core.knowledge.ConfidenceScore
+import com.sovereignatlas.atlas.core.knowledge.EntityType
+import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
+import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
+import com.sovereignatlas.atlas.core.knowledge.SourceCitation
+import com.sovereignatlas.atlas.core.knowledge.TemporalInterval
+import com.sovereignatlas.atlas.geo.navigation.RoadNavigationState
+import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
+import com.sovereignatlas.atlas.geo.navigation.VoiceGuidance
+import com.sovereignatlas.atlas.layers.compositor.LayerAttribution
+import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
+import com.sovereignatlas.atlas.layers.compositor.LayerDescriptor
+import com.sovereignatlas.atlas.layers.compositor.LayerType
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -89,6 +104,132 @@ class AppServices(private val context: Context) {
     val scrubState = TrackScrubState()
     val losState = LoSState()
     val routing = RoutingState()
+    val voiceGuidance: VoiceGuidance = AndroidVoiceGuidance(appContext)
+    val roadNavigation: RoadNavigationState = RoadNavigationState()
+    val roadRoutingEngine: RoadRoutingEngine = RoadRoutingEngine(
+        AndroidRoadGraphLoader.loadSynchronousOrEmpty(appContext, allowDemoSimulation = false),
+    )
+
+    val compositor: LayerCompositor = LayerCompositor().apply {
+        registerLayer(
+            LayerDescriptor(
+                id = "graticule",
+                title = "Graticule",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.8f,
+                defaultZIndex = 10,
+                attribution = LayerAttribution("USGS", "Public Domain", "USGS Graticule"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "mgrs",
+                title = "MGRS Grid",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.8f,
+                defaultZIndex = 20,
+                attribution = LayerAttribution("NGA", "Public Domain", "NGA MGRS Grid"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "rings",
+                title = "Range Rings",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.9f,
+                defaultZIndex = 30,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "waypoints",
+                title = "Waypoints",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 40,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "track",
+                title = "Track",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 50,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "measure",
+                title = "Measure",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 60,
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "route",
+                title = "Road Navigation Route",
+                type = LayerType.GEOJSON_OVERLAY,
+                defaultVisibility = true,
+                defaultOpacity = 1.0f,
+                defaultZIndex = 70,
+                attribution = LayerAttribution("OpenStreetMap", "ODbL", "© OpenStreetMap contributors"),
+            ),
+        )
+    }
+
+    val historicalIndex: HistoricalKnowledgeIndex = HistoricalKnowledgeIndex().apply {
+        insert(
+            HistoricalDossier(
+                id = "hd-001",
+                name = "Fort Point Garrison",
+                entityType = EntityType.STRUCTURE,
+                temporal = TemporalInterval(1853, 1914),
+                latitude = 37.8106,
+                longitude = -122.4770,
+                description = "Brick masonry coastal fortification built by the US Army Corps of Engineers prior to the Civil War to defend San Francisco Bay.",
+                confidence = ConfidenceScore.CONFIRMED,
+                primaryCitation = SourceCitation(
+                    citationId = "NPS-FP-1853",
+                    title = "Historic American Buildings Survey: Fort Point",
+                    authorOrArchive = "National Park Service / Library of Congress",
+                    publicationYear = 1934,
+                    urlOrShelfmark = "HABS CA-1230",
+                    license = "Public Domain",
+                ),
+                tags = listOf("military", "fortification", "masonry", "harbor"),
+            ),
+        )
+        insert(
+            HistoricalDossier(
+                id = "hd-002",
+                name = "Portsmouth Plaza Boundary Survey",
+                entityType = EntityType.PARCEL,
+                temporal = TemporalInterval(1847, 1906),
+                latitude = 37.7946,
+                longitude = -122.4050,
+                description = "Public square of Yerba Buena originally laid out by Mexican authorities and surveyed by Jasper O'Farrell in 1847.",
+                confidence = ConfidenceScore.CONFIRMED,
+                primaryCitation = SourceCitation(
+                    citationId = "BLM-CA-YP1847",
+                    title = "Official Survey Map of the Town of San Francisco",
+                    authorOrArchive = "Jasper O'Farrell / Bureau of Land Management",
+                    publicationYear = 1847,
+                    urlOrShelfmark = "SF-ARCH-0042",
+                    license = "Public Domain",
+                ),
+                tags = listOf("survey", "plaza", "alta-california", "municipal"),
+            ),
+        )
+    }
 
     val historicalAssets = LocalHistoricalAssetRepository(
         directoryProvider = { appContext.getExternalFilesDir(HISTORICAL_ASSET_DIR) },

@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas.ui.historical
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +19,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,6 +31,8 @@ import com.sovereignatlas.atlas.core.HistoricalLicense
 import com.sovereignatlas.atlas.core.HistoricalRecord
 import com.sovereignatlas.atlas.core.LandPatent
 import com.sovereignatlas.atlas.core.SanbornBlueprint
+import com.sovereignatlas.atlas.core.knowledge.ConfidenceScore
+import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,3 +201,145 @@ private fun HistoricalLicense.label(): String = when (this) {
     is HistoricalLicense.PublicDomainUsOnly -> "Public Domain ($jurisdiction only)"
     is HistoricalLicense.Unverified -> "Unverified: $note"
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HistoricalDossierSheet(
+    dossier: HistoricalDossier?,
+    onDismissRequest: () -> Unit,
+) {
+    if (dossier == null) return
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = dossier.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                ConfidenceBadge(dossier.confidence)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            val dateRangeStr = when {
+                dossier.temporal.exactDateIso != null -> dossier.temporal.exactDateIso
+                dossier.temporal.validFromYear != null && dossier.temporal.validToYear != null ->
+                    "${dossier.temporal.validFromYear} \u2013 ${dossier.temporal.validToYear}"
+                dossier.temporal.validFromYear != null -> "From ${dossier.temporal.validFromYear}"
+                dossier.temporal.validToYear != null -> "Until ${dossier.temporal.validToYear}"
+                else -> NOT_RECORDED
+            }
+            Text(
+                text = "${dossier.entityType.name} | Period: $dateRangeStr",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = dossier.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            DetailRow("Coordinates", "%.4f, %.4f".format(dossier.latitude, dossier.longitude))
+            DetailRow("Primary Citation", dossier.primaryCitation.title)
+            DetailRow("Archive / Author", dossier.primaryCitation.authorOrArchive)
+            dossier.primaryCitation.publicationYear?.let {
+                DetailRow("Year", it.toString())
+            }
+            DetailRow("Shelfmark / URL", dossier.primaryCitation.urlOrShelfmark)
+            DetailRow("License", dossier.primaryCitation.license)
+
+            if (dossier.alternativeClaims.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Alternative / Disputed Interpretations",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                dossier.alternativeClaims.forEach { claim ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "\u2022 ${claim.claimDescription}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "  Source: ${claim.conflictingSource.title} (${claim.conflictingSource.authorOrArchive})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+
+            if (dossier.tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Tags: ${dossier.tags.joinToString(", ")}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ConfidenceBadge(confidence: ConfidenceScore) {
+    val (label, containerColor, contentColor) = when (confidence) {
+        ConfidenceScore.CONFIRMED -> Triple(
+            "CONFIRMED",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        ConfidenceScore.PROBABLE -> Triple(
+            "PROBABLE",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+        ConfidenceScore.UNCERTAIN -> Triple(
+            "UNCERTAIN",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        ConfidenceScore.DISPUTED -> Triple(
+            "DISPUTED",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
+    Surface(
+        color = containerColor,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.padding(start = 8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+

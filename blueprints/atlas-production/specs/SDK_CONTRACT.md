@@ -1,0 +1,5 @@
+# SDK contract — target specification
+
+Public Kotlin artifacts: `atlas-core` (IDs/geo/time/provenance), `atlas-navigation` (routing request/route/maneuver/position quality), `atlas-layers` (layer definition/source/visibility/opacity/z-order), `atlas-knowledge` (temporal entity/source/dossier), `atlas-offline` (pack manifests and policy), `atlas-renderer-maplibre` (optional adapter), `atlas-android` (Android lifecycle/location adapters). **Names proposed, not existing modules.** No dependency extraction before ADR and consumer proof.
+
+API: immutable value models; explicit Result/error types; cancellation; structured flows; coordinate reference systems and unit declarations; stable IDs; serialization versioning; schema migration; threading contract; Android minSdk decided from actual consumers; no MapLibre types in pure artifacts. Offline datasets include provenance, expiry, signature/checksum, licensing, attribution and deletion rules. Sample consumer must depend on packaged artifacts rather than app-internal source. ABI/API compatibility checked per release.
