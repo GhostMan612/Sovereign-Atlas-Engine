@@ -151,6 +151,7 @@ import com.sovereignatlas.atlas.geo.navigation.NavigationUpdate
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
 import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
+import com.sovereignatlas.atlas.layers.compositor.OverscalePolicy
 import kotlin.math.roundToInt
 import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
@@ -418,6 +419,10 @@ fun AtlasMapScreen(
     val isMuted by services.roadNavigation.isMuted.collectAsStateWithLifecycle()
     val activeTravelProfile by services.roadNavigation.profile.collectAsStateWithLifecycle()
     val activeRoadRoute by services.roadNavigation.activeRoute.collectAsStateWithLifecycle()
+    val reducedMotion by services.settingsRepository.reducedMotion.collectAsStateWithLifecycle()
+    val explorerWorkspaceEnabled by services.settingsRepository.explorerWorkspaceEnabled.collectAsStateWithLifecycle()
+    val tacticalWorkspaceEnabled by services.settingsRepository.tacticalWorkspaceEnabled.collectAsStateWithLifecycle()
+    val studioWorkspaceEnabled by services.settingsRepository.studioWorkspaceEnabled.collectAsStateWithLifecycle()
     val navigationFeedbackMessage = remember { mutableStateOf<String?>(null) }
     // Bumped on every tap and on every dismissal so a catalogue lookup that
     // completes late cannot resurrect a sheet the operator already closed.
@@ -1153,12 +1158,14 @@ fun AtlasMapScreen(
         // center. Only the reticle is drawn here; the bearing readout is stacked
         // below the compass tape in the top Column. No pointer input, so map
         // gestures pass straight through.
-        TacNavHud(
-            bearing = currentBearing,
-            hudColor = hudAccent,
-            frameLabel = currentHeadingFrame,
-            showReadout = false,
-        )
+        if (tacticalWorkspaceEnabled) {
+            TacNavHud(
+                bearing = currentBearing,
+                hudColor = hudAccent,
+                frameLabel = currentHeadingFrame,
+                showReadout = false,
+            )
+        }
         Column(
             modifier = Modifier.align(Alignment.BottomEnd)
                 .windowInsetsPadding(WindowInsets.navigationBars)
@@ -1175,26 +1182,30 @@ fun AtlasMapScreen(
             ) {
                 Text(if (following.value) "Unfollow" else "Follow")
             }
-            FloatingActionButton(
-                onClick = onMeasure,
-                modifier = Modifier.semantics {
-                    stateDescription = if (measureActive.value) "Measure active" else "Measure inactive"
-                },
-            ) {
-                Text("Measure")
+            if (studioWorkspaceEnabled) {
+                FloatingActionButton(
+                    onClick = onMeasure,
+                    modifier = Modifier.semantics {
+                        stateDescription = if (measureActive.value) "Measure active" else "Measure inactive"
+                    },
+                ) {
+                    Text("Measure")
+                }
             }
-            FloatingActionButton(
-                onClick = {
-                    showLayerManager.value = true
-                    mapScope.launch {
-                        scannedPacks.value = services.mbtilesScanner.scanPacks()
-                    }
-                },
-                modifier = Modifier.semantics {
-                    stateDescription = "Open encyclopedia layer manager"
-                },
-            ) {
-                Text("Layers ${activeMbtilesPacks.value.size}")
+            if (explorerWorkspaceEnabled) {
+                FloatingActionButton(
+                    onClick = {
+                        showLayerManager.value = true
+                        mapScope.launch {
+                            scannedPacks.value = services.mbtilesScanner.scanPacks()
+                        }
+                    },
+                    modifier = Modifier.semantics {
+                        stateDescription = "Open encyclopedia layer manager"
+                    },
+                ) {
+                    Text("Layers ${activeMbtilesPacks.value.size}")
+                }
             }
             FloatingActionButton(
                 onClick = { showTools.value = true },
@@ -1203,7 +1214,7 @@ fun AtlasMapScreen(
                 Text("Tools")
             }
         }
-        if (!measureActive.value) {
+        if (!measureActive.value && tacticalWorkspaceEnabled) {
             TacticalDrawingToolbar(
                 currentMode = drawingMode,
                 pointCount = inProgressPoints.size,
@@ -1601,6 +1612,7 @@ fun AtlasMapScreen(
                     val current = currentBearing?.toDouble() ?: bearingHud
                     if (desired != null) (current - desired + 540.0) % 360.0 - 180.0 else null
                 },
+                reducedMotion = reducedMotion,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -1630,7 +1642,9 @@ fun AtlasMapScreen(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            MgrsHud(mgrsText = mgrsText)
+            if (tacticalWorkspaceEnabled) {
+                MgrsHud(mgrsText = mgrsText)
+            }
             positionTick.value.let { _ ->
                 offlineTick.value.let { _ ->
                     val locStatus = services.location.status().name.uppercase(Locale.US)
@@ -1644,6 +1658,16 @@ fun AtlasMapScreen(
                         color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
                     )
                 }
+            }
+            val activeSourceMaxZoom = basePackId.value?.let { services.offline.lookup(it)?.zMax }
+                ?: OfflineBuiltinProviders.lookup(baseProviderId.value)?.maxZoom
+                ?: 19
+            if (OverscalePolicy.isOverscaled(scaleInput.first, activeSourceMaxZoom)) {
+                Text(
+                    text = OverscalePolicy.formatBadge(scaleInput.first, activeSourceMaxZoom),
+                    fontSize = 11.sp,
+                    color = androidx.compose.ui.graphics.Color(0xFFFFA500),
+                )
             }
             when (losMode) {
                 LoSMode.AwaitingObserver -> Text(
@@ -1716,15 +1740,17 @@ fun AtlasMapScreen(
             )
             // Bearing readout sits directly under the rose, mirroring the TacNav
             // readout style so the right column carries heading, not the center.
-            TacNavHud(
-                bearing = currentBearing,
-                hudColor = hudAccent,
-                frameLabel = currentHeadingFrame,
-                showReticle = false,
-                fillScreen = false,
-                topPadding = 0.dp,
-                modifier = Modifier.width(160.dp).height(56.dp),
-            )
+            if (tacticalWorkspaceEnabled) {
+                TacNavHud(
+                    bearing = currentBearing,
+                    hudColor = hudAccent,
+                    frameLabel = currentHeadingFrame,
+                    showReticle = false,
+                    fillScreen = false,
+                    topPadding = 0.dp,
+                    modifier = Modifier.width(160.dp).height(56.dp),
+                )
+            }
         }
         Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
             ScaleBar(metersPerPixel = metersPerPixel)
@@ -1984,6 +2010,7 @@ fun AtlasMapScreen(
                 },
                 compositor = services.compositor,
                 onCompositorChanged = {
+                    services.settingsRepository.setCompositorSnapshot(services.compositor.exportStateSnapshot())
                     styleRef.value?.let { style ->
                         applyOverlayVisibility(
                             style = style,

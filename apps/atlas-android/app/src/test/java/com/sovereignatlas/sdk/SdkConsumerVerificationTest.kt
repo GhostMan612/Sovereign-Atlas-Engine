@@ -135,5 +135,8 @@ class SdkConsumerVerificationTest {
         assertEquals(2, alternatives.size)
         assertEquals("Offline driving speed model", alternatives.first().etaProvenance)
         assertEquals(6, AtlasSdk.Layers.presets().size)
+        assertTrue(AtlasSdk.Layers.cleanNavigateWorkspace().isCleanNavigateOnly)
+        assertTrue(AtlasSdk.Layers.isOverscaled(20.2, 19))
     }
 }
+

@@ -488,6 +488,10 @@ class AppServices(private val context: Context) {
     )
 
     init {
+        val savedCompositor = settingsRepository.compositorSnapshot.value
+        if (savedCompositor.isNotBlank()) {
+            compositor.restoreStateSnapshot(savedCompositor)
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             syncProvider.ensureAuthenticated()
         }

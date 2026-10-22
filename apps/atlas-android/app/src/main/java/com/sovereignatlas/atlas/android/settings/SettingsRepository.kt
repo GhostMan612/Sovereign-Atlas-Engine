@@ -49,6 +49,32 @@ class SettingsRepository(context: Context) {
     )
     val activeMbtilesPacks: StateFlow<Set<String>> = _activeMbtilesPacks.asStateFlow()
 
+    private val _darkTheme = MutableStateFlow(prefs.getBoolean("darkTheme", true))
+    val darkTheme: StateFlow<Boolean> = _darkTheme.asStateFlow()
+
+    private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reducedMotion", false))
+    val reducedMotion: StateFlow<Boolean> = _reducedMotion.asStateFlow()
+
+    private val _explorerWorkspaceEnabled = MutableStateFlow(
+        prefs.getBoolean("explorerWorkspaceEnabled", true)
+    )
+    val explorerWorkspaceEnabled: StateFlow<Boolean> = _explorerWorkspaceEnabled.asStateFlow()
+
+    private val _tacticalWorkspaceEnabled = MutableStateFlow(
+        prefs.getBoolean("tacticalWorkspaceEnabled", true)
+    )
+    val tacticalWorkspaceEnabled: StateFlow<Boolean> = _tacticalWorkspaceEnabled.asStateFlow()
+
+    private val _studioWorkspaceEnabled = MutableStateFlow(
+        prefs.getBoolean("studioWorkspaceEnabled", true)
+    )
+    val studioWorkspaceEnabled: StateFlow<Boolean> = _studioWorkspaceEnabled.asStateFlow()
+
+    private val _compositorSnapshot = MutableStateFlow(
+        prefs.getString("compositorSnapshot", "") ?: ""
+    )
+    val compositorSnapshot: StateFlow<String> = _compositorSnapshot.asStateFlow()
+
     fun setCallsign(newCallsign: String) {
         val trimmed = newCallsign.trim()
         if (trimmed.isEmpty()) return
@@ -73,4 +99,35 @@ class SettingsRepository(context: Context) {
         prefs.edit().putStringSet("activeMbtilesPacks", packs.toSet()).apply()
         _activeMbtilesPacks.value = packs.toSet()
     }
+
+    fun setDarkTheme(enabled: Boolean) {
+        prefs.edit().putBoolean("darkTheme", enabled).apply()
+        _darkTheme.value = enabled
+    }
+
+    fun setReducedMotion(enabled: Boolean) {
+        prefs.edit().putBoolean("reducedMotion", enabled).apply()
+        _reducedMotion.value = enabled
+    }
+
+    fun setExplorerWorkspaceEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("explorerWorkspaceEnabled", enabled).apply()
+        _explorerWorkspaceEnabled.value = enabled
+    }
+
+    fun setTacticalWorkspaceEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("tacticalWorkspaceEnabled", enabled).apply()
+        _tacticalWorkspaceEnabled.value = enabled
+    }
+
+    fun setStudioWorkspaceEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("studioWorkspaceEnabled", enabled).apply()
+        _studioWorkspaceEnabled.value = enabled
+    }
+
+    fun setCompositorSnapshot(snapshot: String) {
+        prefs.edit().putString("compositorSnapshot", snapshot).apply()
+        _compositorSnapshot.value = snapshot
+    }
 }
+

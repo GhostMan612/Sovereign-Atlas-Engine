@@ -112,8 +112,8 @@ Reviewer and timestamp: Principal Software Architect & QA Lead — 2026-10-22T15
   - `samples/sdk-consumer/settings.gradle`
   - `samples/sdk-consumer/src/test/kotlin/com/sovereignatlas/consumer/ExternalConsumerVerificationTest.kt`
 - **Data/license/provenance:** First-party SDK facade; Apache-2.0 transitive dependencies (`kotlin-stdlib`, `kotlinx-coroutines-core`).
-- **Test fixture and expected result:** External consumer project compiles and passes 5 verification tests across `Spatial`, `Navigation`, `Layers`, and `Knowledge`; `:atlas-sdk` passes 10 library tests.
-- **Unit/integration/device evidence:** `:atlas-sdk:test` (10 tests), `:sdk-consumer:test` (5 tests), `:app` `SdkConsumerVerificationTest` (5 tests).
+- **Test fixture and expected result:** External consumer project compiles and passes 6 verification tests across `Spatial`, `Navigation`, `Layers`, and `Knowledge`; `:atlas-sdk` passes 12 library tests.
+- **Unit/integration/device evidence:** `:atlas-sdk:test` (12 tests), `:sdk-consumer:test` (6 tests), `:app` `SdkConsumerVerificationTest` (6 tests).
 - **Performance and accessibility evidence:** Zero platform overhead; compile-time purity enforced by JVM library classpath.
 - **Risk / rollback:** Multi-module Gradle setup verified across all 4 tasks.
 - **Status:** `VERIFIED`
@@ -125,7 +125,7 @@ Reviewer and timestamp: Principal Software Architect & QA Lead — 2026-10-22T15
 - **Requirement ID:** `REQ-P4-01`
 - **Source and verified revision:** `specs/OFFLINE_DATA_LICENSE_SECURITY.md`, `WO-04_CERTIFICATION_AND_RELEASE.md`
 - **User-visible acceptance:** `PackTileServer` binds strictly to `127.0.0.1` (loopback) and rejects canonical/encoded path traversal; offline bundles verify SHA-256 and roll back atomically on corruption; corrupted pack indexes fail safely without crashing; fail-closed signing guard blocks unsigned release builds.
-- **Architecture decision / ADR:** `ADR-009` (`DEC-P4-012`)
+- **Architecture decision / ADR:** `ADR-009` (`DEC-P4-012`), `ADR-010` (`DEC-P4-013`)
 - **Blueprint/work order:** `blueprints/atlas-production/work-orders/WO-04_CERTIFICATION_AND_RELEASE.md`
 - **Affected exact paths:**
   - `apps/atlas-android/app/src/main/java/com/sovereignatlas/atlas/android/offline/PackTileServer.kt`
@@ -137,8 +137,9 @@ Reviewer and timestamp: Principal Software Architect & QA Lead — 2026-10-22T15
   - `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`
 - **Data/license/provenance:** Full provider catalog, SBOM, and security audit recorded in `DATA_LICENSE_SECURITY_SBOM.md`.
 - **Test fixture and expected result:** Loopback socket assertion (`boundAddress().isLoopbackAddress == true`), traversal variant 404 assertions, concurrent ephemeral port isolation, SHA-256 atomic write & tamper rollback, and corrupt index recovery tests.
-- **Unit/integration/device evidence:** 1,445 total passing unit tests across `:atlas-sdk` (10), `:sdk-consumer` (5), `:app:testPlayDebugUnitTest` (715), and `:app:testEnterpriseDebugUnitTest` (715).
+- **Unit/integration/device evidence:** 1,474 total passing unit tests across `:atlas-sdk` (12), `:sdk-consumer` (6), `:app:testPlayDebugUnitTest` (728), and `:app:testEnterpriseDebugUnitTest` (728).
 - **Performance and accessibility evidence:** Zero overhead on tile serving; atomic file moves via `Files.move`.
-- **Risk / rollback:** Tracked in `ADR-009` and reversible by commit.
-- **Status:** `VERIFIED` (Host) / `BLOCKED` (Operator Release Sign-Off `G07`/`G10`/`G12`)
-- **Release disposition:** `RELEASE BLOCKED` pending operator legal sign-off (`G07`), physical Moto G execution (`G10`), and keystore-signed release packaging (`G12`).
+- **Risk / rollback:** Tracked in `ADR-009` / `ADR-010` and reversible by commit.
+- **Status:** `VERIFIED` (Host) / `DEFERRED` (Physical Device Smoke `G10` & Keystore Signing `G12`)
+- **Release disposition:** `HOST READY / DEVICE & KEYSTORE GATED` pending deferred physical Moto G execution (`G10`) and keystore-signed release packaging (`G12`).
+

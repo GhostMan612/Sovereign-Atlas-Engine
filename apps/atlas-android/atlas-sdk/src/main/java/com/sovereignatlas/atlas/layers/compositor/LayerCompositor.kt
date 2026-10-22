@@ -81,6 +81,33 @@ class LayerCompositor {
             setOpacity(entry.layerId, entry.opacity)
         }
     }
+
+    fun exportStateSnapshot(): String {
+        return layerMap.values.joinToString("\n") { state ->
+            "${state.descriptor.id}|${state.isVisible}|${state.opacity}|${state.zIndex}"
+        }
+    }
+
+    fun restoreStateSnapshot(snapshot: String): Int {
+        if (snapshot.isBlank()) return 0
+        var restored = 0
+        for (rawLine in snapshot.lines()) {
+            val line = rawLine.trim()
+            if (line.isEmpty()) continue
+            val parts = line.split('|')
+            if (parts.size < 4) continue
+            val id = parts[0]
+            val visible = parts[1].toBooleanStrictOrNull() ?: continue
+            val opacity = parts[2].toFloatOrNull() ?: continue
+            val zIndex = parts[3].toIntOrNull() ?: continue
+            val state = layerMap[id] ?: continue
+            state.isVisible = visible
+            state.opacity = opacity.coerceIn(0.0f, 1.0f)
+            state.zIndex = zIndex
+            restored += 1
+        }
+        return restored
+    }
 }
 
 data class LayerBlendEntry(
@@ -203,3 +230,37 @@ object AtlasLayerPresets {
 
     fun lookup(presetId: String): LayerCombinationPreset? = all.firstOrNull { it.presetId == presetId }
 }
+
+data class AtlasWorkspaceConfig(
+    val explorerEnabled: Boolean = true,
+    val tacticalEnabled: Boolean = true,
+    val studioEnabled: Boolean = true,
+) {
+    val isCleanNavigateOnly: Boolean
+        get() = !explorerEnabled && !tacticalEnabled && !studioEnabled
+
+    companion object {
+        val CLEAN_NAVIGATE = AtlasWorkspaceConfig(
+            explorerEnabled = false,
+            tacticalEnabled = false,
+            studioEnabled = false,
+        )
+        val ALL_WORKSPACES = AtlasWorkspaceConfig(
+            explorerEnabled = true,
+            tacticalEnabled = true,
+            studioEnabled = true,
+        )
+    }
+}
+
+object OverscalePolicy {
+    fun isOverscaled(currentZoom: Double, sourceMaxZoom: Int): Boolean {
+        return currentZoom.isFinite() && sourceMaxZoom > 0 && currentZoom > sourceMaxZoom + 0.05
+    }
+
+    fun formatBadge(currentZoom: Double, sourceMaxZoom: Int): String {
+        val zText = String.format(java.util.Locale.US, "%.1f", currentZoom)
+        return "OVERSCALED (z$zText > native z$sourceMaxZoom)"
+    }
+}
+

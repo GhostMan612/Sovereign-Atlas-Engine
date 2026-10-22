@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -170,7 +171,8 @@ final class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         initializeTacticalMesh()
         setContent {
-            AtlasTheme {
+            val darkThemeState = services.settingsRepository.darkTheme.collectAsState()
+            AtlasTheme(darkTheme = darkThemeState.value) {
                 AtlasMapScreen(
                     services,
                     onFirstStyle = { mapReady.value = true },

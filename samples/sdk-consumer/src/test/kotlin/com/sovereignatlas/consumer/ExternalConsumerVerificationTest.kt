@@ -114,4 +114,40 @@ class ExternalConsumerVerificationTest {
         assertEquals(1, hits.size)
         assertEquals("Fort Point", hits.first().name)
     }
+
+    @Test
+    fun externalConsumerCanPersistCompositorStateAndEvaluateWorkspaces() {
+        val compositor = AtlasSdk.Layers.createCompositor()
+        compositor.registerLayer(
+            AtlasSdk.Layers.createDescriptor(
+                id = "usgs-3dep",
+                title = "USGS 3DEP",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.4f,
+                defaultZIndex = 2,
+            ),
+        )
+        compositor.setVisibility("usgs-3dep", true)
+        compositor.setOpacity("usgs-3dep", 0.7f)
+        val snapshot = compositor.exportStateSnapshot()
+
+        val restored = AtlasSdk.Layers.createCompositor()
+        restored.registerLayer(
+            AtlasSdk.Layers.createDescriptor(
+                id = "usgs-3dep",
+                title = "USGS 3DEP",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.4f,
+                defaultZIndex = 2,
+            ),
+        )
+        assertEquals(1, restored.restoreStateSnapshot(snapshot))
+        assertTrue(restored.getLayer("usgs-3dep")!!.isVisible)
+        assertEquals(0.7f, restored.getLayer("usgs-3dep")!!.opacity, 0.001f)
+        assertTrue(AtlasSdk.Layers.cleanNavigateWorkspace().isCleanNavigateOnly)
+        assertTrue(AtlasSdk.Layers.isOverscaled(20.5, 19))
+    }
 }
+

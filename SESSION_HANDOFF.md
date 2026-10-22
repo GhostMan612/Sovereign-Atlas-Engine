@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-22: 1,469 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-22: 1,474 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
-  - `:sdk-consumer:test`: 5 tests
-  - `:app:testPlayDebugUnitTest`: 726 tests
-  - `:app:testEnterpriseDebugUnitTest`: 726 tests
+  - `:sdk-consumer:test`: 6 tests
+  - `:app:testPlayDebugUnitTest`: 728 tests
+  - `:app:testEnterpriseDebugUnitTest`: 728 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -86,8 +86,8 @@
      `OpenSeaMap Nautical`), deterministic `zIndex` ordering, historical overlays (`Historical Dossier Pins`,
      `BLM Land Patents`, `Sanborn Blueprints`), tactical/field overlays (`CoT Markers`, `PLI & Mesh Tracks`,
      `Operational Graphics`, `Radial Geofence`, `Graticule`, `MGRS Grid`, `Range Rings`, `Waypoints`,
-     `Track`, `Measure`, `Route`), per-layer interactive opacity sliders (`10%–100%`), and 6 curated
-     one-tap combination presets (`AtlasLayerPresets`) in `LayersDialog`.
+     `Track`, `Measure`, `Route`), per-layer interactive opacity sliders (`10%–100%`), 6 curated
+     one-tap combination presets (`AtlasLayerPresets`), and deterministic state persistence (`exportStateSnapshot` / `restoreStateSnapshot`) in `SettingsRepository` and `LayersDialog`.
   4. Historical encyclopedia dossier system (`core.knowledge`) fully wired into
      `AtlasServices`, `HistoricalKnowledgeIndex`, Verified `.pack` directory auto-ingestion
      (`KnowledgeBundleSerializer.loadVerifiedDirectory`), interactive Historical Epoch Timeline
@@ -109,12 +109,14 @@
      unavailable to user, and strictly preserves direct-bearing Go-To guidance.
   2. Material 3 chrome/graphite UI design tokens implemented: precision matte charcoal (`#10151C`),
      graphite (`#1B2631`), surface dark (`#141C24`), brushed chrome (`#A8B5C1`), navigation cyan (`#39C5F3`),
-     and caution amber in `ui/theme/Color.kt` and `Theme.kt`, wrapped at application root in `MainActivity.kt`.
+     and caution amber in `ui/theme/Color.kt` and `Theme.kt`, with live user-configurable Dark/Light Theme,
+     Reduced-Motion (5° compass snap), and independent `Explorer` / `Tactical` / `Studio` workspace toggles
+     in `SettingsScreen.kt` and `MainActivity.kt`.
   3. Canvas-based CompassTape HUD upgraded: continuous heading tape with degree ticks, cardinal/intercardinal
      labels, active target bearing diamond, course deviation indicator (CDI) needle, pinned off-tape
      arrows (`◀ TGT` / `TGT ▶`), reduced-motion 5°-step snapping support (`reducedMotion: Boolean`),
-     and TalkBack accessibility semantics in `ui/hud/CompassTape.kt`, plus top-left GPS status/speed and
-     offline pack coverage HUD pill in `AtlasMap.kt`.
+     and TalkBack accessibility semantics in `ui/hud/CompassTape.kt`, plus top-left GPS status/speed,
+     offline pack coverage HUD pill, and `OverscalePolicy` zoom overscaling badge (`OVERSCALED (zX.X > native zY)`) in `AtlasMap.kt`.
   4. 10 standalone vector navigation XML drawables in `res/drawable/` integrated into `NavigationGuidanceHud`.
   5. Standalone SDK module (`:atlas-sdk`) & independent consumer (`samples/sdk-consumer`) established
      per ADR-008 (DEC-P3-011): pure domain contracts extracted into publishable Kotlin library
@@ -129,11 +131,12 @@
   2. Accepted and implemented `ADR-010` (`DEC-P4-013`): added deterministic `.pack` + `.sha256` sidecar ingestion for road networks (`RoadGraphBundleSerializer`, `TurnRestriction` SQL & pack loading) and historical dossiers (`KnowledgeBundleSerializer.loadVerifiedDirectory`), golden Presidio fixtures (`road_network_presidio.pack`, `historical_dossiers_presidio.pack`), programmatic `redistributionAllowed` provider policy (`OfflineBuiltinProviders.redistributableProviders()`), and fail-closed release signing guard verification (`ReleaseSigningGuardTest`).
   3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
   4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
-  5. Sanctioned multi-module host gate green: **1,469 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `726 Play`, `726 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
+  5. Sanctioned multi-module host gate green: **1,474 passing unit tests** (`12 :atlas-sdk`, `6 :sdk-consumer`, `728 Play`, `728 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
 
 ## Next moves
 
 - **Deferred Physical Device & Release Actions (Per Operator Directive):**
   1. **`G10` (Physical Device Smoke):** Deferred until entire phase-set closure; run physical device acceptance on Moto G `ZT4222BMWN` when requested by operator.
   2. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
+
 

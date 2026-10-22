@@ -18,11 +18,13 @@ import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
 import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
 import com.sovereignatlas.atlas.geo.navigation.VoiceGuidance
 import com.sovereignatlas.atlas.layers.compositor.AtlasLayerPresets
+import com.sovereignatlas.atlas.layers.compositor.AtlasWorkspaceConfig
 import com.sovereignatlas.atlas.layers.compositor.LayerAttribution
 import com.sovereignatlas.atlas.layers.compositor.LayerCombinationPreset
 import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
 import com.sovereignatlas.atlas.layers.compositor.LayerDescriptor
 import com.sovereignatlas.atlas.layers.compositor.LayerType
+import com.sovereignatlas.atlas.layers.compositor.OverscalePolicy
 
 sealed class SdkResult<out T> {
     data class Success<out T>(val value: T) : SdkResult<T>()
@@ -94,6 +96,18 @@ object AtlasSdk {
 
         fun presets(): List<LayerCombinationPreset> {
             return AtlasLayerPresets.all
+        }
+
+        fun isOverscaled(currentZoom: Double, sourceMaxZoom: Int): Boolean {
+            return OverscalePolicy.isOverscaled(currentZoom, sourceMaxZoom)
+        }
+
+        fun defaultWorkspaces(): AtlasWorkspaceConfig {
+            return AtlasWorkspaceConfig.ALL_WORKSPACES
+        }
+
+        fun cleanNavigateWorkspace(): AtlasWorkspaceConfig {
+            return AtlasWorkspaceConfig.CLEAN_NAVIGATE
         }
 
         fun createDescriptor(

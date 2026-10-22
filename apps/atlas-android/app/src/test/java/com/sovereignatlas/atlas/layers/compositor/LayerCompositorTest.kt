@@ -210,4 +210,76 @@ class LayerCompositorTest {
         assertFalse(compositor.getLayer("mgrs")!!.isVisible)
         assertTrue(compositor.getLayer("waypoints")!!.isVisible)
     }
+
+    @Test
+    fun stateSnapshotRoundTripRestoresVisibilityOpacityAndZIndex() {
+        val original = LayerCompositor()
+        original.registerLayer(
+            LayerDescriptor(
+                id = "blend-usgs-topo",
+                title = "USGS Topo",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 4,
+            ),
+        )
+        original.registerLayer(
+            LayerDescriptor(
+                id = "mgrs",
+                title = "MGRS Grid",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.80f,
+                defaultZIndex = 20,
+            ),
+        )
+        original.setVisibility("blend-usgs-topo", true)
+        original.setOpacity("blend-usgs-topo", 0.65f)
+        original.setZIndex("blend-usgs-topo", 12)
+        original.setVisibility("mgrs", true)
+        original.setOpacity("mgrs", 0.50f)
+
+        val snapshot = original.exportStateSnapshot()
+
+        val restored = LayerCompositor()
+        restored.registerLayer(
+            LayerDescriptor(
+                id = "blend-usgs-topo",
+                title = "USGS Topo",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 4,
+            ),
+        )
+        restored.registerLayer(
+            LayerDescriptor(
+                id = "mgrs",
+                title = "MGRS Grid",
+                type = LayerType.VECTOR_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.80f,
+                defaultZIndex = 20,
+            ),
+        )
+        val count = restored.restoreStateSnapshot(snapshot)
+        assertEquals(2, count)
+        assertTrue(restored.getLayer("blend-usgs-topo")!!.isVisible)
+        assertEquals(0.65f, restored.getLayer("blend-usgs-topo")!!.opacity, 0.001f)
+        assertEquals(12, restored.getLayer("blend-usgs-topo")!!.zIndex)
+        assertTrue(restored.getLayer("mgrs")!!.isVisible)
+        assertEquals(0.50f, restored.getLayer("mgrs")!!.opacity, 0.001f)
+    }
+
+    @Test
+    fun workspaceConfigAndOverscalePolicyEvaluateDeterministically() {
+        assertFalse(AtlasWorkspaceConfig.ALL_WORKSPACES.isCleanNavigateOnly)
+        assertTrue(AtlasWorkspaceConfig.CLEAN_NAVIGATE.isCleanNavigateOnly)
+
+        assertFalse(OverscalePolicy.isOverscaled(19.0, 19))
+        assertTrue(OverscalePolicy.isOverscaled(19.2, 19))
+        assertEquals("OVERSCALED (z21.4 > native z19)", OverscalePolicy.formatBadge(21.4, 19))
+    }
 }
+
