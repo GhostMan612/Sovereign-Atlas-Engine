@@ -132,4 +132,21 @@ class RoadRoutingEngineTest {
         val result = engine.calculateRoute(RoadRouteRequest(1L, 99L))
         assertNull(result)
     }
+
+    @Test
+    fun routeAlternativesDiscoverDistinctPaths() {
+        val graph = createTestGridGraph()
+        val engine = RoadRoutingEngine(graph)
+
+        val alternatives = engine.calculateRouteAlternatives(
+            request = RoadRouteRequest(startNodeId = 1L, targetNodeId = 6L, profile = TravelProfile.DRIVING),
+            maxAlternatives = 2,
+        )
+
+        assertTrue(alternatives.size >= 2)
+        val primaryEdges = alternatives[0].edges.map { it.id }
+        val altEdges = alternatives[1].edges.map { it.id }
+        assertFalse(primaryEdges == altEdges)
+        assertEquals("Offline driving speed model", alternatives[0].etaProvenance)
+    }
 }

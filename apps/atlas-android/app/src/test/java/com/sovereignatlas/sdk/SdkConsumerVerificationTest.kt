@@ -113,4 +113,27 @@ class SdkConsumerVerificationTest {
         assertEquals(1, hits.size)
         assertEquals("Fort Point", hits.first().name)
     }
+
+    @Test
+    fun sdkNavigationPlansRouteAlternativesAndLayersExposePresets() {
+        val graph = RoadNetworkGraph.Builder()
+            .addNode(1L, 37.7749, -122.4194)
+            .addNode(2L, 37.7755, -122.4180)
+            .addNode(3L, 37.7760, -122.4170)
+            .addEdge(101L, 1L, 3L, 250.0, 50.0, "Direct Way", RoadClass.PRIMARY)
+            .addEdge(102L, 1L, 2L, 140.0, 40.0, "Side St", RoadClass.SECONDARY)
+            .addEdge(103L, 2L, 3L, 140.0, 40.0, "Side St", RoadClass.SECONDARY)
+            .build()
+
+        val engine = AtlasSdk.Navigation.createRoutingEngine(graph)
+        val alternatives = AtlasSdk.Navigation.planRouteAlternatives(
+            engine = engine,
+            request = RoadRouteRequest(1L, 3L, TravelProfile.DRIVING),
+            maxAlternatives = 2,
+        )
+
+        assertEquals(2, alternatives.size)
+        assertEquals("Offline driving speed model", alternatives.first().etaProvenance)
+        assertEquals(6, AtlasSdk.Layers.presets().size)
+    }
 }

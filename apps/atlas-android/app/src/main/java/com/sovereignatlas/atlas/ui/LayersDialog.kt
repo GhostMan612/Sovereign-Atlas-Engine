@@ -19,16 +19,20 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
+import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
 import com.sovereignatlas.atlas.layers.compositor.AtlasLayerPresets
 import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
 import com.sovereignatlas.atlas.layers.compositor.LayerRuntimeState
@@ -53,9 +57,14 @@ fun LayersDialog(
     onMeasureChanged: (Boolean) -> Unit,
     compositor: LayerCompositor? = null,
     onCompositorChanged: () -> Unit = {},
+    historicalIndex: HistoricalKnowledgeIndex? = null,
+    selectedEpochYear: Int? = null,
+    onEpochYearChanged: (Int?) -> Unit = {},
+    onSelectDossier: (HistoricalDossier) -> Unit = {},
     onClose: () -> Unit,
 ) {
     val recomposeTick = remember { mutableIntStateOf(0) }
+    val dossierQuery = remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Map & Overlay Compositor") },
@@ -183,6 +192,88 @@ fun LayersDialog(
                                         recomposeTick.intValue += 1
                                     },
                                 )
+                            }
+                        }
+                    }
+
+                    if (historicalIndex != null) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text(
+                            text = "Historical Epoch Timeline & Dossier Index",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = selectedEpochYear == null,
+                                    onCheckedChange = { showAll ->
+                                        onEpochYearChanged(if (showAll) null else 1880)
+                                        recomposeTick.intValue += 1
+                                    },
+                                )
+                                Text(
+                                    text = if (selectedEpochYear == null) {
+                                        "All Historical Epochs (${historicalIndex.count()} dossiers)"
+                                    } else {
+                                        "Epoch Year: $selectedEpochYear (${historicalIndex.queryTemporal(selectedEpochYear).size} active)"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                        if (selectedEpochYear != null) {
+                            Slider(
+                                value = selectedEpochYear.toFloat(),
+                                onValueChange = { yearFloat ->
+                                    onEpochYearChanged(yearFloat.toInt())
+                                    recomposeTick.intValue += 1
+                                },
+                                valueRange = 1750f..2025f,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                        OutlinedTextField(
+                            value = dossierQuery.value,
+                            onValueChange = { dossierQuery.value = it },
+                            label = { Text("Search Dossiers (name, archive, tag)") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        )
+                        val matchingDossiers = if (dossierQuery.value.isNotBlank()) {
+                            historicalIndex.search(dossierQuery.value)
+                        } else if (selectedEpochYear != null) {
+                            historicalIndex.queryTemporal(selectedEpochYear)
+                        } else {
+                            historicalIndex.getAll()
+                        }
+                        for (dossier in matchingDossiers) {
+                            val fromYr = dossier.temporal.validFromYear?.toString() ?: "?"
+                            val toYr = dossier.temporal.validToYear?.toString() ?: "present"
+                            OutlinedButton(
+                                onClick = { onSelectDossier(dossier) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "${dossier.name} ($fromYr–$toYr)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Text(
+                                        text = "${dossier.entityType.name} • ${dossier.primaryCitation.authorOrArchive}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }

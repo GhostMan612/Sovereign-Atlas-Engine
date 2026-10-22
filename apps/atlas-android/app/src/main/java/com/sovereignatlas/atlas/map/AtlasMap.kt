@@ -412,9 +412,12 @@ fun AtlasMapScreen(
     val selectedAsset by selectedHistoricalAsset.collectAsStateWithLifecycle()
     val selectedHistoricalDossier = remember { MutableStateFlow<HistoricalDossier?>(null) }
     val selectedDossier by selectedHistoricalDossier.collectAsStateWithLifecycle()
+    val selectedEpochYear = remember { mutableStateOf<Int?>(null) }
     val isNavigating by services.roadNavigation.isNavigating.collectAsStateWithLifecycle()
     val navUpdate by services.roadNavigation.update.collectAsStateWithLifecycle()
     val isMuted by services.roadNavigation.isMuted.collectAsStateWithLifecycle()
+    val activeTravelProfile by services.roadNavigation.profile.collectAsStateWithLifecycle()
+    val activeRoadRoute by services.roadNavigation.activeRoute.collectAsStateWithLifecycle()
     val navigationFeedbackMessage = remember { mutableStateOf<String?>(null) }
     // Bumped on every tap and on every dismissal so a catalogue lookup that
     // completes late cannot resurrect a sheet the operator already closed.
@@ -504,7 +507,7 @@ fun AtlasMapScreen(
             services.losState.target.value,
             services.losState.profile.value,
         )
-        pushHistoricalDossiers(sink, services.historicalIndex)
+        pushHistoricalDossiers(sink, services.historicalIndex, selectedEpochYear.value)
         applyOverlayVisibility(
             style = style,
             compositor = services.compositor,
@@ -696,13 +699,14 @@ fun AtlasMapScreen(
                         // bump also cancels a lookup still in flight from a prior tap.
                         patentTapToken.incrementAndGet()
                         selectedHistoricalAsset.value = null
-                        val dossierHit = services.historicalIndex.querySpatial(
-                            com.sovereignatlas.atlas.core.AtlasBoundingBox(
+                        val dossierHit = services.historicalIndex.query(
+                            box = com.sovereignatlas.atlas.core.AtlasBoundingBox(
                                 south = point.latitude - 0.005,
                                 west = point.longitude - 0.005,
                                 north = point.latitude + 0.005,
                                 east = point.longitude + 0.005,
                             ),
+                            year = selectedEpochYear.value,
                         ).firstOrNull()
                         if (dossierHit != null) {
                             selectedHistoricalDossier.value = dossierHit
@@ -1612,6 +1616,7 @@ fun AtlasMapScreen(
                     isMuted = isMuted,
                     onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
                     onStopNavigation = { services.roadNavigation.stopNavigation() },
+                    activeRoute = activeRoadRoute,
                 )
             }
         }
@@ -1626,6 +1631,20 @@ fun AtlasMapScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             MgrsHud(mgrsText = mgrsText)
+            positionTick.value.let { _ ->
+                offlineTick.value.let { _ ->
+                    val locStatus = services.location.status().name.uppercase(Locale.US)
+                    val speedText = currentLocationFix?.speed?.let { s ->
+                        String.format(Locale.US, " • %.1f km/h", s * 3.6f)
+                    } ?: ""
+                    val packCount = services.offline.packs().size
+                    Text(
+                        text = "GPS: $locStatus$speedText • OFFLINE: $packCount packs",
+                        fontSize = 11.sp,
+                        color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                    )
+                }
+            }
             when (losMode) {
                 LoSMode.AwaitingObserver -> Text(
                     text = "LoS: tap observer point",
@@ -1795,6 +1814,10 @@ fun AtlasMapScreen(
                                 }
                             },
                             navigationMessage = navigationFeedbackMessage.value,
+                            selectedProfile = activeTravelProfile,
+                            onProfileSelected = { profile ->
+                                services.roadNavigation.setProfile(profile)
+                            },
                         )
                     }
                 }
@@ -1976,6 +1999,17 @@ fun AtlasMapScreen(
                         val baseAttr = OfflineBuiltinProviders.lookup(baseProviderId.value)?.attribution ?: ""
                         attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
                     }
+                },
+                historicalIndex = services.historicalIndex,
+                selectedEpochYear = selectedEpochYear.value,
+                onEpochYearChanged = { year ->
+                    selectedEpochYear.value = year
+                    pushHistoricalDossiers(sink, services.historicalIndex, year)
+                },
+                onSelectDossier = { dossier ->
+                    selectedHistoricalDossier.value = dossier
+                    showLayers.value = false
+                    mapRef.value?.let { map -> animateToWaypoint(map, dossier.latitude, dossier.longitude) }
                 },
                 onClose = { showLayers.value = false },
             )
@@ -2565,8 +2599,9 @@ fun pushGraticule(map: MapLibreMap, sink: FeatureSink) {
 fun pushHistoricalDossiers(
     sink: FeatureSink,
     index: com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex,
+    epochYear: Int? = null,
 ) {
-    val allDossiers = index.getAll()
+    val allDossiers = if (epochYear != null) index.queryTemporal(epochYear) else index.getAll()
     val features = allDossiers.map { dossier ->
         RenderFeature(
             geometry = RenderGeometry.Point(LngLat(dossier.longitude, dossier.latitude)),
@@ -2588,7 +2623,7 @@ fun syncBlendedProviderLayers(
     compositor: LayerCompositor,
     cartoKey: String? = null,
 ) {
-    for (layerState in compositor.getAllLayers()) {
+    for (layerState in compositor.getAllLayers().sortedBy { it.zIndex }) {
         val compId = layerState.descriptor.id
         if (!compId.startsWith("blend-")) continue
         val providerId = compId.removePrefix("blend-")
@@ -3061,6 +3096,7 @@ fun NavigationGuidanceHud(
     isMuted: Boolean,
     onToggleMute: () -> Unit,
     onStopNavigation: () -> Unit,
+    activeRoute: RoadRouteResult? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -3127,14 +3163,25 @@ fun NavigationGuidanceHud(
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
             val distRemainingKm = (navUpdate?.remainingDistanceMeters ?: 0.0) / 1000.0
             val durRemainingMin = (navUpdate?.remainingDurationSeconds ?: 0.0) / 60.0
+            val snapPct = navUpdate?.snappedPosition?.confidence?.let { (it * 100.0).roundToInt() }
+            val profileLabel = activeRoute?.profile?.name ?: "DRIVING"
+            val provenanceLabel = activeRoute?.etaProvenance ?: "Offline road-class speed model"
             Text(
-                text = "%.1f km remaining  \u00B7  %.0f min  \u00B7  %s".format(
+                text = "%.1f km remaining  \u00B7  %.0f min (%s)  \u00B7  %s%s".format(
+                    Locale.US,
                     distRemainingKm,
                     durRemainingMin,
+                    profileLabel,
                     navUpdate?.status?.name ?: "NAVIGATING",
+                    if (snapPct != null) "  \u00B7  Snap $snapPct%" else "",
                 ),
                 fontSize = 12.sp,
                 color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+            )
+            Text(
+                text = "ETA source: $provenanceLabel",
+                fontSize = 10.sp,
+                color = androidx.compose.ui.graphics.Color(0xFF6B7D8D),
             )
         }
     }

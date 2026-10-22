@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-22: 1,463 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-22: 1,469 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 5 tests
-  - `:app:testPlayDebugUnitTest`: 723 tests
-  - `:app:testEnterpriseDebugUnitTest`: 723 tests
+  - `:app:testPlayDebugUnitTest`: 726 tests
+  - `:app:testEnterpriseDebugUnitTest`: 726 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -71,26 +71,30 @@
 - **WO-02 (Navigation, Knowledge, Layers): COMPLETE & INTEGRATED.**
   1. Road navigation subsystem (`geo.navigation`) implemented in pure domain logic,
      complemented with `AndroidVoiceGuidance` (TTS adapter) and `AndroidRoadGraphLoader`
-     (offline `roads.pack` and `roads.db` loading with SHA-256 sidecar verification & `TurnRestriction` ingestion).
-  2. Full user flow wired into the host application: GoTo target selection triggers
-     road route calculation and Turn-by-Turn navigation via "Navigate" button; live
-     location fixes feed `NavigationSession.updateLocation()` with automatic off-route
-     rerouting; active maneuver instructions, distances, and ETAs render in
+     (offline `roads.pack` and `roads.db` loading with SHA-256 sidecar verification & `TurnRestriction` ingestion),
+     penalty-based route alternatives (`calculateRouteAlternatives`), and profile-aware ETA provenance.
+  2. Full user flow wired into the host application: GoTo target selection with interactive
+     `TravelProfile` selector (`DRIVING` / `CYCLING` / `WALKING`) triggers road route calculation
+     and Turn-by-Turn navigation via "Navigate" button; live location fixes feed
+     `NavigationSession.updateLocation()` with profile-scaled remaining ETA and automatic off-route
+     rerouting; active maneuver instructions, distances, snap confidence, and ETA provenance render in
      `NavigationGuidanceHud`; route geometry renders onto MapLibre `Route` layer.
   3. Multi-layer compositor (`layers.compositor`) wired into `AtlasServices` with
-     simultaneous multi-map raster blending (`USGS 3DEP Hillshade`, `USGS NHD Hydrography`,
-     `USGS Topo`, `USGS Imagery+Topo Hybrid`, `OpenTopoMap`, `Esri Imagery`, `OSM Standard`,
-     `CARTO Positron/Dark Matter`, `OpenSeaMap Nautical`), historical overlays (`Historical Dossier Pins`,
+     simultaneous multi-map raster blending across all 12 URL-backed providers (`USGS 3DEP Hillshade`,
+     `USGS NHD Hydrography`, `USGS Topo`, `USGS Imagery+Topo Hybrid`, `OpenTopoMap`, `Esri Imagery`,
+     `Esri Light Gray Canvas`, `Esri Dark Gray Canvas`, `OSM Standard`, `CARTO Positron/Dark Matter`,
+     `OpenSeaMap Nautical`), deterministic `zIndex` ordering, historical overlays (`Historical Dossier Pins`,
      `BLM Land Patents`, `Sanborn Blueprints`), tactical/field overlays (`CoT Markers`, `PLI & Mesh Tracks`,
      `Operational Graphics`, `Radial Geofence`, `Graticule`, `MGRS Grid`, `Range Rings`, `Waypoints`,
      `Track`, `Measure`, `Route`), per-layer interactive opacity sliders (`10%–100%`), and 6 curated
      one-tap combination presets (`AtlasLayerPresets`) in `LayersDialog`.
   4. Historical encyclopedia dossier system (`core.knowledge`) fully wired into
      `AtlasServices`, `HistoricalKnowledgeIndex`, Verified `.pack` directory auto-ingestion
-     (`KnowledgeBundleSerializer.loadVerifiedDirectory`), map pin rendering (`HISTORICAL_DOSSIERS_LAYER`),
-     and the map UI with `HistoricalDossierSheet` displaying confidence badges
-     (CONFIRMED/PROBABLE/UNCERTAIN/DISPUTED), temporal intervals, primary archival citations,
-     and alternative disputed claims.
+     (`KnowledgeBundleSerializer.loadVerifiedDirectory`), interactive Historical Epoch Timeline
+     Slider (`1750..2025` + `All Epochs` toggle) and Dossier Search & Jump bar in `LayersDialog`,
+     map pin rendering (`HISTORICAL_DOSSIERS_LAYER`), and the map UI with `HistoricalDossierSheet`
+     displaying confidence badges (CONFIRMED/PROBABLE/UNCERTAIN/DISPUTED), temporal intervals,
+     primary archival citations, and alternative disputed claims.
 - **ADR-006 Resolved:** `offline/` networking extracted into `android/offline/`
   (`PackTileServer.kt`, `AndroidHttpDownloader.kt`), while `offline/` holds pure
   interfaces (`LocalTileServer.kt`, `OfflineDownloader.kt`). 100% pure boundary clean.
@@ -108,7 +112,9 @@
      and caution amber in `ui/theme/Color.kt` and `Theme.kt`, wrapped at application root in `MainActivity.kt`.
   3. Canvas-based CompassTape HUD upgraded: continuous heading tape with degree ticks, cardinal/intercardinal
      labels, active target bearing diamond, course deviation indicator (CDI) needle, pinned off-tape
-     arrows (`◀ TGT` / `TGT ▶`), and TalkBack accessibility semantics in `ui/hud/CompassTape.kt`.
+     arrows (`◀ TGT` / `TGT ▶`), reduced-motion 5°-step snapping support (`reducedMotion: Boolean`),
+     and TalkBack accessibility semantics in `ui/hud/CompassTape.kt`, plus top-left GPS status/speed and
+     offline pack coverage HUD pill in `AtlasMap.kt`.
   4. 10 standalone vector navigation XML drawables in `res/drawable/` integrated into `NavigationGuidanceHud`.
   5. Standalone SDK module (`:atlas-sdk`) & independent consumer (`samples/sdk-consumer`) established
      per ADR-008 (DEC-P3-011): pure domain contracts extracted into publishable Kotlin library
@@ -123,7 +129,7 @@
   2. Accepted and implemented `ADR-010` (`DEC-P4-013`): added deterministic `.pack` + `.sha256` sidecar ingestion for road networks (`RoadGraphBundleSerializer`, `TurnRestriction` SQL & pack loading) and historical dossiers (`KnowledgeBundleSerializer.loadVerifiedDirectory`), golden Presidio fixtures (`road_network_presidio.pack`, `historical_dossiers_presidio.pack`), programmatic `redistributionAllowed` provider policy (`OfflineBuiltinProviders.redistributableProviders()`), and fail-closed release signing guard verification (`ReleaseSigningGuardTest`).
   3. Authored full provider/dataset licensing catalog, security audit, SBOM, and operator rollback runbook in `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`.
   4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
-  5. Sanctioned multi-module host gate green: **1,463 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `723 Play`, `723 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
+  5. Sanctioned multi-module host gate green: **1,469 passing unit tests** (`12 :atlas-sdk`, `5 :sdk-consumer`, `726 Play`, `726 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
 
 ## Next moves
 

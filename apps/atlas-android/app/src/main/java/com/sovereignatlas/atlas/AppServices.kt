@@ -180,6 +180,28 @@ class AppServices(private val context: Context) {
         )
         registerLayer(
             LayerDescriptor(
+                id = "blend-esri-light-gray",
+                title = "Esri Light Gray Canvas Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 7,
+                attribution = LayerAttribution("Esri", "Esri Terms of Use", "Esri, HERE, Garmin, © OpenStreetMap contributors"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
+                id = "blend-esri-dark-gray",
+                title = "Esri Dark Gray Canvas Overlay",
+                type = LayerType.RASTER_OVERLAY,
+                defaultVisibility = false,
+                defaultOpacity = 0.45f,
+                defaultZIndex = 7,
+                attribution = LayerAttribution("Esri", "Esri Terms of Use", "Esri, HERE, Garmin, © OpenStreetMap contributors"),
+            ),
+        )
+        registerLayer(
+            LayerDescriptor(
                 id = "blend-osm-standard",
                 title = "OpenStreetMap Overlay",
                 type = LayerType.RASTER_OVERLAY,

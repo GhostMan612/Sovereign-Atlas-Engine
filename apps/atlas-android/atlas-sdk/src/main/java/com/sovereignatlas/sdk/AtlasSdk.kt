@@ -71,6 +71,14 @@ object AtlasSdk {
             }
         }
 
+        fun planRouteAlternatives(
+            engine: RoadRoutingEngine,
+            request: RoadRouteRequest,
+            maxAlternatives: Int = 2,
+        ): List<RoadRouteResult> {
+            return engine.calculateRouteAlternatives(request, maxAlternatives)
+        }
+
         fun createSession(
             route: RoadRouteResult,
             voice: VoiceGuidance? = null,

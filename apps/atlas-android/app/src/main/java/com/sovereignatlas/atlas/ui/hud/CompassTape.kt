@@ -31,8 +31,10 @@ fun CompassTape(
     targetBearing: Double? = null,
     targetLabel: String? = null,
     courseDeviationDeg: Double? = null,
+    reducedMotion: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val effectiveBearing = if (reducedMotion) (bearing / 5.0).roundToInt() * 5.0 else bearing
     val backgroundColor = Color(0xFF10151C).copy(alpha = 0.85f)
     val chromeMajor = Color(0xFFA8B5C1)
     val chromeMinor = Color(0xFF6B7D8D)
@@ -54,7 +56,7 @@ fun CompassTape(
 
     val semanticDescription = buildString {
         append("Heading ")
-        append(bearing.roundToInt())
+        append(effectiveBearing.roundToInt())
         append(" degrees")
         if (targetBearing != null) {
             append(", target ")
@@ -75,12 +77,12 @@ fun CompassTape(
         val fov = 90.0
         val pixelsPerDegree = size.width / fov
         val halfWidth = size.width / 2f
-        val startDeg = kotlin.math.floor(bearing - fov / 2).toInt()
-        val endDeg = kotlin.math.ceil(bearing + fov / 2).toInt()
+        val startDeg = kotlin.math.floor(effectiveBearing - fov / 2).toInt()
+        val endDeg = kotlin.math.ceil(effectiveBearing + fov / 2).toInt()
 
         for (deg in startDeg..endDeg) {
             if (deg % 5 == 0) {
-                val xOffset = ((deg - (bearing - fov / 2)) * pixelsPerDegree).toFloat()
+                val xOffset = ((deg - (effectiveBearing - fov / 2)) * pixelsPerDegree).toFloat()
                 val isMajor = deg % 45 == 0
                 val isMinor = deg % 15 == 0
                 val tickHeight = when {
@@ -113,7 +115,7 @@ fun CompassTape(
         }
 
         if (targetBearing != null) {
-            val rawDiff = (targetBearing - bearing + 540.0) % 360.0 - 180.0
+            val rawDiff = (targetBearing - effectiveBearing + 540.0) % 360.0 - 180.0
             if (rawDiff in -45.0..45.0) {
                 val targetX = (halfWidth + rawDiff * pixelsPerDegree).toFloat()
                 val targetPath = Path().apply {

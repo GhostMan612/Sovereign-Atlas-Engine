@@ -132,7 +132,7 @@ class NavigationSession(
 
         maybeAnnounceVoice(distToManeuver, activeManeuver)
 
-        val speedMps = 13.88
+        val speedMps = maxOf(0.5, (route.profile.defaultSpeedKmh * 1000.0) / 3600.0)
         val estRemainingSec = snapped.remainingDistanceMeters / speedMps
 
         return NavigationUpdate(

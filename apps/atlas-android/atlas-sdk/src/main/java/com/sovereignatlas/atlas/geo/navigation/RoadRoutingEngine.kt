@@ -25,6 +25,7 @@ data class RoadRouteResult(
     val edges: List<RoadEdge>,
     val maneuvers: List<RouteManeuver>,
     val profile: TravelProfile,
+    val etaProvenance: String = "Offline road-class speed model",
 )
 
 class RoadRoutingEngine(val graph: RoadNetworkGraph) {
@@ -82,8 +83,45 @@ class RoadRoutingEngine(val graph: RoadNetworkGraph) {
     }
 
     fun calculateRoute(request: RoadRouteRequest): RoadRouteResult? {
+        return calculateRouteWithPenalties(request)
+    }
+
+    fun calculateRouteAlternatives(
+        request: RoadRouteRequest,
+        maxAlternatives: Int = 2,
+    ): List<RoadRouteResult> {
+        val primary = calculateRoute(request) ?: return emptyList()
+        if (maxAlternatives <= 0 || primary.edges.isEmpty()) return listOf(primary)
+
+        val results = mutableListOf(primary)
+        val seenEdgeLists = mutableSetOf(primary.edges.map { it.id })
+        val penalizedEdges = mutableSetOf<Long>()
+
+        for (attempt in 0 until maxAlternatives) {
+            penalizedEdges.addAll(results.last().edges.map { it.id })
+            val candidate = calculateRouteWithPenalties(
+                request = request,
+                penalizedEdgeIds = penalizedEdges,
+                penaltyMultiplier = 2.5,
+            ) ?: break
+            val edgeIds = candidate.edges.map { it.id }
+            if (seenEdgeLists.add(edgeIds)) {
+                results.add(candidate)
+            } else {
+                break
+            }
+        }
+        return results
+    }
+
+    private fun calculateRouteWithPenalties(
+        request: RoadRouteRequest,
+        penalizedEdgeIds: Set<Long> = emptySet(),
+        penaltyMultiplier: Double = 2.5,
+    ): RoadRouteResult? {
         val startNode = graph.nodes[request.startNodeId] ?: return null
         val targetNode = graph.nodes[request.targetNodeId] ?: return null
+        val provenanceLabel = "Offline ${request.profile.name.lowercase()} speed model"
 
         if (request.startNodeId == request.targetNodeId) {
             val coord = AtlasCoordinate(startNode.latitude, startNode.longitude)
@@ -107,6 +145,7 @@ class RoadRoutingEngine(val graph: RoadNetworkGraph) {
                     ),
                 ),
                 profile = request.profile,
+                etaProvenance = provenanceLabel,
             )
         }
 
@@ -147,7 +186,8 @@ class RoadRoutingEngine(val graph: RoadNetworkGraph) {
             for (edge in outbound) {
                 if (!graph.isTurnAllowed(inboundEdge, edge)) continue
 
-                val cost = edgeTraversalCost(edge, request.profile, request.avoidUnpaved)
+                val baseCost = edgeTraversalCost(edge, request.profile, request.avoidUnpaved)
+                val cost = if (edge.id in penalizedEdgeIds) baseCost * penaltyMultiplier else baseCost
                 val tentativeG = current.costG + cost
                 val nextKey = Pair(edge.toNodeId, edge.id)
 
@@ -214,6 +254,7 @@ class RoadRoutingEngine(val graph: RoadNetworkGraph) {
             edges = pathEdges,
             maneuvers = maneuvers,
             profile = request.profile,
+            etaProvenance = provenanceLabel,
         )
     }
 }

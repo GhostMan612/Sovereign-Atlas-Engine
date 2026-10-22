@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
 import com.sovereignatlas.atlas.geo.AtlasGeoMath
 import com.sovereignatlas.atlas.geo.Mgrs
+import com.sovereignatlas.atlas.geo.navigation.TravelProfile
 import com.sovereignatlas.atlas.goto.GoToState
 import java.util.Locale
 
@@ -29,6 +31,8 @@ fun GoToCard(
     onClear: () -> Unit,
     onNavigate: (() -> Unit)? = null,
     navigationMessage: String? = null,
+    selectedProfile: TravelProfile? = null,
+    onProfileSelected: ((TravelProfile) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val target = goTo.targetOrNull() ?: return
@@ -63,6 +67,30 @@ fun GoToCard(
                 AtlasGeoMath.formatBearing(bearingDeg)
             },
         )
+        if (selectedProfile != null && onProfileSelected != null) {
+            Row(
+                modifier = Modifier.padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (profile in TravelProfile.values()) {
+                    if (profile == selectedProfile) {
+                        Button(
+                            onClick = { onProfileSelected(profile) },
+                            modifier = Modifier.testTag("go-to-profile-${profile.name.lowercase()}"),
+                        ) {
+                            Text(profile.name)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onProfileSelected(profile) },
+                            modifier = Modifier.testTag("go-to-profile-${profile.name.lowercase()}"),
+                        ) {
+                            Text(profile.name)
+                        }
+                    }
+                }
+            }
+        }
         if (navigationMessage != null) {
             Text(
                 text = navigationMessage,

@@ -92,4 +92,19 @@ class NavigationSessionTest {
         assertTrue(update.offRoute)
         assertEquals(farCoord, rerouteCalledWith)
     }
+
+    @Test
+    fun remainingDurationScalesWithTravelProfileSpeed() {
+        val drivingRoute = createSampleRoute().copy(profile = TravelProfile.DRIVING)
+        val walkingRoute = createSampleRoute().copy(profile = TravelProfile.WALKING)
+
+        val drivingSession = NavigationSession(drivingRoute)
+        val walkingSession = NavigationSession(walkingRoute)
+
+        val midPoint = AtlasCoordinate(45.000, -92.996)
+        val drivingUpdate = drivingSession.updateLocation(midPoint)
+        val walkingUpdate = walkingSession.updateLocation(midPoint)
+
+        assertTrue(walkingUpdate.remainingDurationSeconds > drivingUpdate.remainingDurationSeconds * 5.0)
+    }
 }
