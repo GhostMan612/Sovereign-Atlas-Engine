@@ -17,7 +17,7 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-22: 1,474 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-23: 1,474 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 6 tests
   - `:app:testPlayDebugUnitTest`: 728 tests
@@ -139,7 +139,7 @@
      - Eliminated the bottom-left triple overlap by stacking `ScaleBar` (`bottom = 30.dp`) and `TacticalDrawingToolbar` (`bottom = 30.dp`) cleanly above the single-line bottom attribution micro-pill (`bottom = 6.dp`).
      - Replaced the clipped square right-rail FABs with `AtlasRailPillButton` controls (`minWidth = 88.dp`, active cyan border/fill) and upgraded the `Tools` bottom sheet into the **Sovereign Command Center** with a one-tap **Quick Workspace Switcher** (`All`, `Clean Nav`, `Explorer`, `Tactical`, `Studio`) and structured Graphite command cards.
 
-- **Sovereign Visual, Iconography, Motion, Splash & Loading System (written; gate result is in the commit message):**
+- **Sovereign Visual, Iconography, Motion, Splash & Loading System (COMPLETE):**
   - Animated Android 12+ splash (`avd_splash_atlas.xml` over `ic_splash_compass.xml`, `#10151C` background) with an exit transition in `MainActivity` (320 ms fade + icon zoom, 100 ms fade-only when `reducedMotion`).
   - Adaptive launcher icons (`ic_launcher_background/foreground/monochrome.xml`) in the charcoal / chrome / cyan / amber palette.
   - `AtlasLoadingOverlay` rebuilt as a cinematic boot screen: `bg_sovereign_topography.jpg` backdrop (`drawable-nodpi`), `Canvas` radar sweep with counter-rotating astrolabe arcs, boot-stage telemetry from `AtlasMotionMath.bootTelemetryStage`. `AtlasActivityBanner` micro-loader is wired to the MBTiles swap, offline pack scan, road route calculation and LoS profile calculation.
@@ -147,7 +147,24 @@
   - Pure `ui/hud/AtlasMotionMath.kt` (shortest-arc unwrap, pack download fraction, boot stage labels) with `AtlasMotionMathTest`. `CompassOverlay` and `CompassTape` animate along the shortest arc when `reducedMotion` is false and keep the 5° snap when it is true.
   - **Physical Device Smoke & Fresh Clean Deployment:** Uninstalled previous packages (`com.sovereignatlas.atlas`, `com.sovereignatlas.atlas.enterprise`) from Moto G `ZT4222BMWN`. Executed full clean build (`clean :app:assemblePlayDebug :app:assembleEnterpriseDebug` in 7m 43s; Play APK SHA-256 `1338b5500d41b9b1ed6a7a258e02c33ee35bdf66409852cf8331f4126982d718` / 125,314,971 bytes; Enterprise APK SHA-256 `0d75154032c9bb3d4e16030683f1dbb4f48770500c1dcbfe3fa1fb6efb34a821` / 125,314,983 bytes). Fresh installed both packages onto Moto G (`ZT4222BMWN`, Android 16 / SDK 36), launched `com.sovereignatlas.atlas/.MainActivity` (PID 32396), and verified 0 runtime crashes / 0 uncaught exceptions.
 
+- **Monolithic Screen Deconstruction & Advanced Roadmap Blueprints (COMPLETE):**
+  - **Monolithic `AtlasMap.kt` Split:** Decomposed 3,618-line `AtlasMap.kt` down to 2,340 lines (-1,278 lines, -35.3%), eliminating the ART compiler instruction limit warning (`Method exceeds compiler instruction limit: 16956`).
+    1. Extracted Turn-by-Turn navigation guidance HUD to `ui/hud/NavigationGuidanceHud.kt`.
+    2. Extracted rail pills, chips, and tool row buttons to `map/AtlasMapControls.kt`.
+    3. Extracted base layer styling, MBTiles pack sync, DEM raster sources, blueprint rasters, and compositor overlay visibility to `map/MapStyleSync.kt`.
+    4. Extracted MapLibre feature pushers (`pushMarkers`, `pushOpsGraphics`, `pushMeshTracks`, `pushPli`, `pushPosition`, `pushMeasure`, `pushFence`, `pushGoTo`, `pushRings`, `pushGraticule`, `pushHistoricalDossiers`, `pushScrubPoint`, `pushRouteResult`, `pushRoadRouteResult`, `pushLosState`), icon decoders, and foot routing to `map/MapFeatureSync.kt`.
+  - **Complete Subsystem Blueprints Authored (`blueprints/`):**
+    1. `BP-01: Modular Map & Screen Architecture` (`blueprints/01_MODULAR_MAP_ARCHITECTURE.md`)
+    2. `BP-02: True 3D DEM Terrain & Dynamic 2D Viewshed Mask` (`blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`)
+    3. `BP-03: Plug-and-Play Meshtastic & LoRa Tactical Transport` (`blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`)
+    4. `BP-04: Field GIS Ingestion Subsystem` (`blueprints/04_FIELD_GIS_INGESTION.md`)
+  - **Verification:** Full host gate passed (`BUILD SUCCESSFUL in 2m 31s`): 1,474 passing tests across `:atlas-sdk:test`, `:sdk-consumer:test`, `:app:testPlayDebugUnitTest`, `:app:testEnterpriseDebugUnitTest`, 0 failures, 0 errors, 0 pure-boundary violations.
+
 ## Next moves
 
+- **Implementation Roadmap from Blueprints:**
+  1. **Phase 11 (Field GIS Ingestion Subsystem):** Implement universal ingestion engine (`geo.gis`) supporting `.gpkg`, `.kml`, `.kmz`, `.geojson`, and `.zip` Shapefiles based on `blueprints/04_FIELD_GIS_INGESTION.md`.
+  2. **Phase 12 (True 3D DEM Terrain & Dynamic 2D Viewshed Mask):** Implement 3D terrain exaggeration, pitch camera controls, and 360° radial viewshed polygon projection based on `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
+  3. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, 237-byte sub-segment fragmentation, and offline store based on `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md` (mined from `C:\sovereign_mantle`).
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
