@@ -5,7 +5,18 @@
 
 package com.sovereignatlas.atlas.ui
 
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,21 +30,31 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sovereignatlas.atlas.R
+import com.sovereignatlas.atlas.ui.hud.AtlasMotionMath
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -98,32 +119,82 @@ fun HudTelemetryPill(
     text: String,
     textColor: Color = Color(0xFFE2E8F0),
     borderColor: Color = Color(0x40A8B5C1),
+    @DrawableRes iconRes: Int? = null,
+    iconTint: Color = textColor,
+    pulse: Boolean = false,
+    reducedMotion: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val pulseAlpha = if (pulse && !reducedMotion) {
+        val transition = rememberInfiniteTransition(label = "hudBeacon")
+        val animated by transition.animateFloat(
+            initialValue = 0.32f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 750),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "hudBeaconAlpha",
+        )
+        animated
+    } else {
+        1.0f
+    }
     Surface(
         color = Color(0xD910151C),
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, borderColor),
         modifier = modifier,
     ) {
-        Text(
-            text = text,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = textColor,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
+        ) {
+            if (pulse) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .alpha(pulseAlpha)
+                        .background(textColor, CircleShape),
+                )
+            }
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+            Text(
+                text = text,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = textColor,
+            )
+        }
     }
 }
 
 @Composable
 fun TacticalCrosshair(modifier: Modifier = Modifier) {
-    Box(modifier = modifier) {
-        Text(
-            text = "+",
-            fontSize = 20.sp,
-            color = Color(0xFF39C5F3),
-        )
+    Canvas(modifier = modifier.size(28.dp)) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val arm = size.minDimension * 0.42f
+        val gap = size.minDimension * 0.14f
+        val halo = Color(0xB310151C)
+        val cyan = Color(0xFF39C5F3)
+        drawLine(halo, Offset(cx - arm, cy), Offset(cx - gap, cy), strokeWidth = 3.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(halo, Offset(cx + gap, cy), Offset(cx + arm, cy), strokeWidth = 3.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(halo, Offset(cx, cy - arm), Offset(cx, cy - gap), strokeWidth = 3.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(halo, Offset(cx, cy + gap), Offset(cx, cy + arm), strokeWidth = 3.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(cyan, Offset(cx - arm, cy), Offset(cx - gap, cy), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(cyan, Offset(cx + gap, cy), Offset(cx + arm, cy), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(cyan, Offset(cx, cy - arm), Offset(cx, cy - gap), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(cyan, Offset(cx, cy + gap), Offset(cx, cy + arm), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(cyan, radius = 1.8.dp.toPx(), center = Offset(cx, cy))
     }
 }
 
@@ -133,12 +204,31 @@ fun CompassOverlay(
     bearing: Double,
     onLocate: () -> Unit,
     onFaceNorth: () -> Unit,
+    reducedMotion: Boolean = false,
 ) {
+    var unwrappedTarget by remember { mutableFloatStateOf(bearing.toFloat()) }
+    val nextTarget = AtlasMotionMath.unwrapBearingTarget(unwrappedTarget, bearing.toFloat())
+    SideEffect {
+        unwrappedTarget = nextTarget
+    }
+    val animatedBearing by animateFloatAsState(
+        targetValue = nextTarget,
+        animationSpec = if (reducedMotion) {
+            snap()
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            )
+        },
+        label = "compassDialBearing",
+    )
     Image(
         painter = painterResource(R.drawable.ic_compass_overlay),
         contentDescription = "Compass - tap to locate, long-press to face north",
-        modifier = Modifier.size(48.dp)
-            .rotate(-bearing.toFloat())
+        modifier = Modifier
+            .size(48.dp)
+            .rotate(-animatedBearing)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

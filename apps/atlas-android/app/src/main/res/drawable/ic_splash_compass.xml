@@ -1,42 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="240dp"
     android:height="240dp"
     android:viewportWidth="240"
     android:viewportHeight="240">
-    <!-- Compass rose on transparent: ring radius 70 about (120,120), spans 50..190. -->
+    <group
+        android:name="outer_ring"
+        android:pivotX="120"
+        android:pivotY="120">
+        <path
+            android:fillColor="#141C24"
+            android:strokeColor="#A8B5C1"
+            android:strokeWidth="4.5"
+            android:pathData="M120,48a72,72 0 1,1 0,144a72,72 0 1,1 0,-144z" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4D39C5F3"
+            android:strokeWidth="2.2"
+            android:pathData="M120,62a58,58 0 1,1 0,116a58,58 0 1,1 0,-116z" />
+        <path
+            android:strokeColor="#A8B5C1"
+            android:strokeWidth="3"
+            android:pathData="M120,48v10M120,182v10M48,120h10M182,120h10" />
+        <path
+            android:strokeColor="#F4B85C"
+            android:strokeWidth="2.8"
+            android:pathData="M69,69l8,8M171,69l-8,8M171,171l-8,-8M69,171l8,-8" />
+    </group>
+    <group
+        android:name="compass_rose"
+        android:pivotX="120"
+        android:pivotY="120">
+        <path
+            android:fillColor="#A8B5C1"
+            android:pathData="M178,120l-46,-10l7,10l-7,10z" />
+        <path
+            android:fillColor="#A8B5C1"
+            android:pathData="M62,120l46,-10l-7,10l7,10z" />
+        <path
+            android:fillColor="#6B7D8D"
+            android:pathData="M120,178l11,-48l-11,8l-11,-8z" />
+        <path
+            android:fillColor="#39C5F3"
+            android:pathData="M120,58l13,52l-13,-9l-13,9z" />
+    </group>
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#39FF14"
-        android:strokeWidth="8"
-        android:pathData="M50,120a70,70 0 1,1 140,0a70,70 0 1,1 -140,0" />
-    <!-- Cardinal points. -->
+        android:fillColor="#10151C"
+        android:strokeColor="#39C5F3"
+        android:strokeWidth="3.5"
+        android:pathData="M120,109a11,11 0 1,1 0,22a11,11 0 1,1 0,-22z" />
     <path
-        android:fillColor="#39FF14"
-        android:pathData="M120,58l10,52h-20z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M120,182l10,-52h-20z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M182,120l-52,-10v20z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M58,120l52,-10v20z" />
-    <!-- Intercardinal points. -->
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M163,77l5,11h-10z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M163,163l5,-11h-10z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M77,163l5,-11h-10z" />
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M77,77l5,11h-10z" />
-    <!-- Center pivot. -->
-    <path
-        android:fillColor="#39FF14"
-        android:pathData="M114,114h12v12h-12z" />
+        android:name="core_pip"
+        android:fillColor="#39C5F3"
+        android:pathData="M120,115a5,5 0 1,1 0,10a5,5 0 1,1 0,-10z" />
 </vector>

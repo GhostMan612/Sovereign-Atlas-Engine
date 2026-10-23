@@ -5,9 +5,15 @@
 
 package com.sovereignatlas.atlas
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.pm.PackageManager
 import android.hardware.GeomagneticField
 import android.os.Bundle
+import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -158,7 +164,47 @@ final class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen().setKeepOnScreenCondition { !mapReady.value }
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { !mapReady.value }
+        splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
+            val splashView = splashScreenViewProvider.view
+            val reduced = appServices.settingsRepository.reducedMotion.value
+            if (reduced) {
+                ObjectAnimator.ofFloat(splashView, View.ALPHA, 1f, 0f).apply {
+                    duration = 100L
+                    addListener(
+                        object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                splashScreenViewProvider.remove()
+                            }
+                        },
+                    )
+                    start()
+                }
+            } else {
+                val icon = runCatching { splashScreenViewProvider.iconView }.getOrNull()
+                val animators = buildList {
+                    add(ObjectAnimator.ofFloat(splashView, View.ALPHA, 1f, 0f))
+                    if (icon != null) {
+                        add(ObjectAnimator.ofFloat(icon, View.SCALE_X, 1f, 1.18f))
+                        add(ObjectAnimator.ofFloat(icon, View.SCALE_Y, 1f, 1.18f))
+                    }
+                }
+                AnimatorSet().apply {
+                    playTogether(animators)
+                    duration = 320L
+                    interpolator = AccelerateDecelerateInterpolator()
+                    addListener(
+                        object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                splashScreenViewProvider.remove()
+                            }
+                        },
+                    )
+                    start()
+                }
+            }
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // enableEdgeToEdge() defaults to light scrims that vanish against a dark

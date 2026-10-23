@@ -139,6 +139,14 @@
      - Eliminated the bottom-left triple overlap by stacking `ScaleBar` (`bottom = 30.dp`) and `TacticalDrawingToolbar` (`bottom = 30.dp`) cleanly above the single-line bottom attribution micro-pill (`bottom = 6.dp`).
      - Replaced the clipped square right-rail FABs with `AtlasRailPillButton` controls (`minWidth = 88.dp`, active cyan border/fill) and upgraded the `Tools` bottom sheet into the **Sovereign Command Center** with a one-tap **Quick Workspace Switcher** (`All`, `Clean Nav`, `Explorer`, `Tactical`, `Studio`) and structured Graphite command cards.
 
+- **Sovereign Visual, Iconography, Motion, Splash & Loading System (written; gate result is in the commit message):**
+  - Animated Android 12+ splash (`avd_splash_atlas.xml` over `ic_splash_compass.xml`, `#10151C` background) with an exit transition in `MainActivity` (320 ms fade + icon zoom, 100 ms fade-only when `reducedMotion`).
+  - Adaptive launcher icons (`ic_launcher_background/foreground/monochrome.xml`) in the charcoal / chrome / cyan / amber palette.
+  - `AtlasLoadingOverlay` rebuilt as a cinematic boot screen: `bg_sovereign_topography.jpg` backdrop (`drawable-nodpi`), `Canvas` radar sweep with counter-rotating astrolabe arcs, boot-stage telemetry from `AtlasMotionMath.bootTelemetryStage`. `AtlasActivityBanner` micro-loader is wired to the MBTiles swap, offline pack scan, road route calculation and LoS profile calculation.
+  - 15 new control vector icons (`ic_hud_*`, `ic_draw_*`, `ic_tool_*`) wired into the rail pills, Command Center rows, drawing toolbar and `HudTelemetryPill` (`iconRes`, `pulse`). MIL-STD-2525D symbols and `wp-icon` / `scrub-icon` were redrawn at unchanged pixel sizes.
+  - Pure `ui/hud/AtlasMotionMath.kt` (shortest-arc unwrap, pack download fraction, boot stage labels) with `AtlasMotionMathTest`. `CompassOverlay` and `CompassTape` animate along the shortest arc when `reducedMotion` is false and keep the 5° snap when it is true.
+  - Device smoke on the Moto G is deferred until the whole phase set closes (operator directive).
+
 ## Next moves
 
 - **Remaining Release Action (`G12`):**

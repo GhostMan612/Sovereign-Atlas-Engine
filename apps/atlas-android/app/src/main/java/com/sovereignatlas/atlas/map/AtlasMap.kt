@@ -16,10 +16,23 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.displayCutout
@@ -34,10 +47,12 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -67,9 +82,11 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
@@ -82,6 +99,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.gson.JsonObject
 import com.sovereignatlas.atlas.AtlasServices
+import com.sovereignatlas.atlas.R
 import com.sovereignatlas.atlas.android.AndroidRoutingLoader
 import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.android.SqliteDemTileStore
@@ -161,6 +179,7 @@ import com.sovereignatlas.atlas.ui.HudTelemetryPill
 import com.sovereignatlas.atlas.ui.LayersDialog
 import com.sovereignatlas.atlas.ui.MgrsHud
 import com.sovereignatlas.atlas.geo.MgrsConverter
+import com.sovereignatlas.atlas.ui.AtlasActivityBanner
 import com.sovereignatlas.atlas.ui.AtlasLoadingOverlay
 import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.MeasurePanel
@@ -361,6 +380,8 @@ fun AtlasMapScreen(
         mutableStateOf<MeasureSnapshot>(services.measure.snapshot())
     }
     val mapLoading = remember { mutableStateOf(true) }
+    val mapLoadingLabel = remember { mutableStateOf<String?>(null) }
+    val activityBannerLabel = remember { mutableStateOf<String?>(null) }
     val hadOfflineMap = remember { mutableStateOf(false) }
     val cameraState = remember {
         MutableStateFlow(
@@ -452,6 +473,7 @@ fun AtlasMapScreen(
     val onStyleLoaded: (Style, MapLibreMap, Boolean) -> Unit = { style, map, applyOnlineBase ->
         styleRef.value = style
         mapLoading.value = false
+        mapLoadingLabel.value = null
         onFirstStyle()
         cameraState.value = CameraState(
             center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
@@ -622,7 +644,12 @@ fun AtlasMapScreen(
                             services.losState.setTarget(tapped)
                             services.losState.setMode(LoSMode.Inactive)
                             mapScope.launch {
-                                runLosCalculation(services)
+                                activityBannerLabel.value = "COMPUTING TERRAIN LINE-OF-SIGHT"
+                                try {
+                                    runLosCalculation(services)
+                                } finally {
+                                    activityBannerLabel.value = null
+                                }
                             }
                         }
                         pushLosState(
@@ -1105,6 +1132,8 @@ fun AtlasMapScreen(
         val map = mapRef.value
         if (activeOfflineMap != null && map != null) {
             hadOfflineMap.value = true
+            mapLoadingLabel.value = "MOUNTING OFFLINE MBTILES ARCHIVE"
+            mapLoading.value = true
             val demUrl = if (demStoreState.value != null) {
                 services.tiles.demTileUrl()
             } else {
@@ -1167,14 +1196,19 @@ fun AtlasMapScreen(
             AtlasRailPillButton(
                 label = if (following.value) "Unfollow" else "Follow",
                 stateDesc = if (following.value) "Follow active" else "Follow inactive",
+                iconRes = R.drawable.ic_hud_follow,
                 active = following.value,
+                pulse = following.value,
+                reducedMotion = reducedMotion,
                 onClick = onToggleFollow,
             )
             if (studioWorkspaceEnabled) {
                 AtlasRailPillButton(
                     label = "Measure",
                     stateDesc = if (measureActive.value) "Measure active" else "Measure inactive",
+                    iconRes = R.drawable.ic_hud_measure,
                     active = measureActive.value,
+                    reducedMotion = reducedMotion,
                     onClick = onMeasure,
                 )
             }
@@ -1182,11 +1216,18 @@ fun AtlasMapScreen(
                 AtlasRailPillButton(
                     label = "Layers ${activeMbtilesPacks.value.size}",
                     stateDesc = "Open encyclopedia layer manager",
+                    iconRes = R.drawable.ic_hud_layers,
                     active = activeMbtilesPacks.value.isNotEmpty(),
+                    reducedMotion = reducedMotion,
                     onClick = {
                         showLayerManager.value = true
                         mapScope.launch {
-                            scannedPacks.value = services.mbtilesScanner.scanPacks()
+                            activityBannerLabel.value = "SCANNING OFFLINE PACK DIRECTORY"
+                            try {
+                                scannedPacks.value = services.mbtilesScanner.scanPacks()
+                            } finally {
+                                activityBannerLabel.value = null
+                            }
                         }
                     },
                 )
@@ -1194,7 +1235,9 @@ fun AtlasMapScreen(
             AtlasRailPillButton(
                 label = "Tools",
                 stateDesc = "Tools",
+                iconRes = R.drawable.ic_hud_tools,
                 active = showTools.value,
+                reducedMotion = reducedMotion,
                 onClick = { showTools.value = true },
             )
         }
@@ -1241,10 +1284,11 @@ fun AtlasMapScreen(
                     drawingModeFlow.value = DrawingMode.NONE
                     inProgressPointsFlow.value = emptyList()
                 },
+                reducedMotion = reducedMotion,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 30.dp)
+                    .padding(bottom = 30.dp),
             )
         }
         if (showTools.value) {
@@ -1275,6 +1319,7 @@ fun AtlasMapScreen(
                         WorkspaceQuickChip(
                             label = "All",
                             active = explorerWorkspaceEnabled && tacticalWorkspaceEnabled && studioWorkspaceEnabled,
+                            reducedMotion = reducedMotion,
                             onClick = {
                                 services.settingsRepository.setExplorerWorkspaceEnabled(true)
                                 services.settingsRepository.setTacticalWorkspaceEnabled(true)
@@ -1284,6 +1329,7 @@ fun AtlasMapScreen(
                         WorkspaceQuickChip(
                             label = "Clean Nav",
                             active = !explorerWorkspaceEnabled && !tacticalWorkspaceEnabled && !studioWorkspaceEnabled,
+                            reducedMotion = reducedMotion,
                             onClick = {
                                 services.settingsRepository.setExplorerWorkspaceEnabled(false)
                                 services.settingsRepository.setTacticalWorkspaceEnabled(false)
@@ -1293,6 +1339,7 @@ fun AtlasMapScreen(
                         WorkspaceQuickChip(
                             label = "Explorer",
                             active = explorerWorkspaceEnabled,
+                            reducedMotion = reducedMotion,
                             onClick = {
                                 services.settingsRepository.setExplorerWorkspaceEnabled(!explorerWorkspaceEnabled)
                             },
@@ -1300,6 +1347,7 @@ fun AtlasMapScreen(
                         WorkspaceQuickChip(
                             label = "Tactical",
                             active = tacticalWorkspaceEnabled,
+                            reducedMotion = reducedMotion,
                             onClick = {
                                 services.settingsRepository.setTacticalWorkspaceEnabled(!tacticalWorkspaceEnabled)
                             },
@@ -1307,23 +1355,68 @@ fun AtlasMapScreen(
                         WorkspaceQuickChip(
                             label = "Studio",
                             active = studioWorkspaceEnabled,
+                            reducedMotion = reducedMotion,
                             onClick = {
                                 services.settingsRepository.setStudioWorkspaceEnabled(!studioWorkspaceEnabled)
                             },
                         )
                     }
-                    ToolRow("Waypoints", "Open waypoints", openTool(showWaypoints))
-                    ToolRow("Tracks", "Open tracks", openTool(showTracks))
-                    ToolRow("Offline", "Open offline packs", openTool(showOffline))
-                    ToolRow("Layers", "Open layers", openTool(showLayers))
-                    ToolRow("Link", "Open radio link", openTool(showLink))
-                    ToolRow("Fence", "Open geofence", openTool(showFence))
-                    ToolRow("API Keys", "Open API keys", openTool(showSettings))
-                    ToolRow("Settings", "Open node settings", openTool(showNodeSettings))
                     ToolRow(
-                        "Chat",
-                        "Open tactical chat",
-                        {
+                        label = "Waypoints",
+                        description = "Open waypoints",
+                        iconRes = R.drawable.ic_tool_waypoints,
+                        onClick = openTool(showWaypoints),
+                    )
+                    ToolRow(
+                        label = "Tracks",
+                        description = "Open tracks",
+                        iconRes = R.drawable.ic_tool_tracks,
+                        active = services.recorder.isRecording(),
+                        onClick = openTool(showTracks),
+                    )
+                    ToolRow(
+                        label = "Offline",
+                        description = "Open offline packs",
+                        iconRes = R.drawable.ic_tool_offline,
+                        onClick = openTool(showOffline),
+                    )
+                    ToolRow(
+                        label = "Layers",
+                        description = "Open layers",
+                        iconRes = R.drawable.ic_tool_compositor,
+                        onClick = openTool(showLayers),
+                    )
+                    ToolRow(
+                        label = "Link",
+                        description = "Open radio link",
+                        iconRes = R.drawable.ic_tool_link,
+                        onClick = openTool(showLink),
+                    )
+                    ToolRow(
+                        label = "Fence",
+                        description = "Open geofence",
+                        iconRes = R.drawable.ic_tool_fence,
+                        active = fence.value?.armed == true,
+                        onClick = openTool(showFence),
+                    )
+                    ToolRow(
+                        label = "API Keys",
+                        description = "Open API keys",
+                        iconRes = R.drawable.ic_tool_keys,
+                        active = cartoKey != null,
+                        onClick = openTool(showSettings),
+                    )
+                    ToolRow(
+                        label = "Settings",
+                        description = "Open node settings",
+                        iconRes = R.drawable.ic_tool_settings,
+                        onClick = openTool(showNodeSettings),
+                    )
+                    ToolRow(
+                        label = "Chat",
+                        description = "Open tactical chat",
+                        iconRes = R.drawable.ic_tool_chat,
+                        onClick = {
                             toolsScope.launch {
                                 try {
                                     toolsSheetState.hide()
@@ -1335,13 +1428,15 @@ fun AtlasMapScreen(
                         },
                     )
                     ToolRow(
-                        if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
-                        if (losMode != LoSMode.Inactive) {
+                        label = if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
+                        description = if (losMode != LoSMode.Inactive) {
                             "Cancel line-of-sight"
                         } else {
                             "Start line-of-sight"
                         },
-                        {
+                        iconRes = R.drawable.ic_tool_los,
+                        active = losMode != LoSMode.Inactive,
+                        onClick = {
                             toolsScope.launch {
                                 try {
                                     toolsSheetState.hide()
@@ -1358,9 +1453,11 @@ fun AtlasMapScreen(
                         },
                     )
                     ToolRow(
-                        if (headingUp.value) "North-up" else "Head-up",
-                        if (headingUp.value) "Head-up on" else "Head-up off",
-                        {
+                        label = if (headingUp.value) "North-up" else "Head-up",
+                        description = if (headingUp.value) "Head-up on" else "Head-up off",
+                        iconRes = R.drawable.ic_tool_heading,
+                        active = headingUp.value,
+                        onClick = {
                             toolsScope.launch {
                                 try {
                                     toolsSheetState.hide()
@@ -1498,20 +1595,25 @@ fun AtlasMapScreen(
                                 mapScope.launch {
                                     val drop = targetDropPointState ?: return@launch
                                     val origin = currentLocationFix ?: return@launch
-                                    val profile = withContext(Dispatchers.IO) {
-                                        services.lineOfSightEngine.calculateProfile(
-                                            start = origin,
-                                            end = GeoPoint(
-                                                drop.latitude,
-                                                drop.longitude,
-                                                null,
-                                                null,
-                                                null,
-                                                origin.timestamp,
-                                            ),
-                                        )
+                                    activityBannerLabel.value = "ANALYZING TERRAIN ELEVATION PROFILE"
+                                    try {
+                                        val profile = withContext(Dispatchers.IO) {
+                                            services.lineOfSightEngine.calculateProfile(
+                                                start = origin,
+                                                end = GeoPoint(
+                                                    drop.latitude,
+                                                    drop.longitude,
+                                                    null,
+                                                    null,
+                                                    null,
+                                                    origin.timestamp,
+                                                ),
+                                            )
+                                        }
+                                        activeTerrainProfile.value = profile
+                                    } finally {
+                                        activityBannerLabel.value = null
                                     }
-                                    activeTerrainProfile.value = profile
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -1655,22 +1757,33 @@ fun AtlasMapScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (isNavigating) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                    .padding(top = 48.dp),
-            ) {
-                NavigationGuidanceHud(
-                    navUpdate = navUpdate,
-                    isMuted = isMuted,
-                    onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
-                    onStopNavigation = { services.roadNavigation.stopNavigation() },
-                    activeRoute = activeRoadRoute,
-                )
-            }
+        val hudAnimMs = if (reducedMotion) 60 else 200
+        AnimatedVisibility(
+            visible = isNavigating,
+            enter = fadeIn(tween(hudAnimMs)) + expandVertically(tween(hudAnimMs)),
+            exit = fadeOut(tween(hudAnimMs)) + shrinkVertically(tween(hudAnimMs)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                .padding(top = 48.dp),
+        ) {
+            NavigationGuidanceHud(
+                navUpdate = navUpdate,
+                isMuted = isMuted,
+                onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
+                onStopNavigation = { services.roadNavigation.stopNavigation() },
+                activeRoute = activeRoadRoute,
+            )
         }
+        AtlasActivityBanner(
+            visible = activityBannerLabel.value != null,
+            label = activityBannerLabel.value ?: "",
+            reducedMotion = reducedMotion,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                .padding(top = if (isNavigating) 144.dp else 54.dp),
+        )
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -1684,7 +1797,8 @@ fun AtlasMapScreen(
             }
             positionTick.value.let { _ ->
                 offlineTick.value.let { _ ->
-                    val locStatus = services.location.status().name.uppercase(Locale.US)
+                    val statusVal = services.location.status()
+                    val locStatus = statusVal.name.uppercase(Locale.US)
                     val speedText = currentLocationFix?.speed?.let { s ->
                         String.format(Locale.US, " • %.1f km/h", s * 3.6f)
                     } ?: ""
@@ -1692,6 +1806,12 @@ fun AtlasMapScreen(
                     HudTelemetryPill(
                         text = "GPS: $locStatus$speedText • OFFLINE: $packCount packs",
                         textColor = androidx.compose.ui.graphics.Color(0xFFE2E8F0),
+                        iconRes = R.drawable.ic_hud_gps,
+                        iconTint = if (statusVal == AtlasLocationStatus.valid) {
+                            hudAccent
+                        } else {
+                            androidx.compose.ui.graphics.Color(0xFFA8B5C1)
+                        },
                     )
                 }
             }
@@ -1710,11 +1830,17 @@ fun AtlasMapScreen(
                     text = "LoS: tap observer point",
                     textColor = hudAccent,
                     borderColor = hudAccent,
+                    iconRes = R.drawable.ic_tool_los,
+                    pulse = true,
+                    reducedMotion = reducedMotion,
                 )
                 LoSMode.AwaitingTarget -> HudTelemetryPill(
                     text = "LoS: tap target point",
                     textColor = hudAccent,
                     borderColor = hudAccent,
+                    iconRes = R.drawable.ic_tool_los,
+                    pulse = true,
+                    reducedMotion = reducedMotion,
                 )
                 LoSMode.Inactive -> {
                     val verdict = losProfile?.lineOfSight
@@ -1733,12 +1859,14 @@ fun AtlasMapScreen(
                                 text = "CLEAR",
                                 textColor = androidx.compose.ui.graphics.Color(0xFF39FF14),
                                 borderColor = androidx.compose.ui.graphics.Color(0x8039FF14),
+                                iconRes = R.drawable.ic_tool_los,
                             )
                         } else {
                             HudTelemetryPill(
                                 text = "OBSTRUCTED at ${verdict.blockingDistanceMeters?.toInt()}m",
                                 textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
                                 borderColor = androidx.compose.ui.graphics.Color(0x80FF4444),
+                                iconRes = R.drawable.ic_tool_los,
                             )
                         }
                     }
@@ -1758,6 +1886,8 @@ fun AtlasMapScreen(
                     text = "REC • ${services.recorder.pointCount()} pts",
                     textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
                     borderColor = androidx.compose.ui.graphics.Color(0x99FF4444),
+                    pulse = true,
+                    reducedMotion = reducedMotion,
                 )
             }
             CompassOverlay(
@@ -1770,6 +1900,7 @@ fun AtlasMapScreen(
                         map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
                     }
                 },
+                reducedMotion = reducedMotion,
             )
             if (tacticalWorkspaceEnabled) {
                 TacNavHud(
@@ -1836,42 +1967,60 @@ fun AtlasMapScreen(
                                             ).show()
                                             return@launch
                                         }
-                                        val startNode = engine.findNearestNode(fix.latitude, fix.longitude)
-                                        val targetNode = engine.findNearestNode(target.latitude, target.longitude)
-                                        if (startNode == null || targetNode == null) {
-                                            navigationFeedbackMessage.value = "Location outside road coverage"
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Location outside road network coverage. Direct-bearing guidance active.",
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@launch
+                                        activityBannerLabel.value = "COMPUTING OPTIMAL ROAD ROUTE"
+                                        val result = try {
+                                            val startNode = withContext(Dispatchers.Default) {
+                                                engine.findNearestNode(fix.latitude, fix.longitude)
+                                            }
+                                            val targetNode = withContext(Dispatchers.Default) {
+                                                engine.findNearestNode(target.latitude, target.longitude)
+                                            }
+                                            if (startNode == null || targetNode == null) {
+                                                navigationFeedbackMessage.value = "Location outside road coverage"
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "Location outside road network coverage. Direct-bearing guidance active.",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                                return@launch
+                                            }
+                                            withContext(Dispatchers.Default) {
+                                                engine.calculateRoute(
+                                                    RoadRouteRequest(
+                                                        startNodeId = startNode.id,
+                                                        targetNodeId = targetNode.id,
+                                                        profile = services.roadNavigation.profile.value,
+                                                    ),
+                                                )
+                                            }
+                                        } finally {
+                                            activityBannerLabel.value = null
                                         }
-                                        val result = engine.calculateRoute(
-                                            RoadRouteRequest(
-                                                startNodeId = startNode.id,
-                                                targetNodeId = targetNode.id,
-                                                profile = services.roadNavigation.profile.value,
-                                            ),
-                                        )
                                         if (result != null) {
+                                            val targetNode = engine.findNearestNode(target.latitude, target.longitude)
                                             navigationFeedbackMessage.value = null
                                             services.roadNavigation.startNavigation(
                                                 route = result,
                                                 voice = services.voiceGuidance,
                                                 onRerouteNeeded = { offRouteCoord ->
-                                                    mapScope.launch {
-                                                        val newStart = engine.findNearestNode(offRouteCoord.latitude, offRouteCoord.longitude)
-                                                        if (newStart != null) {
-                                                            val reroute = engine.calculateRoute(
-                                                                RoadRouteRequest(
-                                                                    startNodeId = newStart.id,
-                                                                    targetNodeId = targetNode.id,
-                                                                    profile = services.roadNavigation.profile.value,
-                                                                ),
-                                                            )
-                                                            if (reroute != null) {
-                                                                services.roadNavigation.updateRoute(reroute)
+                                                    if (targetNode != null) {
+                                                        mapScope.launch {
+                                                            val newStart = withContext(Dispatchers.Default) {
+                                                                engine.findNearestNode(offRouteCoord.latitude, offRouteCoord.longitude)
+                                                            }
+                                                            if (newStart != null) {
+                                                                val reroute = withContext(Dispatchers.Default) {
+                                                                    engine.calculateRoute(
+                                                                        RoadRouteRequest(
+                                                                            startNodeId = newStart.id,
+                                                                            targetNodeId = targetNode.id,
+                                                                            profile = services.roadNavigation.profile.value,
+                                                                        ),
+                                                                    )
+                                                                }
+                                                                if (reroute != null) {
+                                                                    services.roadNavigation.updateRoute(reroute)
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -2166,7 +2315,11 @@ fun AtlasMapScreen(
                 )
             }
         }
-        AtlasLoadingOverlay(visible = mapLoading.value)
+        AtlasLoadingOverlay(
+            visible = mapLoading.value,
+            statusLabel = mapLoadingLabel.value,
+            reducedMotion = reducedMotion,
+        )
     }
     HistoricalRecordSheet(
         record = selectedRecord,
@@ -2189,31 +2342,73 @@ fun AtlasMapScreen(
 private fun AtlasRailPillButton(
     label: String,
     stateDesc: String,
+    @DrawableRes iconRes: Int? = null,
     active: Boolean = false,
+    pulse: Boolean = false,
+    reducedMotion: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val animMs = if (reducedMotion) 0 else 180
+    val fill by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xE6162E3D) else androidx.compose.ui.graphics.Color(0xE6141C24),
+        animationSpec = tween(animMs),
+        label = "railPillFill",
+    )
+    val border by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x55A8B5C1),
+        animationSpec = tween(animMs),
+        label = "railPillBorder",
+    )
+    val content by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color.White,
+        animationSpec = tween(animMs),
+        label = "railPillContent",
+    )
+    val beaconAlpha = if (pulse && !reducedMotion) {
+        val transition = rememberInfiniteTransition(label = "railBeacon")
+        val animated by transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "railBeaconAlpha",
+        )
+        animated
+    } else {
+        1f
+    }
     Surface(
         onClick = onClick,
-        color = if (active) androidx.compose.ui.graphics.Color(0xE6162E3D) else androidx.compose.ui.graphics.Color(0xE6141C24),
+        color = fill,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x55A8B5C1),
-        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
         shadowElevation = 4.dp,
         modifier = Modifier
             .defaultMinSize(minWidth = 88.dp, minHeight = 40.dp)
             .semantics { stateDescription = stateDesc },
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = content,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .alpha(if (pulse) beaconAlpha else 1f),
+                )
+            }
             Text(
                 text = label,
                 fontSize = 12.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                color = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color.White,
+                color = content,
             )
         }
     }
@@ -2223,35 +2418,55 @@ private fun AtlasRailPillButton(
 private fun WorkspaceQuickChip(
     label: String,
     active: Boolean,
+    reducedMotion: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val animMs = if (reducedMotion) 0 else 160
+    val fill by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xFF1B3A4B) else androidx.compose.ui.graphics.Color(0xFF1B2631),
+        animationSpec = tween(animMs),
+        label = "chipFill",
+    )
+    val border by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x33A8B5C1),
+        animationSpec = tween(animMs),
+        label = "chipBorder",
+    )
+    val content by animateColorAsState(
+        targetValue = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+        animationSpec = tween(animMs),
+        label = "chipContent",
+    )
     Surface(
         onClick = onClick,
-        color = if (active) androidx.compose.ui.graphics.Color(0xFF1B3A4B) else androidx.compose.ui.graphics.Color(0xFF1B2631),
+        color = fill,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x33A8B5C1),
-        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
     ) {
         Text(
             text = label,
             fontSize = 11.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-            color = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+            color = content,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
         )
     }
 }
 
 @Composable
-private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
+private fun ToolRow(
+    label: String,
+    description: String,
+    @DrawableRes iconRes: Int? = null,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
     Surface(
         color = androidx.compose.ui.graphics.Color(0xFF1B2631),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            androidx.compose.ui.graphics.Color(0x26A8B5C1),
+            if (active) androidx.compose.ui.graphics.Color(0x8039C5F3) else androidx.compose.ui.graphics.Color(0x26A8B5C1),
         ),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -2267,12 +2482,25 @@ private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = label,
-                    fontSize = 14.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    color = androidx.compose.ui.graphics.Color.White,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (iconRes != null) {
+                        Icon(
+                            painter = painterResource(iconRes),
+                            contentDescription = null,
+                            tint = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = label,
+                        fontSize = 14.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
                 Text(
                     text = description,
                     fontSize = 11.sp,
@@ -2338,8 +2566,17 @@ fun rotateMap(map: MapLibreMap, bearing: Double) {
 private val wpIconBitmap: Bitmap by lazy {
     val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.RED }
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.color = Color.parseColor("#10151C")
     canvas.drawCircle(12f, 12f, 12f, paint)
+    paint.color = Color.parseColor("#F4F7FA")
+    canvas.drawCircle(12f, 12f, 10.5f, paint)
+    paint.color = Color.parseColor("#E5484D")
+    canvas.drawCircle(12f, 12f, 8.5f, paint)
+    paint.color = Color.parseColor("#10151C")
+    canvas.drawCircle(12f, 12f, 3.6f, paint)
+    paint.color = Color.parseColor("#39C5F3")
+    canvas.drawCircle(12f, 12f, 2.2f, paint)
     bitmap
 }
 
@@ -2461,11 +2698,26 @@ private val scrubIconBitmap: Bitmap by lazy {
     val bitmap = Bitmap.createBitmap(28, 28, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.GREEN
         style = Paint.Style.STROKE
-        strokeWidth = 4f
     }
-    canvas.drawCircle(14f, 14f, 11f, paint)
+    paint.color = Color.parseColor("#10151C")
+    paint.strokeWidth = 6.5f
+    canvas.drawCircle(14f, 14f, 10.5f, paint)
+    paint.color = Color.parseColor("#39C5F3")
+    paint.strokeWidth = 3.2f
+    canvas.drawCircle(14f, 14f, 10.5f, paint)
+    paint.strokeWidth = 2.2f
+    paint.color = Color.parseColor("#10151C")
+    canvas.drawLine(14f, 1f, 14f, 6f, paint)
+    canvas.drawLine(14f, 22f, 14f, 27f, paint)
+    canvas.drawLine(1f, 14f, 6f, 14f, paint)
+    canvas.drawLine(22f, 14f, 27f, 14f, paint)
+    paint.strokeWidth = 1.2f
+    paint.color = Color.parseColor("#F4F7FA")
+    canvas.drawLine(14f, 1f, 14f, 6f, paint)
+    canvas.drawLine(14f, 22f, 14f, 27f, paint)
+    canvas.drawLine(1f, 14f, 6f, 14f, paint)
+    canvas.drawLine(22f, 14f, 27f, 14f, paint)
     bitmap
 }
 

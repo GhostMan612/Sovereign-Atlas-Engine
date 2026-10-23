@@ -27,6 +27,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -43,10 +44,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.sovereignatlas.atlas.R
 import com.sovereignatlas.atlas.core.MapNameFormatter
 import com.sovereignatlas.atlas.android.offline.AndroidHttpDownloader
 import com.sovereignatlas.atlas.core.KeyProvider
+import com.sovereignatlas.atlas.ui.hud.AtlasMotionMath
 import com.sovereignatlas.atlas.offline.DownloadResult
 import com.sovereignatlas.atlas.offline.KEY_PLACEHOLDER
 import com.sovereignatlas.atlas.offline.withApiKey
@@ -142,16 +146,34 @@ private fun PacksTab(
                         Text("${pack.packId} • ${pack.providerTitle}")
                     },
                     supportingContent = {
-                        Text(
-                            "${pack.lifecycle.name} • " +
-                                "${pack.receivedTiles}/${pack.tileCount} tiles • " +
-                                formatBytes(pack.receivedBytes) +
-                                if (pack.failureDetail.isNotEmpty()) {
-                                    " • ${pack.failureDetail}"
-                                } else {
-                                    ""
-                                },
-                        )
+                        Column {
+                            Text(
+                                "${pack.lifecycle.name} • " +
+                                    "${pack.receivedTiles}/${pack.tileCount} tiles • " +
+                                    formatBytes(pack.receivedBytes) +
+                                    if (pack.failureDetail.isNotEmpty()) {
+                                        " • ${pack.failureDetail}"
+                                    } else {
+                                        ""
+                                    },
+                            )
+                            if (pack.lifecycle == OfflinePackLifecycle.downloading) {
+                                LinearProgressIndicator(
+                                    progress = {
+                                        AtlasMotionMath.packDownloadFraction(
+                                            pack.receivedTiles,
+                                            pack.tileCount,
+                                        )
+                                    },
+                                    color = Color(0xFF39C5F3),
+                                    trackColor = Color(0xFF1B2631),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 6.dp)
+                                        .height(4.dp),
+                                )
+                            }
+                        }
                     },
                     trailingContent = {
                         Row {
@@ -420,26 +442,26 @@ private fun MapsTab(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                imageVector = Icons.Default.Warning,
+                painter = painterResource(R.drawable.ic_tool_offline),
                 contentDescription = "No offline maps",
-                tint = Color(0xFF39FF14),
+                tint = Color(0xFF39C5F3),
                 modifier = Modifier.size(48.dp),
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "NO OFFLINE MAPS FOUND",
-                color = Color(0xFF39FF14),
+                color = Color(0xFFE2E8F0),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Push .mbtiles files via ADB/USB to",
-                color = Color.Gray,
+                color = Color(0xFFA8B5C1),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
                 text = "/Android/data/${context.packageName}/files/mbtiles/",
-                color = Color.Gray,
+                color = Color(0xFF6B7D8D),
                 style = MaterialTheme.typography.bodySmall,
             )
         }

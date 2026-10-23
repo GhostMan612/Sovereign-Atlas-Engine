@@ -5,11 +5,20 @@
 
 package com.sovereignatlas.atlas.ui.hud
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -34,7 +43,28 @@ fun CompassTape(
     reducedMotion: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val effectiveBearing = if (reducedMotion) (bearing / 5.0).roundToInt() * 5.0 else bearing
+    var unwrappedTarget by remember { mutableFloatStateOf(bearing.toFloat()) }
+    val nextTarget = AtlasMotionMath.unwrapBearingTarget(unwrappedTarget, bearing.toFloat())
+    SideEffect {
+        unwrappedTarget = nextTarget
+    }
+    val animatedBearing by animateFloatAsState(
+        targetValue = nextTarget,
+        animationSpec = if (reducedMotion) {
+            snap()
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium,
+            )
+        },
+        label = "compassTapeBearing",
+    )
+    val effectiveBearing = if (reducedMotion) {
+        (bearing / 5.0).roundToInt() * 5.0
+    } else {
+        (((animatedBearing.toDouble() % 360.0) + 360.0) % 360.0)
+    }
     val backgroundColor = Color(0xFF10151C).copy(alpha = 0.85f)
     val chromeMajor = Color(0xFFA8B5C1)
     val chromeMinor = Color(0xFF6B7D8D)
