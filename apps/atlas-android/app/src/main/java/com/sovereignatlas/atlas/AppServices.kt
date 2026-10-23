@@ -24,6 +24,8 @@ import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
 import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
+import com.sovereignatlas.atlas.geo.gis.GisRepository
+import com.sovereignatlas.atlas.geo.gis.InMemoryGisRepository
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.cot.SyncProvider
@@ -110,6 +112,7 @@ class AppServices(private val context: Context) {
     val roadRoutingEngine: RoadRoutingEngine = RoadRoutingEngine(
         AndroidRoadGraphLoader.loadSynchronousOrEmpty(appContext, allowDemoSimulation = false),
     )
+    val gisRepository: GisRepository = InMemoryGisRepository()
 
     val compositor: LayerCompositor = LayerCompositor().apply {
         registerLayer(

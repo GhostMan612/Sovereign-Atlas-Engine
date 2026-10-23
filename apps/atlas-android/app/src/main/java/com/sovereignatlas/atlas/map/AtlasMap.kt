@@ -167,6 +167,8 @@ import com.sovereignatlas.atlas.ui.historical.HistoricalDossierSheet
 import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
 import com.sovereignatlas.atlas.geo.navigation.ManeuverType
 import com.sovereignatlas.atlas.geo.navigation.NavigationUpdate
+import com.sovereignatlas.atlas.geo.gis.GisDataset
+import com.sovereignatlas.atlas.geo.gis.GisFeature
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
 import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
@@ -383,6 +385,33 @@ fun AtlasMapScreen(
     val mapLoading = remember { mutableStateOf(true) }
     val mapLoadingLabel = remember { mutableStateOf<String?>(null) }
     val activityBannerLabel = remember { mutableStateOf<String?>(null) }
+    val showGisLayers = remember { mutableStateOf(false) }
+    val selectedGisFeature = remember { mutableStateOf<Pair<GisFeature, String>?>(null) }
+    val gisDatasets by services.gisRepository.datasets.collectAsStateWithLifecycle()
+    val openGisLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            mapScope.launch {
+                activityBannerLabel.value = "IMPORTING FIELD GIS DATASET..."
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        com.sovereignatlas.atlas.android.gis.AndroidGisImporter.importFromUri(context, uri)
+                    }
+                    if (result.dataset != null) {
+                        services.gisRepository.addDataset(result.dataset)
+                    }
+                } finally {
+                    activityBannerLabel.value = null
+                }
+            }
+        }
+    }
+    LaunchedEffect(gisDatasets, styleRef.value) {
+        val style = styleRef.value ?: return@LaunchedEffect
+        syncUserGisLayers(style, gisDatasets)
+        pushUserGisDatasets(sink, gisDatasets)
+    }
     val hadOfflineMap = remember { mutableStateOf(false) }
     val cameraState = remember {
         MutableStateFlow(
@@ -555,6 +584,8 @@ fun AtlasMapScreen(
         pushGoTo(sink, services)
         pushRings(sink, services)
         syncMbtilesPackLayers(style, services, activeMbtilesPacks.value)
+        syncUserGisLayers(style, services.gisRepository.datasets.value)
+        pushUserGisDatasets(sink, services.gisRepository.datasets.value)
         if (showGraticule.value) pushGraticule(map, sink)
         val baseAttr = if (applyOnlineBase) {
             applyBaseSource(
@@ -719,6 +750,25 @@ fun AtlasMapScreen(
                                     }
                                 }
                                 return@addOnMapClickListener true
+                            }
+                            val activeGis = services.gisRepository.datasets.value.filter { it.isVisible }
+                            for (ds in activeGis) {
+                                val gisLayerIds = listOf(
+                                    "${AtlasLayerIds.USER_GIS_CIRCLE_PREFIX}${ds.id}",
+                                    "${AtlasLayerIds.USER_GIS_LINE_PREFIX}${ds.id}",
+                                    "${AtlasLayerIds.USER_GIS_FILL_PREFIX}${ds.id}",
+                                )
+                                for (layerId in gisLayerIds) {
+                                    val hit = map.queryRenderedFeatures(screen, layerId).firstOrNull()
+                                    if (hit != null) {
+                                        val featId = hit.id() ?: hit.getStringProperty("id")
+                                        val feat = ds.features.firstOrNull { it.id == featId }
+                                        if (feat != null) {
+                                            selectedGisFeature.value = feat to ds.name
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
+                                }
                             }
                         }
                         // A tap that reaches here hit no historical feature at all, so
@@ -1277,6 +1327,7 @@ fun AtlasMapScreen(
             onOpenTracks = openTool(showTracks),
             onOpenOffline = openTool(showOffline),
             onOpenLayers = openTool(showLayers),
+            onOpenGisLayers = openTool(showGisLayers),
             onOpenLink = openTool(showLink),
             onOpenFence = openTool(showFence),
             onOpenSettings = openTool(showSettings),
@@ -1575,6 +1626,10 @@ fun AtlasMapScreen(
         attribution = attribution,
         context = context,
         refreshMgrsGrid = refreshMgrsGrid,
+        showGisLayers = showGisLayers,
+        gisDatasets = gisDatasets,
+        onImportGis = { openGisLauncher.launch(arrayOf("*/*")) },
+        selectedGisFeature = selectedGisFeature,
     )
     AtlasHistoricalSheetsHost(
         selectedRecord = selectedRecord,

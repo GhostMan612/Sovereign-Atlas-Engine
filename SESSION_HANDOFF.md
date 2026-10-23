@@ -17,15 +17,15 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-23: 1,480 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-23: 1,530 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 6 tests
-  - `:app:testPlayDebugUnitTest`: 734 tests
-  - `:app:testEnterpriseDebugUnitTest`: 734 tests
+  - `:app:testPlayDebugUnitTest`: 756 tests
+  - `:app:testEnterpriseDebugUnitTest`: 756 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
-- Pure boundary scan passes: 98 Kotlin files across pure packages, `:atlas-sdk`, and
+- Pure boundary scan passes: 104 Kotlin files across pure packages, `:atlas-sdk`, and
   `samples/sdk-consumer` have 0 forbidden imports (100% clean).
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
@@ -163,11 +163,18 @@
     4. `BP-04: Field GIS Ingestion Subsystem` (`blueprints/04_FIELD_GIS_INGESTION.md`) — Enforced strict pure boundary: pure streaming interfaces in `gis/ingestion/` with zero Android imports, isolating `XmlPullParser` and `android.database.sqlite` in platform adapters.
   - **Verification:** Verified 1,480 passing tests (12 :atlas-sdk, 6 :sdk-consumer, 734 Play, 734 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations.
 
+  - **Phase 11 (Field GIS Ingestion Subsystem - COMPLETE & INTEGRATED):**
+    1. Pure domain GIS contracts (`geo.gis`) implemented with 0 Android/Compose/MapLibre imports: `GisModels.kt`, `WkbDecoder.kt` (supporting Big/Little Endian, GeoPackage binary headers `0x47 0x50` with envelope decoding), `GeoJsonParser.kt` (RFC 7946 features, properties, vertex budget caps), `ShapefileParser.kt` (ESRI Shapefile byte-stream, dBASE III attribute table, `.prj` projection SRID detection with Web Mercator reprojection), `KmlStreamingParser.kt` (Placemarks, paths, polygons, ExtendedData attributes), and `GisRepository.kt` (`InMemoryGisRepository`).
+    2. Platform adapter (`android.gis.AndroidGisImporter`) implemented with Zip-Slip path traversal protection on `.kmz` and zipped shapefiles, Android `SQLiteDatabase` query engine for `.gpkg` feature tables and geometry columns, and system file picker ingestion.
+    3. MapLibre dynamic styling and feature synchronization: added `USER_GIS_*` constants to `AtlasLayerInstaller.kt`, dynamic `syncUserGisLayers` in `MapStyleSync.kt`, and `pushUserGisDatasets` in `MapFeatureSync.kt`.
+    4. Sovereign Cockpit UI & feature inspection: added "Field GIS" to Sovereign Command Center, built `GisLayersSheet` (format badges, visibility toggles, palette chips, stroke width slider), and `GisFeatureInspectorSheet` (feature ID, geometry type, coordinates, GoTo navigation, attribute table).
+    5. Interactive map hit-testing: wired click interrogation on active user GIS layers in `AtlasMap.kt`.
+    6. Verified 100% green host gate: **1,530 passing unit tests** (+50 tests: 12 :atlas-sdk, 6 :sdk-consumer, 756 Play, 756 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 104 pure files.
+
 ## Next moves
 
 - **Implementation Roadmap from Corrected Blueprints:**
-  1. **Phase 11 (Field GIS Ingestion Subsystem):** Implement universal ingestion engine (`geo.gis`) supporting `.gpkg`, `.kml`, `.kmz`, `.geojson`, and `.zip` Shapefiles based on corrected `blueprints/04_FIELD_GIS_INGESTION.md`.
-  2. **Phase 12 (2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask):** Implement 2.5D hillshade styling, perspective camera pitch controls, and 360° radial viewshed polygon projection based on corrected `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
-  3. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
+  1. **Phase 12 (2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask):** Implement 2.5D hillshade styling, perspective camera pitch controls, and 360° radial viewshed polygon projection based on corrected `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
+  2. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.

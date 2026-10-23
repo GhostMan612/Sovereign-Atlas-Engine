@@ -47,7 +47,11 @@ import com.sovereignatlas.atlas.geo.render.FeatureSink
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesPack
 import com.sovereignatlas.atlas.tactical.RadialFence
+import com.sovereignatlas.atlas.geo.gis.GisDataset
+import com.sovereignatlas.atlas.geo.gis.GisFeature
 import com.sovereignatlas.atlas.ui.FenceDialog
+import com.sovereignatlas.atlas.ui.gis.GisFeatureInspectorSheet
+import com.sovereignatlas.atlas.ui.gis.GisLayersSheet
 import com.sovereignatlas.atlas.ui.LayersDialog
 import com.sovereignatlas.atlas.ui.LinkDialog
 import com.sovereignatlas.atlas.ui.OfflineDialog
@@ -93,6 +97,7 @@ fun AtlasCommandCenterSheet(
     onOpenSettings: () -> Unit,
     onOpenNodeSettings: () -> Unit,
     onOpenChat: () -> Unit,
+    onOpenGisLayers: () -> Unit = {},
     onToggleLoS: () -> Unit,
     onToggleHeadingUp: () -> Unit,
 ) {
@@ -190,6 +195,12 @@ fun AtlasCommandCenterSheet(
                 description = "Open layers",
                 iconRes = R.drawable.ic_tool_compositor,
                 onClick = onOpenLayers,
+            )
+            ToolRow(
+                label = "Field GIS",
+                description = "Open Field GIS layers",
+                iconRes = R.drawable.ic_tool_compositor,
+                onClick = onOpenGisLayers,
             )
             ToolRow(
                 label = "Link",
@@ -453,6 +464,10 @@ fun AtlasMapDialogsHost(
     attribution: MutableState<String>,
     context: Context,
     refreshMgrsGrid: (MapLibreMap) -> Unit,
+    showGisLayers: MutableState<Boolean> = remember { mutableStateOf(false) },
+    gisDatasets: List<GisDataset> = emptyList(),
+    onImportGis: () -> Unit = {},
+    selectedGisFeature: MutableState<Pair<GisFeature, String>?> = remember { mutableStateOf(null) },
 ) {
     if (showChat.value) {
         ModalBottomSheet(
@@ -688,6 +703,40 @@ fun AtlasMapDialogsHost(
         SettingsDialog(
             keyProvider = services.keys,
             onClose = { showSettings.value = false },
+        )
+    }
+    if (showGisLayers.value) {
+        GisLayersSheet(
+            datasets = gisDatasets,
+            onDismiss = { showGisLayers.value = false },
+            onImportClick = onImportGis,
+            onToggleVisibility = { id, vis -> services.gisRepository.setDatasetVisibility(id, vis) },
+            onDeleteDataset = { id -> services.gisRepository.removeDataset(id) },
+            onUpdateStyle = { id, style -> services.gisRepository.updateDatasetStyle(id, style) },
+        )
+    }
+    selectedGisFeature.value?.let { (feature, datasetName) ->
+        GisFeatureInspectorSheet(
+            feature = feature,
+            datasetName = datasetName,
+            onDismiss = { selectedGisFeature.value = null },
+            onNavigateTo = { target ->
+                services.goTo.activate(
+                    id = feature.id,
+                    latitude = target.latitude,
+                    longitude = target.longitude,
+                    label = feature.id,
+                )
+                mapRef.value?.let { map ->
+                    com.sovereignatlas.atlas.goto.goToCameraIntent(
+                        services.goTo,
+                        map.cameraPosition.zoom,
+                        map.cameraPosition.bearing,
+                    )?.let { intent ->
+                        applyCameraIntent(map, intent)
+                    }
+                }
+            },
         )
     }
 }

@@ -21,6 +21,7 @@ import com.sovereignatlas.atlas.core.LngLat
 import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
 import com.sovereignatlas.atlas.db.Track
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.geo.gis.GisDataset
 import com.sovereignatlas.atlas.geo.AtlasGrids
 import com.sovereignatlas.atlas.geo.GeoPoint
 import com.sovereignatlas.atlas.geo.LoSRequest
@@ -533,4 +534,20 @@ fun pushHistoricalDossiers(
         AtlasLayerIds.HISTORICAL_DOSSIERS_SOURCE,
         RenderFeatureCollection(features),
     )
+}
+
+fun pushUserGisDatasets(
+    sink: FeatureSink,
+    datasets: List<GisDataset>,
+) {
+    val mlSink = sink as? MapLibreFeatureSink ?: return
+    for (dataset in datasets) {
+        val sourceId = "${AtlasLayerIds.USER_GIS_SOURCE_PREFIX}${dataset.id}"
+        val collection = if (dataset.isVisible) {
+            dataset.toRenderFeatureCollection()
+        } else {
+            RenderFeatureCollection.EMPTY
+        }
+        mlSink.replaceSourceFeatures(sourceId, collection)
+    }
 }

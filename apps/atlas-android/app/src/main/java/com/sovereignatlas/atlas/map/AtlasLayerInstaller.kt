@@ -75,6 +75,10 @@ object AtlasLayerIds {
     const val LOS_LAYER = "atlas-los-ray-layer"
     const val LOS_BLOCK_SOURCE = "atlas-los-block"
     const val LOS_BLOCK_LAYER = "atlas-los-block-layer"
+    const val USER_GIS_SOURCE_PREFIX = "user-gis-source-"
+    const val USER_GIS_FILL_PREFIX = "user-gis-fill-"
+    const val USER_GIS_LINE_PREFIX = "user-gis-line-"
+    const val USER_GIS_CIRCLE_PREFIX = "user-gis-circle-"
 
     /**
      * Image name the LoS observer layer requests.

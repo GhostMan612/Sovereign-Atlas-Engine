@@ -6,7 +6,9 @@
 package com.sovereignatlas.atlas.map
 
 import android.content.Context
+import android.graphics.Color
 import com.sovereignatlas.atlas.AtlasServices
+import com.sovereignatlas.atlas.geo.gis.GisDataset
 import com.sovereignatlas.atlas.geo.AtlasAngles
 import com.sovereignatlas.atlas.camera.AtlasCameraState
 import com.sovereignatlas.atlas.core.SanbornBlueprint
@@ -20,12 +22,14 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.RasterDemSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
@@ -493,4 +497,83 @@ fun applyBaseSource(
 
 fun isCartoProvider(providerId: String): Boolean {
     return providerId == "carto-positron" || providerId == "carto-dark-matter"
+}
+
+fun syncUserGisLayers(style: Style, datasets: List<GisDataset>) {
+    val activeIds = datasets.map { it.id }.toSet()
+    val existingSourceIds = style.sources
+        .map { it.id }
+        .filter { it.startsWith(AtlasLayerIds.USER_GIS_SOURCE_PREFIX) }
+        .map { it.removePrefix(AtlasLayerIds.USER_GIS_SOURCE_PREFIX) }
+        .toSet()
+
+    for (oldId in existingSourceIds - activeIds) {
+        val fillId = "${AtlasLayerIds.USER_GIS_FILL_PREFIX}$oldId"
+        val lineId = "${AtlasLayerIds.USER_GIS_LINE_PREFIX}$oldId"
+        val circleId = "${AtlasLayerIds.USER_GIS_CIRCLE_PREFIX}$oldId"
+        val sourceId = "${AtlasLayerIds.USER_GIS_SOURCE_PREFIX}$oldId"
+        if (style.getLayer(fillId) != null) style.removeLayer(fillId)
+        if (style.getLayer(lineId) != null) style.removeLayer(lineId)
+        if (style.getLayer(circleId) != null) style.removeLayer(circleId)
+        if (style.getSource(sourceId) != null) style.removeSource(sourceId)
+    }
+
+    for (dataset in datasets) {
+        val sourceId = "${AtlasLayerIds.USER_GIS_SOURCE_PREFIX}${dataset.id}"
+        val fillId = "${AtlasLayerIds.USER_GIS_FILL_PREFIX}${dataset.id}"
+        val lineId = "${AtlasLayerIds.USER_GIS_LINE_PREFIX}${dataset.id}"
+        val circleId = "${AtlasLayerIds.USER_GIS_CIRCLE_PREFIX}${dataset.id}"
+
+        if (style.getSource(sourceId) == null) {
+            style.addSource(GeoJsonSource(sourceId))
+        }
+
+        val visibility = if (dataset.isVisible) Property.VISIBLE else Property.NONE
+
+        if (style.getLayer(fillId) == null) {
+            val fillLayer = FillLayer(fillId, sourceId)
+            fillLayer.setProperties(
+                PropertyFactory.fillColor(Color.parseColor(dataset.style.fillColorHex)),
+                PropertyFactory.visibility(visibility),
+            )
+            style.addLayer(fillLayer)
+        } else {
+            style.getLayer(fillId)?.setProperties(
+                PropertyFactory.fillColor(Color.parseColor(dataset.style.fillColorHex)),
+                PropertyFactory.visibility(visibility),
+            )
+        }
+
+        if (style.getLayer(lineId) == null) {
+            val lineLayer = LineLayer(lineId, sourceId)
+            lineLayer.setProperties(
+                PropertyFactory.lineColor(Color.parseColor(dataset.style.strokeColorHex)),
+                PropertyFactory.lineWidth(dataset.style.strokeWidthDp),
+                PropertyFactory.visibility(visibility),
+            )
+            style.addLayer(lineLayer)
+        } else {
+            style.getLayer(lineId)?.setProperties(
+                PropertyFactory.lineColor(Color.parseColor(dataset.style.strokeColorHex)),
+                PropertyFactory.lineWidth(dataset.style.strokeWidthDp),
+                PropertyFactory.visibility(visibility),
+            )
+        }
+
+        if (style.getLayer(circleId) == null) {
+            val circleLayer = CircleLayer(circleId, sourceId)
+            circleLayer.setProperties(
+                PropertyFactory.circleColor(Color.parseColor(dataset.style.pointColorHex)),
+                PropertyFactory.circleRadius(dataset.style.pointRadiusDp),
+                PropertyFactory.visibility(visibility),
+            )
+            style.addLayer(circleLayer)
+        } else {
+            style.getLayer(circleId)?.setProperties(
+                PropertyFactory.circleColor(Color.parseColor(dataset.style.pointColorHex)),
+                PropertyFactory.circleRadius(dataset.style.pointRadiusDp),
+                PropertyFactory.visibility(visibility),
+            )
+        }
+    }
 }

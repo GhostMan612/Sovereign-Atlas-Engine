@@ -33,6 +33,8 @@ import com.sovereignatlas.atlas.map.MapBehavior
 import com.sovereignatlas.atlas.measure.MeasureState
 import com.sovereignatlas.atlas.offline.OfflineStore
 import com.sovereignatlas.atlas.core.knowledge.HistoricalKnowledgeIndex
+import com.sovereignatlas.atlas.geo.gis.GisRepository
+import com.sovereignatlas.atlas.geo.gis.InMemoryGisRepository
 import com.sovereignatlas.atlas.geo.navigation.RoadNavigationState
 import com.sovereignatlas.atlas.geo.navigation.RoadRoutingEngine
 import com.sovereignatlas.atlas.geo.navigation.VoiceGuidance
@@ -74,6 +76,7 @@ class AtlasServices(
     val voiceGuidance: VoiceGuidance? = null,
     val compositor: LayerCompositor = LayerCompositor(),
     val historicalIndex: HistoricalKnowledgeIndex = HistoricalKnowledgeIndex(),
+    val gisRepository: GisRepository = InMemoryGisRepository(),
 ) {
     val lineOfSightEngine = LineOfSightEngine(
         elevationProvider = object : ElevationProvider {

@@ -1,0 +1,118 @@
+// ============================================================
+// As Above, So Below. As Within, So Without.
+// The Future Dictates the Past and the Past is Always Present.
+// ============================================================
+
+package com.sovereignatlas.atlas.geo.gis
+
+import com.sovereignatlas.atlas.geo.render.RenderGeometry
+import com.sovereignatlas.atlas.geo.render.RenderProperty
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class KmlStreamingParserTest {
+
+    @Test
+    fun parsesPlacemarkPointWithExtendedData() {
+        val kml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <Placemark>
+              <name>SAR Command Post</name>
+              <description>Primary Base of Operations</description>
+              <ExtendedData>
+                <Data name="Agency">
+                  <value>USFS</value>
+                </Data>
+                <Data name="OperationalStatus">
+                  <value>Active</value>
+                </Data>
+              </ExtendedData>
+              <Point>
+                <coordinates>-105.2500,40.1250,1850</coordinates>
+              </Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml, datasetName = "SAR Incident")
+        assertEquals(1, dataset.featureCount)
+        assertEquals(1, dataset.features.size)
+        assertEquals(GisFormat.KML, dataset.format)
+        assertEquals(GisSrid.WGS84, dataset.srid)
+
+        val feature = dataset.features.first()
+        assertTrue(feature.geometry is RenderGeometry.Point)
+        val pt = feature.geometry as RenderGeometry.Point
+        assertEquals(-105.2500, pt.coordinates.longitude, 1e-4)
+        assertEquals(40.1250, pt.coordinates.latitude, 1e-4)
+
+        assertEquals(RenderProperty.Text("SAR Command Post"), feature.properties["name"])
+        assertEquals(RenderProperty.Text("Primary Base of Operations"), feature.properties["description"])
+        assertEquals(RenderProperty.Text("USFS"), feature.properties["Agency"])
+        assertEquals(RenderProperty.Text("Active"), feature.properties["OperationalStatus"])
+    }
+
+    @Test
+    fun parsesLineStringWithWhitespaceSeparatedCoordinates() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Ridge Trail</name>
+            <LineString>
+              <coordinates>
+                -105.2500,40.1250,0
+                -105.2600,40.1350,100
+                -105.2700,40.1450,200
+              </coordinates>
+            </LineString>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        val feature = dataset.features.first()
+        assertTrue(feature.geometry is RenderGeometry.LineString)
+        val line = feature.geometry as RenderGeometry.LineString
+        assertEquals(3, line.coordinates.size)
+        assertEquals(-105.2500, line.coordinates[0].longitude, 1e-4)
+        assertEquals(-105.2700, line.coordinates[2].longitude, 1e-4)
+    }
+
+    @Test
+    fun parsesPolygonAndClosesUnclosedRings() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Containment Zone</name>
+            <Polygon>
+              <outerBoundaryIs>
+                <LinearRing>
+                  <coordinates>
+                    -105.0,40.0
+                    -104.0,40.0
+                    -104.0,41.0
+                    -105.0,41.0
+                  </coordinates>
+                </LinearRing>
+              </outerBoundaryIs>
+            </Polygon>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        val feature = dataset.features.first()
+        assertTrue(feature.geometry is RenderGeometry.Polygon)
+        val poly = feature.geometry as RenderGeometry.Polygon
+        assertEquals(1, poly.coordinates.size)
+        assertEquals(5, poly.coordinates[0].size)
+        assertEquals(poly.coordinates[0].first(), poly.coordinates[0].last())
+    }
+}

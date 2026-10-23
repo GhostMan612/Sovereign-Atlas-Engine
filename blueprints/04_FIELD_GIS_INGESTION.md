@@ -1,6 +1,6 @@
 # BP-04: Field GIS Ingestion Subsystem (GeoPackage, KML/KMZ, Shapefile)
 
-> **Status:** APPROVED DESIGN SPECIFICATION (AMENDED 2026-10-23)  
+> **Status:** IMPLEMENTED AND VERIFIED (2026-10-23) — 1,530 TESTS GREEN  
 > **Target:** Pure contracts in `gis/ingestion/`, Platform adapters in `gis/adapters/`, UI in `ui/gis/`  
 > **Standards:** OGC GeoPackage 1.3, OGC KML 2.3, GeoJSON RFC 7946, ESRI Shapefile Technical Description
 

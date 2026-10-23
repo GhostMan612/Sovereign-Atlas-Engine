@@ -103,6 +103,7 @@ final class MainActivity : ComponentActivity() {
             voiceGuidance = appServices.voiceGuidance,
             compositor = appServices.compositor,
             historicalIndex = appServices.historicalIndex,
+            gisRepository = appServices.gisRepository,
         )
     }
 
