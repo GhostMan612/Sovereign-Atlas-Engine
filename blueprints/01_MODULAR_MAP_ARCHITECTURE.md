@@ -1,14 +1,14 @@
 # BP-01: Modular Map & Screen Architecture (Zero-Monolith Blueprint)
 
-> **Status:** APPROVED FOR EXECUTION  
+> **Status:** EXECUTED & VERIFIED (2026-10-23)  
 > **Target:** `apps/atlas-android/app/src/main/java/com/sovereignatlas/atlas/map/`  
-> **Issue Addressed:** `AtlasMap.kt` is currently 3,618 lines with `AtlasMapScreen` exceeding Android ART runtime JIT instruction limits (16,956 instructions), forcing interpreter fallback and degrading recomposition performance.
+> **Issue Addressed:** `AtlasMap.kt` previously contained 3,618 lines with `AtlasMapScreen` exceeding Android ART runtime JIT instruction limits (16,956 instructions). The function body was deconstructed into modular composables, dropping bytecode sizes well under compiler thresholds.
 
 ---
 
 ## 1. Architectural Problem Statement
 
-The single largest technical debt in the user interface is `AtlasMap.kt`. At 3,618 lines, it performs six conflicting responsibilities within one file and predominantly within a single `@Composable fun AtlasMapScreen`:
+The single largest technical debt in the user interface was `AtlasMap.kt`. At 3,618 lines, it performed six conflicting responsibilities within one file and predominantly within a single `@Composable fun AtlasMapScreen`:
 1. **MapLibre View Lifecycle & Camera Management:** SurfaceView creation, camera movement, heading rotation, and state persistence.
 2. **Feature Synchronization:** Pushing 14+ distinct GeoJSON sources (GPS puck, MGRS graticule, GoTo lines, range rings, LoS rays, CoT markers, PLI tracks, tactical graphics, historical dossiers).
 3. **Style & Layer Blending:** Ingesting 12 raster providers, offline MBTiles packs, local loopback tile servers, and historical blueprints into MapLibre styles.
@@ -25,18 +25,21 @@ This forces Android ART to run `AtlasMapScreen` through the interpreter rather t
 
 ---
 
-## 2. Target Decomposition Plan
+## 2. Landed Decomposition Architecture
 
-Split `AtlasMap.kt` into five focused, cohesive, decoupled Kotlin source files within `com.sovereignatlas.atlas.map`:
+Decomposed `AtlasMap.kt` and `AtlasMapScreen` into cohesive, decoupled Kotlin source files within `com.sovereignatlas.atlas.map`:
 
 ```text
 com.sovereignatlas.atlas.map/
-├── AtlasMap.kt              (<300 lines) -> Root coordinator composable: layout scaffold & gestures
-├── AtlasMapState.kt         (~250 lines) -> Hoisted UI state, dialog visibility flags, and coroutine scopes
-├── AtlasMapOverlays.kt      (~450 lines) -> Floating HUD controls, CompassTape, pill buttons, and Guidance HUD
-├── AtlasMapDialogs.kt       (~350 lines) -> Modal sheets, dialog triggers, and Command Center integration
-├── MapFeatureSync.kt        (~750 lines) -> MapLibre FeatureSink and GeoJSON layer pushing functions
-└── MapStyleSync.kt          (~500 lines) -> Base templates, raster compositor blending, MBTiles pack sync
+├── AtlasMap.kt              (Root coordinator: MapView lifecycle, state bindings, & child composable assembly)
+├── AtlasMapControls.kt      (Rail pills, workspace chips, tool rows)
+├── AtlasMapOverlays.kt      (Top HUD, CompassTape, activity banner, telemetry pills, instrument HUD, attribution)
+├── AtlasGoToPanel.kt        (GoTo routing calculation card & measure panel hosts)
+├── AtlasMapDialogsHost.kt   (Command center sheet, layer manager sheet, target drop sheet, dialogs host)
+├── MapFeatureSync.kt        (MapLibre FeatureSink and GeoJSON layer pushing functions)
+└── MapStyleSync.kt          (Base templates, raster compositor blending, MBTiles pack sync)
+com.sovereignatlas.atlas.ui.hud/
+└── NavigationGuidanceHud.kt (Turn-by-turn road navigation guidance HUD)
 ```
 
 ---

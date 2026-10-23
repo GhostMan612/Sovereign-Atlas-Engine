@@ -1,6 +1,6 @@
-# BP-02: True 3D DEM Terrain & Dynamic 2D Viewshed Mask
+# BP-02: 2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask
 
-> **Status:** APPROVED DESIGN SPECIFICATION  
+> **Status:** APPROVED DESIGN SPECIFICATION (AMENDED 2026-10-23)  
 > **Target:** `geo/elevation/`, `map/terrain/`, `ui/hud/`, `apps/atlas-android/`  
 > **Prerequisites:** BP-01 Modular Map Architecture
 
@@ -11,8 +11,8 @@
 While the Sovereign Atlas currently includes a USGS 3DEP Hillshade raster layer and a 1D Line-of-Sight (LoS) raycast profile chart, it renders in an orthographic 2D top-down plane.
 
 This blueprint establishes:
-1. **MapLibre Native 3D DEM Mesh:** Ingesting offline `raster-dem` tiles (Terrarium encoding) into MapLibre's native terrain engine, enabling real 3D terrain elevation, camera pitch/tilt (`0°..65°`), and dynamic hillshading based on sun azimuth and altitude.
-2. **2D Radial Viewshed Polygon:** Upgrading the 1D LoS profile raycaster into a 360-degree, terrain-aware radial viewshed engine that calculates and paints visible vs. obscured observer zones directly on the map as a dynamic vector polygon.
+1. **MapLibre Native 2.5D DEM & Perspective Pitch:** Ingesting offline `raster-dem` tiles (Mapbox Terrain-RGB encoding) into MapLibre Native Android 13.3.1. On native mobile platforms, `raster-dem` sources feed native `hillshade` and `raster` layers with camera pitch/tilt ($0^\circ..60^\circ$). Full 3D terrain triangle meshes (`setTerrain` / style `"terrain"`) are WebGL-spec features and are not supported in MapLibre Native Android 13.x; native rendering provides dynamic hillshading with perspective pitch over a planar surface, with 3D elevation profile queries handled by `DemEngine`.
+2. **2D Radial Viewshed Polygon:** Generalizing the pure `LineOfSightEngine` from 1D ray profiles into a 360-degree, terrain-aware radial viewshed engine that calculates and paints visible vs. obscured observer zones directly on the map as dynamic vector polygons.
 
 ---
 
@@ -21,39 +21,51 @@ This blueprint establishes:
 ```text
        OFFLINE STORAGE (.pack / .mbtiles)
                       │
-           Terrarium RGB Tiles (z10-z14)
+          Mapbox Terrain-RGB Tiles (z10-z14)
                       │
-               LocalTileServer (127.0.0.1)
+                LocalTileServer (127.0.0.1)
                       │
-             MapLibre Style JSON
+              MapLibre Style JSON
         "sources": {
-          "terrain-source": {
+          "terrain-dem-source": {
             "type": "raster-dem",
-            "tiles": ["http://127.0.0.1:{port}/terrain/{z}/{x}/{y}.png"],
-            "encoding": "terrarium",
+            "tiles": ["http://127.0.0.1:{port}/dem/{z}/{x}/{y}.png"],
+            "encoding": "mapbox",
             "tileSize": 256
           }
         }
-        "terrain": {
-          "source": "terrain-source",
-          "exaggeration": 1.2
-        }
+        "layers": [
+          {
+            "id": "atlas-terrain-hillshade",
+            "type": "hillshade",
+            "source": "terrain-dem-source",
+            "paint": {
+              "hillshade-exaggeration": 0.8,
+              "hillshade-shadow-color": "#10151C",
+              "hillshade-highlight-color": "#FFFFFF",
+              "hillshade-accent-color": "#39C5F3"
+            }
+          }
+        ]
 ```
 
 ### 2.1 Elevation Decoding Math (Pure Domain `geo/elevation/`)
-Terrarium format encodes elevation in meters into 24-bit RGB values:
-$$\text{Elevation (meters)} = (R \times 256 + G + \frac{B}{256}) - 32768$$
+The engine strictly standardizes on **Mapbox Terrain-RGB** (matching `DemEngine.kt` and `AndroidOfflineMapRepository.kt`). Terrarium encoding is explicitly rejected.
+
+Mapbox Terrain-RGB encodes elevation in meters with 0.1-meter precision into 24-bit RGB values:
+$$\text{Elevation (meters)} = -10000.0 + \left(\left(R \times 65536 + G \times 256 + B\right) \times 0.1\right)$$
 
 ```kotlin
-object TerrariumDecoder {
+object MapboxDemDecoder {
     fun decodeRgbToElevation(r: Int, g: Int, b: Int): Double {
-        return (r * 256.0 + g.toDouble() + b / 256.0) - 32768.0
+        val raw = (r shl 16) or (g shl 8) or b
+        return -10000.0 + (raw * 0.1)
     }
 }
 ```
 
 ### 2.2 Offline Terrain Pack Packaging
-* Terrain elevation packs use standard `.mbtiles` or `.pack` format containing 256x256 PNGs encoded in Terrarium format.
+* Terrain elevation packs use standard `.mbtiles` or `.pack` format containing 256x256 PNGs encoded in Mapbox Terrain-RGB format.
 * Ingested through `PackTileServer` over localhost loopback (`127.0.0.1`) with the existing SHA-256 sidecar validation guard.
 
 ---
@@ -61,9 +73,9 @@ object TerrariumDecoder {
 ## 3. Dynamic 2D Viewshed Mask Engine
 
 ### 3.1 Pure Viewshed Algorithm (`geo/viewshed/ViewshedEngine.kt`)
-The current `LosCalculator` shoots a single 1D ray from Observer $(lat_1, lon_1, alt_1)$ to Target $(lat_2, lon_2, alt_2)$.
+The current `LineOfSightEngine` evaluates line-of-sight along a single 1D ray from Observer $(lat_1, lon_1, alt_1)$ to Target $(lat_2, lon_2, alt_2)$.
 
-The **Viewshed Engine** generalizes this into $N$ radial bearings (e.g., 360 rays at 1° intervals, or 720 rays at 0.5° intervals) out to a configurable maximum radius (e.g., 5 km – 25 km):
+The **Viewshed Engine** reuses `LineOfSightEngine` and generalizes this into $N$ radial bearings (e.g., 360 rays at 1° intervals, or 720 rays at 0.5° intervals) out to a configurable maximum radius (e.g., 5 km – 25 km):
 
 ```kotlin
 data class ViewshedConfig(
@@ -94,20 +106,20 @@ The computed `ViewshedPolygon` is pushed to `MapFeatureSync.kt` as a `GeoJsonSou
 
 ---
 
-## 4. UI/UX 3D Camera Controls
+## 4. UI/UX Camera Pitch Controls
 
 1. **Two-Finger Pitch Gesture:**
-   * Two-finger drag up/down tilts the camera between $0^\circ$ (nadir 2D top-down) and $60^\circ$ (3D perspective).
+   * Two-finger drag up/down tilts the camera between $0^\circ$ (nadir 2D top-down) and $60^\circ$ (perspective pitch).
 2. **Pitch Indicator Badge:**
-   * When camera pitch $> 5^\circ$, display a `3D • PITCH: 45°` HUD indicator next to the scale bar.
+   * When camera pitch $> 5^\circ$, display a `PERSPECTIVE • PITCH: 45°` HUD indicator next to the scale bar.
    * Tapping the badge smoothly animates pitch back to $0^\circ$ (instant 2D reset).
-3. **Terrain Wireframe Toggle:**
-   * In Studio workspace, an optional wireframe mesh mode renders topographic contours in vector space.
+3. **Terrain Elevation Cross-Section:**
+   * In Studio workspace, operator can query continuous elevation along arbitrary paths with `DemEngine.queryElevationProfile()`.
 
 ---
 
 ## 5. Implementation Roadmap
-* **Step 1:** Pure `TerrariumDecoder.kt` and `ViewshedEngine.kt` in pure `geo/` with 100% deterministic unit tests.
-* **Step 2:** Add `terrain` and `raster-dem` support in `MapStyleSync.kt`.
+* **Step 1:** Verify `MapboxDemDecoder.kt` and implement `ViewshedEngine.kt` in pure `geo/` building on `LineOfSightEngine.kt` with 100% deterministic unit tests.
+* **Step 2:** Add `raster-dem` and `hillshade` style synchronization in `MapStyleSync.kt`.
 * **Step 3:** Hook two-finger pitch tilt into `AtlasMap.kt` camera controller.
 * **Step 4:** Integrate Viewshed tool into the Sovereign Command Center and Tactical HUD.

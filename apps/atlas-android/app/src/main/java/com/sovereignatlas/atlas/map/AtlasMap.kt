@@ -1186,62 +1186,30 @@ fun AtlasMapScreen(
                 showReadout = false,
             )
         }
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(end = 12.dp, bottom = 30.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            AtlasRailPillButton(
-                label = if (following.value) "Unfollow" else "Follow",
-                stateDesc = if (following.value) "Follow active" else "Follow inactive",
-                iconRes = R.drawable.ic_hud_follow,
-                active = following.value,
-                pulse = following.value,
-                reducedMotion = reducedMotion,
-                onClick = onToggleFollow,
-            )
-            if (studioWorkspaceEnabled) {
-                AtlasRailPillButton(
-                    label = "Measure",
-                    stateDesc = if (measureActive.value) "Measure active" else "Measure inactive",
-                    iconRes = R.drawable.ic_hud_measure,
-                    active = measureActive.value,
-                    reducedMotion = reducedMotion,
-                    onClick = onMeasure,
-                )
-            }
-            if (explorerWorkspaceEnabled) {
-                AtlasRailPillButton(
-                    label = "Layers ${activeMbtilesPacks.value.size}",
-                    stateDesc = "Open encyclopedia layer manager",
-                    iconRes = R.drawable.ic_hud_layers,
-                    active = activeMbtilesPacks.value.isNotEmpty(),
-                    reducedMotion = reducedMotion,
-                    onClick = {
-                        showLayerManager.value = true
-                        mapScope.launch {
-                            activityBannerLabel.value = "SCANNING OFFLINE PACK DIRECTORY"
-                            try {
-                                scannedPacks.value = services.mbtilesScanner.scanPacks()
-                            } finally {
-                                activityBannerLabel.value = null
-                            }
-                        }
-                    },
-                )
-            }
-            AtlasRailPillButton(
-                label = "Tools",
-                stateDesc = "Tools",
-                iconRes = R.drawable.ic_hud_tools,
-                active = showTools.value,
-                reducedMotion = reducedMotion,
-                onClick = { showTools.value = true },
-            )
-        }
+        AtlasMapRailPills(
+            following = following.value,
+            measureActive = measureActive.value,
+            activeMbtilesPacksCount = activeMbtilesPacks.value.size,
+            showTools = showTools.value,
+            studioWorkspaceEnabled = studioWorkspaceEnabled,
+            explorerWorkspaceEnabled = explorerWorkspaceEnabled,
+            reducedMotion = reducedMotion,
+            onToggleFollow = onToggleFollow,
+            onMeasure = onMeasure,
+            onOpenLayers = {
+                showLayerManager.value = true
+                mapScope.launch {
+                    activityBannerLabel.value = "SCANNING OFFLINE PACK DIRECTORY"
+                    try {
+                        scannedPacks.value = services.mbtilesScanner.scanPacks()
+                    } finally {
+                        activityBannerLabel.value = null
+                    }
+                }
+            },
+            onOpenTools = { showTools.value = true },
+            modifier = Modifier.align(Alignment.BottomEnd),
+        )
         if (!measureActive.value && tacticalWorkspaceEnabled) {
             TacticalDrawingToolbar(
                 currentMode = drawingMode,
@@ -1292,416 +1260,152 @@ fun AtlasMapScreen(
                     .padding(bottom = 30.dp),
             )
         }
-        if (showTools.value) {
-            ModalBottomSheet(
-                onDismissRequest = { showTools.value = false },
-                sheetState = toolsSheetState,
-                containerColor = androidx.compose.ui.graphics.Color(0xFF141C24),
-                contentColor = androidx.compose.ui.graphics.Color.White,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = "Sovereign Command Center",
-                        fontSize = 16.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = androidx.compose.ui.graphics.Color.White,
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        WorkspaceQuickChip(
-                            label = "All",
-                            active = explorerWorkspaceEnabled && tacticalWorkspaceEnabled && studioWorkspaceEnabled,
-                            reducedMotion = reducedMotion,
-                            onClick = {
-                                services.settingsRepository.setExplorerWorkspaceEnabled(true)
-                                services.settingsRepository.setTacticalWorkspaceEnabled(true)
-                                services.settingsRepository.setStudioWorkspaceEnabled(true)
-                            },
-                        )
-                        WorkspaceQuickChip(
-                            label = "Clean Nav",
-                            active = !explorerWorkspaceEnabled && !tacticalWorkspaceEnabled && !studioWorkspaceEnabled,
-                            reducedMotion = reducedMotion,
-                            onClick = {
-                                services.settingsRepository.setExplorerWorkspaceEnabled(false)
-                                services.settingsRepository.setTacticalWorkspaceEnabled(false)
-                                services.settingsRepository.setStudioWorkspaceEnabled(false)
-                            },
-                        )
-                        WorkspaceQuickChip(
-                            label = "Explorer",
-                            active = explorerWorkspaceEnabled,
-                            reducedMotion = reducedMotion,
-                            onClick = {
-                                services.settingsRepository.setExplorerWorkspaceEnabled(!explorerWorkspaceEnabled)
-                            },
-                        )
-                        WorkspaceQuickChip(
-                            label = "Tactical",
-                            active = tacticalWorkspaceEnabled,
-                            reducedMotion = reducedMotion,
-                            onClick = {
-                                services.settingsRepository.setTacticalWorkspaceEnabled(!tacticalWorkspaceEnabled)
-                            },
-                        )
-                        WorkspaceQuickChip(
-                            label = "Studio",
-                            active = studioWorkspaceEnabled,
-                            reducedMotion = reducedMotion,
-                            onClick = {
-                                services.settingsRepository.setStudioWorkspaceEnabled(!studioWorkspaceEnabled)
-                            },
-                        )
+        AtlasCommandCenterSheet(
+            visible = showTools.value,
+            sheetState = toolsSheetState,
+            onDismissRequest = { showTools.value = false },
+            services = services,
+            cartoKey = cartoKey,
+            losMode = losMode,
+            headingUp = headingUp.value,
+            fenceArmed = fence.value?.armed == true,
+            reducedMotion = reducedMotion,
+            explorerWorkspaceEnabled = explorerWorkspaceEnabled,
+            tacticalWorkspaceEnabled = tacticalWorkspaceEnabled,
+            studioWorkspaceEnabled = studioWorkspaceEnabled,
+            onOpenWaypoints = openTool(showWaypoints),
+            onOpenTracks = openTool(showTracks),
+            onOpenOffline = openTool(showOffline),
+            onOpenLayers = openTool(showLayers),
+            onOpenLink = openTool(showLink),
+            onOpenFence = openTool(showFence),
+            onOpenSettings = openTool(showSettings),
+            onOpenNodeSettings = openTool(showNodeSettings),
+            onOpenChat = {
+                toolsScope.launch {
+                    try {
+                        toolsSheetState.hide()
+                    } finally {
+                        showTools.value = false
+                        showChat.value = true
                     }
-                    ToolRow(
-                        label = "Waypoints",
-                        description = "Open waypoints",
-                        iconRes = R.drawable.ic_tool_waypoints,
-                        onClick = openTool(showWaypoints),
-                    )
-                    ToolRow(
-                        label = "Tracks",
-                        description = "Open tracks",
-                        iconRes = R.drawable.ic_tool_tracks,
-                        active = services.recorder.isRecording(),
-                        onClick = openTool(showTracks),
-                    )
-                    ToolRow(
-                        label = "Offline",
-                        description = "Open offline packs",
-                        iconRes = R.drawable.ic_tool_offline,
-                        onClick = openTool(showOffline),
-                    )
-                    ToolRow(
-                        label = "Layers",
-                        description = "Open layers",
-                        iconRes = R.drawable.ic_tool_compositor,
-                        onClick = openTool(showLayers),
-                    )
-                    ToolRow(
-                        label = "Link",
-                        description = "Open radio link",
-                        iconRes = R.drawable.ic_tool_link,
-                        onClick = openTool(showLink),
-                    )
-                    ToolRow(
-                        label = "Fence",
-                        description = "Open geofence",
-                        iconRes = R.drawable.ic_tool_fence,
-                        active = fence.value?.armed == true,
-                        onClick = openTool(showFence),
-                    )
-                    ToolRow(
-                        label = "API Keys",
-                        description = "Open API keys",
-                        iconRes = R.drawable.ic_tool_keys,
-                        active = cartoKey != null,
-                        onClick = openTool(showSettings),
-                    )
-                    ToolRow(
-                        label = "Settings",
-                        description = "Open node settings",
-                        iconRes = R.drawable.ic_tool_settings,
-                        onClick = openTool(showNodeSettings),
-                    )
-                    ToolRow(
-                        label = "Chat",
-                        description = "Open tactical chat",
-                        iconRes = R.drawable.ic_tool_chat,
-                        onClick = {
-                            toolsScope.launch {
-                                try {
-                                    toolsSheetState.hide()
-                                } finally {
-                                    showTools.value = false
-                                    showChat.value = true
-                                }
-                            }
-                        },
-                    )
-                    ToolRow(
-                        label = if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
-                        description = if (losMode != LoSMode.Inactive) {
-                            "Cancel line-of-sight"
-                        } else {
-                            "Start line-of-sight"
-                        },
-                        iconRes = R.drawable.ic_tool_los,
-                        active = losMode != LoSMode.Inactive,
-                        onClick = {
-                            toolsScope.launch {
-                                try {
-                                    toolsSheetState.hide()
-                                } finally {
-                                    showTools.value = false
-                                    if (losMode != LoSMode.Inactive) {
-                                        services.losState.reset()
-                                    } else {
-                                        services.losState.reset()
-                                        services.losState.setMode(LoSMode.AwaitingObserver)
-                                    }
-                                }
-                            }
-                        },
-                    )
-                    ToolRow(
-                        label = if (headingUp.value) "North-up" else "Head-up",
-                        description = if (headingUp.value) "Head-up on" else "Head-up off",
-                        iconRes = R.drawable.ic_tool_heading,
-                        active = headingUp.value,
-                        onClick = {
-                            toolsScope.launch {
-                                try {
-                                    toolsSheetState.hide()
-                                } finally {
-                                    showTools.value = false
-                                    onToggleHeadingUp()
-                                }
-                            }
-                        },
-                    )
                 }
-            }
-        }
-        if (showChat.value) {
-            ModalBottomSheet(
-                onDismissRequest = { showChat.value = false },
-                sheetState = chatSheetState,
-            ) {
-                GeoChatScreen(viewModel = chatViewModel)
-            }
-        }
-        if (showNodeSettings.value) {
-            ModalBottomSheet(
-                onDismissRequest = { showNodeSettings.value = false },
-                sheetState = nodeSettingsSheetState,
-            ) {
-                SettingsScreen(viewModel = nodeSettingsViewModel)
-            }
-        }
-        if (showLayerManager.value) {
-            ModalBottomSheet(
-                onDismissRequest = { showLayerManager.value = false },
-                sheetState = layerManagerSheetState,
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        "Encyclopedia Layers",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    if (scannedPacks.value.isEmpty()) {
-                        Text(
-                            "No .mbtiles packs found in the offline packs directory.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                        )
-                    }
-                    scannedPacks.value.forEach { pack ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 48.dp)
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(pack.name, style = MaterialTheme.typography.bodyLarge)
-                                if (pack.description.isNotEmpty()) {
-                                    Text(
-                                        pack.description,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = activeMbtilesPacks.value.contains(pack.packId),
-                                onCheckedChange = { enabled ->
-                                    val current = activeMbtilesPacks.value
-                                    val next =
-                                        if (enabled) current + pack.packId
-                                        else current - pack.packId
-                                    services.settingsRepository.setActiveMbtilesPacks(next)
-                                },
-                            )
+            },
+            onToggleLoS = {
+                toolsScope.launch {
+                    try {
+                        toolsSheetState.hide()
+                    } finally {
+                        showTools.value = false
+                        if (losMode != LoSMode.Inactive) {
+                            services.losState.reset()
+                        } else {
+                            services.losState.reset()
+                            services.losState.setMode(LoSMode.AwaitingObserver)
                         }
                     }
                 }
-            }
-        }
+            },
+            onToggleHeadingUp = {
+                toolsScope.launch {
+                    try {
+                        toolsSheetState.hide()
+                    } finally {
+                        showTools.value = false
+                        onToggleHeadingUp()
+                    }
+                }
+            },
+        )
+        AtlasLayerManagerSheet(
+            visible = showLayerManager.value,
+            sheetState = layerManagerSheetState,
+            scannedPacks = scannedPacks.value,
+            activePacks = activeMbtilesPacks.value,
+            onTogglePack = { packId, enabled ->
+                val current = activeMbtilesPacks.value
+                val next = if (enabled) current + packId else current - packId
+                services.settingsRepository.setActiveMbtilesPacks(next)
+            },
+            onDismissRequest = { showLayerManager.value = false },
+        )
         val targetDropPointState by targetDropPoint.collectAsStateWithLifecycle()
         val activeProfileState by activeTerrainProfile.collectAsStateWithLifecycle()
         val currentLocationFix = services.locationEngine.currentLocation.collectAsStateWithLifecycle().value
-        if (targetDropPointState != null) {
-            var errorMessage by remember { mutableStateOf<String?>(null) }
-            ModalBottomSheet(onDismissRequest = { targetDropPoint.value = null }) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        "Drop Tactical Marker",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 16.dp),
-                    )
-                    errorMessage?.let { msg ->
-                        Text(
-                            msg,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                    val losProfile = activeProfileState
-                    if (losProfile != null) {
-                        Text(
-                            "Line of Sight Analysis",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        val losError = losProfile.errorMessage
-                        if (losError != null) {
-                            Text(
-                                text = losError,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(bottom = 16.dp),
-                            )
-                        } else {
-                            TerrainProfileChart(profile = losProfile)
-                            Text(
-                                text = when (losProfile.lineOfSight.status) {
-                                    LoSStatus.Clear -> "CLEAR LINE OF SIGHT"
-                                    LoSStatus.BlockedTerrain -> "LINE OF SIGHT BLOCKED"
-                                    // Everything else was never measured. Saying
-                                    // "BLOCKED" here would assert a terrain finding
-                                    // the engine did not make.
-                                    else -> "LINE OF SIGHT UNDETERMINED"
-                                },
-                                color = when (losProfile.lineOfSight.status) {
-                                    LoSStatus.Clear -> androidx.compose.ui.graphics.Color.Green
-                                    LoSStatus.BlockedTerrain -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.tertiary
-                                },
-                                modifier = Modifier.padding(bottom = 16.dp),
+        AtlasTargetDropSheet(
+            targetDropPoint = targetDropPointState,
+            activeProfileState = activeProfileState,
+            currentLocationFix = currentLocationFix,
+            onDismissRequest = { targetDropPoint.value = null },
+            onAnalyzeLoS = {
+                mapScope.launch {
+                    val drop = targetDropPointState ?: return@launch
+                    val origin = currentLocationFix ?: return@launch
+                    activityBannerLabel.value = "ANALYZING TERRAIN ELEVATION PROFILE"
+                    try {
+                        val profile = withContext(Dispatchers.IO) {
+                            services.lineOfSightEngine.calculateProfile(
+                                start = origin,
+                                end = GeoPoint(
+                                    drop.latitude,
+                                    drop.longitude,
+                                    null,
+                                    null,
+                                    null,
+                                    origin.timestamp,
+                                ),
                             )
                         }
-                    } else if (currentLocationFix != null && targetDropPointState != null) {
-                        Button(
-                            onClick = {
-                                mapScope.launch {
-                                    val drop = targetDropPointState ?: return@launch
-                                    val origin = currentLocationFix ?: return@launch
-                                    activityBannerLabel.value = "ANALYZING TERRAIN ELEVATION PROFILE"
-                                    try {
-                                        val profile = withContext(Dispatchers.IO) {
-                                            services.lineOfSightEngine.calculateProfile(
-                                                start = origin,
-                                                end = GeoPoint(
-                                                    drop.latitude,
-                                                    drop.longitude,
-                                                    null,
-                                                    null,
-                                                    null,
-                                                    origin.timestamp,
-                                                ),
-                                            )
-                                        }
-                                        activeTerrainProfile.value = profile
-                                    } finally {
-                                        activityBannerLabel.value = null
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary,
-                            ),
-                        ) {
-                            Text("Analyze Line of Sight")
-                        }
-                    } else {
-                        Text(
-                            "Waiting for GPS to enable LoS...",
-                            color = androidx.compose.ui.graphics.Color.Gray,
-                            modifier = Modifier.padding(bottom = 16.dp),
-                        )
-                    }
-                    val types = listOf(
-                        Triple("Hostile", "a-h-G", MaterialTheme.colorScheme.error),
-                        Triple("Neutral", "a-n-G", androidx.compose.ui.graphics.Color.Green),
-                        Triple("Unknown", "a-u-G", androidx.compose.ui.graphics.Color.Yellow),
-                        Triple("Waypoint", "b-m-p-w", androidx.compose.ui.graphics.Color.White),
-                    )
-                    types.forEach { (label, type, color) ->
-                        Button(
-                            onClick = {
-                                mapScope.launch {
-                                    try {
-                                        val result = withContext(Dispatchers.IO) {
-                                            services.atakBroadcaster.sendMarker(
-                                                type = type,
-                                                callsign = label,
-                                                lat = targetDropPointState!!.latitude,
-                                                lon = targetDropPointState!!.longitude,
-                                            )
-                                        }
-                                        // Local echo under the SAME wire uid: the
-                                        // marker is visible immediately instead of
-                                        // depending on multicast loopback, and a later
-                                        // mesh round-trip overwrites the same key
-                                        // rather than duplicating it.
-                                        services.markers.upsert(
-                                            CotMarker(
-                                                uid = result.uid,
-                                                type = type,
-                                                callsign = label,
-                                                latitude = targetDropPointState!!.latitude,
-                                                longitude = targetDropPointState!!.longitude,
-                                                altitude = null,
-                                                timestampMillis = System.currentTimeMillis(),
-                                            )
-                                        )
-                                        if (!result.transmitted) {
-                                            errorMessage = "Radio offline — marker saved locally only"
-                                        }
-                                        if (type == "b-m-p-w") {
-                                            val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
-                                            services.waypointRepository.saveWaypoint(
-                                                Waypoint(
-                                                    id = UUID.randomUUID().toString(),
-                                                    name = "WP-$stamp",
-                                                    latitude = targetDropPointState!!.latitude,
-                                                    longitude = targetDropPointState!!.longitude,
-                                                    timestamp = System.currentTimeMillis(),
-                                                    notes = "",
-                                                    // A waypoint dropped from a broadcast
-                                                    // marker is PRIVATE by default. Phase 10
-                                                    // §10.6 requires explicit opt-in, so
-                                                    // creating one must not also publish it.
-                                                    sharingPolicy = WaypointSharingPolicy.Private.storedValue,
-                                                ),
-                                            )
-                                        }
-                                        targetDropPoint.value = null
-                                    } catch (e: Exception) {
-                                        errorMessage = e.message ?: "Failed to drop marker"
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = color),
-                        ) {
-                            Text(label, color = androidx.compose.ui.graphics.Color.Black)
-                        }
+                        activeTerrainProfile.value = profile
+                    } finally {
+                        activityBannerLabel.value = null
                     }
                 }
-            }
-        }
+            },
+            onSendMarker = { label, type, color ->
+                mapScope.launch {
+                    try {
+                        val drop = targetDropPointState ?: return@launch
+                        val result = withContext(Dispatchers.IO) {
+                            services.atakBroadcaster.sendMarker(
+                                type = type,
+                                callsign = label,
+                                lat = drop.latitude,
+                                lon = drop.longitude,
+                            )
+                        }
+                        services.markers.upsert(
+                            CotMarker(
+                                uid = result.uid,
+                                type = type,
+                                callsign = label,
+                                latitude = drop.latitude,
+                                longitude = drop.longitude,
+                                altitude = null,
+                                timestampMillis = System.currentTimeMillis(),
+                            )
+                        )
+                        if (type == "b-m-p-w") {
+                            val stamp = SimpleDateFormat("HHmmss", Locale.US).format(Date())
+                            services.waypointRepository.saveWaypoint(
+                                Waypoint(
+                                    id = UUID.randomUUID().toString(),
+                                    name = "WP-$stamp",
+                                    latitude = drop.latitude,
+                                    longitude = drop.longitude,
+                                    timestamp = System.currentTimeMillis(),
+                                    notes = "",
+                                    sharingPolicy = WaypointSharingPolicy.Private.storedValue,
+                                ),
+                            )
+                        }
+                        targetDropPoint.value = null
+                    } catch (e: Exception) {
+                        Unit
+                    }
+                }
+            },
+        )
         // MGRS HUD - only recompose when center changes AND isIdle is true
         val mgrsInput by remember {
             cameraState
@@ -1720,201 +1424,82 @@ fun AtlasMapScreen(
         }
         val metersPerPixel = mapRef.value?.projection
             ?.getMetersPerPixelAtLatitude(scaleInput.second) ?: 0.0
-        // Top band: opaque black so the system status bar (clock, date, battery)
-        // reads on top of it instead of over raw map imagery, and so the cutout
-        // never lands on the tape. Content is inset below the bar.
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .background(androidx.compose.ui.graphics.Color.Black)
-                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val activeTargetBearing = if (isNavigating) {
-                navUpdate?.currentManeuver?.bearingAfterManeuverDeg
-            } else if (services.goTo.isActive()) {
-                services.goTo.bearingDegTo(usableFixOf(services))
-            } else {
-                null
-            }
-            val activeTargetLabel = if (isNavigating) {
-                navUpdate?.currentManeuver?.maneuverType?.name
-            } else if (services.goTo.isActive()) {
-                services.goTo.targetOrNull()?.label ?: "GOTO"
-            } else {
-                null
-            }
-            CompassTape(
-                bearing = currentBearing?.toDouble() ?: bearingHud,
-                targetBearing = activeTargetBearing,
-                targetLabel = activeTargetLabel,
-                courseDeviationDeg = navUpdate?.snappedPosition?.let {
-                    val desired = navUpdate?.currentManeuver?.bearingAfterManeuverDeg
-                    val current = currentBearing?.toDouble() ?: bearingHud
-                    if (desired != null) (current - desired + 540.0) % 360.0 - 180.0 else null
-                },
-                reducedMotion = reducedMotion,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        val activeTargetBearing = if (isNavigating) {
+            navUpdate?.currentManeuver?.bearingAfterManeuverDeg
+        } else if (services.goTo.isActive()) {
+            services.goTo.bearingDegTo(usableFixOf(services))
+        } else {
+            null
         }
-        val hudAnimMs = if (reducedMotion) 60 else 200
-        AnimatedVisibility(
-            visible = isNavigating,
-            enter = fadeIn(tween(hudAnimMs)) + expandVertically(tween(hudAnimMs)),
-            exit = fadeOut(tween(hudAnimMs)) + shrinkVertically(tween(hudAnimMs)),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(top = 48.dp),
-        ) {
-            NavigationGuidanceHud(
-                navUpdate = navUpdate,
-                isMuted = isMuted,
-                onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
-                onStopNavigation = { services.roadNavigation.stopNavigation() },
-                activeRoute = activeRoadRoute,
-            )
+        val activeTargetLabel = if (isNavigating) {
+            navUpdate?.currentManeuver?.maneuverType?.name
+        } else if (services.goTo.isActive()) {
+            services.goTo.targetOrNull()?.label ?: "GOTO"
+        } else {
+            null
         }
-        AtlasActivityBanner(
-            visible = activityBannerLabel.value != null,
-            label = activityBannerLabel.value ?: "",
+        AtlasTopHud(
+            bearing = currentBearing?.toDouble() ?: bearingHud,
+            targetBearing = activeTargetBearing,
+            targetLabel = activeTargetLabel,
+            courseDeviationDeg = navUpdate?.snappedPosition?.let {
+                val desired = navUpdate?.currentManeuver?.bearingAfterManeuverDeg
+                val current = currentBearing?.toDouble() ?: bearingHud
+                if (desired != null) (current - desired + 540.0) % 360.0 - 180.0 else null
+            },
+            isNavigating = isNavigating,
+            navUpdate = navUpdate,
+            isMuted = isMuted,
+            activeRoadRoute = activeRoadRoute,
+            onToggleMute = { services.roadNavigation.setMuted(!isMuted) },
+            onStopNavigation = { services.roadNavigation.stopNavigation() },
+            activityBannerLabel = activityBannerLabel.value,
             reducedMotion = reducedMotion,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(top = if (isNavigating) 144.dp else 54.dp),
+            modifier = Modifier.align(Alignment.TopCenter),
         )
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(start = 10.dp, top = 54.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            if (tacticalWorkspaceEnabled) {
-                MgrsHud(mgrsText = mgrsText)
-            }
-            positionTick.value.let { _ ->
-                offlineTick.value.let { _ ->
-                    val statusVal = services.location.status()
-                    val locStatus = statusVal.name.uppercase(Locale.US)
-                    val speedText = currentLocationFix?.speed?.let { s ->
-                        String.format(Locale.US, " • %.1f km/h", s * 3.6f)
-                    } ?: ""
-                    val packCount = services.offline.packs().size
-                    HudTelemetryPill(
-                        text = "GPS: $locStatus$speedText • OFFLINE: $packCount packs",
-                        textColor = androidx.compose.ui.graphics.Color(0xFFE2E8F0),
-                        iconRes = R.drawable.ic_hud_gps,
-                        iconTint = if (statusVal == AtlasLocationStatus.valid) {
-                            hudAccent
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFFA8B5C1)
-                        },
-                    )
+        val statusVal = services.location.status()
+        val locStatus = statusVal.name.uppercase(Locale.US)
+        val speedText = currentLocationFix?.speed?.let { s ->
+            String.format(Locale.US, " • %.1f km/h", s * 3.6f)
+        } ?: ""
+        val packCount = services.offline.packs().size
+        val activeSourceMaxZoom = basePackId.value?.let { services.offline.lookup(it)?.zMax }
+            ?: OfflineBuiltinProviders.lookup(baseProviderId.value)?.maxZoom
+            ?: 19
+        AtlasTelemetryHud(
+            tacticalWorkspaceEnabled = tacticalWorkspaceEnabled,
+            mgrsText = mgrsText,
+            locStatus = locStatus,
+            speedText = speedText,
+            packCount = packCount,
+            statusVal = statusVal,
+            zoom = scaleInput.first,
+            activeSourceMaxZoom = activeSourceMaxZoom,
+            losMode = losMode,
+            losProfile = losProfile,
+            hudAccent = hudAccent,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.align(Alignment.TopStart),
+        )
+        AtlasNavInstrumentHud(
+            isRecording = recorderTick.value >= 0 && services.recorder.isRecording(),
+            pointCount = services.recorder.pointCount(),
+            bearingHud = bearingHud,
+            currentBearing = currentBearing,
+            currentHeadingFrame = currentHeadingFrame,
+            tacticalWorkspaceEnabled = tacticalWorkspaceEnabled,
+            hudAccent = hudAccent,
+            reducedMotion = reducedMotion,
+            onLocate = onLocate,
+            onFaceNorth = {
+                headingUp.value = false
+                pendingHeadingUp.value = false
+                mapRef.value?.let { map ->
+                    map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
                 }
-            }
-            val activeSourceMaxZoom = basePackId.value?.let { services.offline.lookup(it)?.zMax }
-                ?: OfflineBuiltinProviders.lookup(baseProviderId.value)?.maxZoom
-                ?: 19
-            if (OverscalePolicy.isOverscaled(scaleInput.first, activeSourceMaxZoom)) {
-                HudTelemetryPill(
-                    text = OverscalePolicy.formatBadge(scaleInput.first, activeSourceMaxZoom),
-                    textColor = androidx.compose.ui.graphics.Color(0xFFF4B85C),
-                    borderColor = androidx.compose.ui.graphics.Color(0x80F4B85C),
-                )
-            }
-            when (losMode) {
-                LoSMode.AwaitingObserver -> HudTelemetryPill(
-                    text = "LoS: tap observer point",
-                    textColor = hudAccent,
-                    borderColor = hudAccent,
-                    iconRes = R.drawable.ic_tool_los,
-                    pulse = true,
-                    reducedMotion = reducedMotion,
-                )
-                LoSMode.AwaitingTarget -> HudTelemetryPill(
-                    text = "LoS: tap target point",
-                    textColor = hudAccent,
-                    borderColor = hudAccent,
-                    iconRes = R.drawable.ic_tool_los,
-                    pulse = true,
-                    reducedMotion = reducedMotion,
-                )
-                LoSMode.Inactive -> {
-                    val verdict = losProfile?.lineOfSight
-                    val error = losProfile?.errorMessage
-                    if (verdict == null) {
-                        Unit
-                    } else if (error != null) {
-                        HudTelemetryPill(
-                            text = error,
-                            textColor = androidx.compose.ui.graphics.Color(0xFFF4B85C),
-                            borderColor = androidx.compose.ui.graphics.Color(0x80F4B85C),
-                        )
-                    } else {
-                        if (verdict.status == LoSStatus.Clear) {
-                            HudTelemetryPill(
-                                text = "CLEAR",
-                                textColor = androidx.compose.ui.graphics.Color(0xFF39FF14),
-                                borderColor = androidx.compose.ui.graphics.Color(0x8039FF14),
-                                iconRes = R.drawable.ic_tool_los,
-                            )
-                        } else {
-                            HudTelemetryPill(
-                                text = "OBSTRUCTED at ${verdict.blockingDistanceMeters?.toInt()}m",
-                                textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
-                                borderColor = androidx.compose.ui.graphics.Color(0x80FF4444),
-                                iconRes = R.drawable.ic_tool_los,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(end = 10.dp, top = 54.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (recorderTick.value >= 0 && services.recorder.isRecording()) {
-                HudTelemetryPill(
-                    text = "REC • ${services.recorder.pointCount()} pts",
-                    textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
-                    borderColor = androidx.compose.ui.graphics.Color(0x99FF4444),
-                    pulse = true,
-                    reducedMotion = reducedMotion,
-                )
-            }
-            CompassOverlay(
-                bearing = bearingHud,
-                onLocate = onLocate,
-                onFaceNorth = {
-                    headingUp.value = false
-                    pendingHeadingUp.value = false
-                    mapRef.value?.let { map ->
-                        map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
-                    }
-                },
-                reducedMotion = reducedMotion,
-            )
-            if (tacticalWorkspaceEnabled) {
-                TacNavHud(
-                    bearing = currentBearing,
-                    hudColor = hudAccent,
-                    frameLabel = currentHeadingFrame,
-                    showReticle = false,
-                    fillScreen = false,
-                    topPadding = 0.dp,
-                    modifier = Modifier.width(136.dp).height(46.dp),
-                )
-            }
-        }
+            },
+            modifier = Modifier.align(Alignment.TopEnd),
+        )
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -1923,419 +1508,84 @@ fun AtlasMapScreen(
         ) {
             ScaleBar(metersPerPixel = metersPerPixel)
         }
-        goToTick.value.let {
-            positionTick.value.let {
-                if (services.goTo.isActive()) {
-                    Surface(
-                        color = androidx.compose.ui.graphics.Color(0xF0141C24),
-                        contentColor = androidx.compose.ui.graphics.Color.White,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            androidx.compose.ui.graphics.Color(0x4DA8B5C1),
-                        ),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                            .padding(start = 10.dp, top = 54.dp),
-                    ) {
-                        GoToCard(
-                            goTo = services.goTo,
-                            usableFix =
-                            if (services.location.status() == AtlasLocationStatus.valid) {
-                                services.location.latestFixOrNull()?.position
-                            } else {
-                                null
-                            },
-                            onClear = {
-                                services.goTo.clear()
-                                services.roadNavigation.stopNavigation()
-                                navigationFeedbackMessage.value = null
-                            },
-                            onNavigate = {
-                                val target = services.goTo.targetOrNull()
-                                val fix = usableFixOf(services)
-                                if (target != null && fix != null) {
-                                    mapScope.launch {
-                                        val engine = services.roadRoutingEngine
-                                        if (engine == null || engine.graph.nodes.isEmpty()) {
-                                            navigationFeedbackMessage.value = "Road network data unavailable"
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Road network data unavailable for this area. Direct-bearing guidance active.",
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@launch
-                                        }
-                                        activityBannerLabel.value = "COMPUTING OPTIMAL ROAD ROUTE"
-                                        val result = try {
-                                            val startNode = withContext(Dispatchers.Default) {
-                                                engine.findNearestNode(fix.latitude, fix.longitude)
-                                            }
-                                            val targetNode = withContext(Dispatchers.Default) {
-                                                engine.findNearestNode(target.latitude, target.longitude)
-                                            }
-                                            if (startNode == null || targetNode == null) {
-                                                navigationFeedbackMessage.value = "Location outside road coverage"
-                                                android.widget.Toast.makeText(
-                                                    context,
-                                                    "Location outside road network coverage. Direct-bearing guidance active.",
-                                                    android.widget.Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@launch
-                                            }
-                                            withContext(Dispatchers.Default) {
-                                                engine.calculateRoute(
-                                                    RoadRouteRequest(
-                                                        startNodeId = startNode.id,
-                                                        targetNodeId = targetNode.id,
-                                                        profile = services.roadNavigation.profile.value,
-                                                    ),
-                                                )
-                                            }
-                                        } finally {
-                                            activityBannerLabel.value = null
-                                        }
-                                        if (result != null) {
-                                            val targetNode = engine.findNearestNode(target.latitude, target.longitude)
-                                            navigationFeedbackMessage.value = null
-                                            services.roadNavigation.startNavigation(
-                                                route = result,
-                                                voice = services.voiceGuidance,
-                                                onRerouteNeeded = { offRouteCoord ->
-                                                    if (targetNode != null) {
-                                                        mapScope.launch {
-                                                            val newStart = withContext(Dispatchers.Default) {
-                                                                engine.findNearestNode(offRouteCoord.latitude, offRouteCoord.longitude)
-                                                            }
-                                                            if (newStart != null) {
-                                                                val reroute = withContext(Dispatchers.Default) {
-                                                                    engine.calculateRoute(
-                                                                        RoadRouteRequest(
-                                                                            startNodeId = newStart.id,
-                                                                            targetNodeId = targetNode.id,
-                                                                            profile = services.roadNavigation.profile.value,
-                                                                        ),
-                                                                    )
-                                                                }
-                                                                if (reroute != null) {
-                                                                    services.roadNavigation.updateRoute(reroute)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                            )
-                                        } else {
-                                            navigationFeedbackMessage.value = "No road route found"
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "No road route found between points. Direct-bearing guidance active.",
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                    }
-                                }
-                            },
-                            navigationMessage = navigationFeedbackMessage.value,
-                            selectedProfile = activeTravelProfile,
-                            onProfileSelected = { profile ->
-                                services.roadNavigation.setProfile(profile)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-        if (measureActive.value && drawingMode == DrawingMode.NONE) {
-            Surface(
-                color = androidx.compose.ui.graphics.Color(0xF0141C24),
-                contentColor = androidx.compose.ui.graphics.Color.White,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    androidx.compose.ui.graphics.Color(0x4DA8B5C1),
-                ),
-                shadowElevation = 6.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(start = 12.dp, end = 104.dp, bottom = 30.dp),
-            ) {
-                MeasurePanel(
-                    snapshot = measureSnapshot.value,
-                    units = MeasureUnit.values().toList(),
-                    onUnitSelected = { services.measure.setUnit(it) },
-                    onClose = { services.measure.clear() },
-                    onClear = { services.measure.clear() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        if (showWaypoints.value) {
-            WaypointsDialog(
-                waypointRepository = services.waypointRepository,
-                onCenterWaypoint = { latitude, longitude ->
-                    mapRef.value?.let { map -> animateToWaypoint(map, latitude, longitude) }
-                },
-                onEditWaypoint = { id -> waypointSelection.selectWaypoint(id) },
-                onClose = { showWaypoints.value = false },
-            )
-        }
-        WaypointEditorSheet(
-            selection = waypointSelection,
-            waypointRepository = services.waypointRepository,
-            onGoTo = { latitude, longitude, label ->
-                waypointSelection.selectedWaypointId.value?.let { id ->
-                    services.goTo.activate(
-                        id = id,
-                        latitude = latitude,
-                        longitude = longitude,
-                        label = label,
-                    )
-                }
-                mapRef.value?.let { map ->
-                    goToCameraIntent(
-                        services.goTo,
-                        map.cameraPosition.zoom,
-                        map.cameraPosition.bearing,
-                    )?.let { intent ->
-                        applyCameraIntent(map, intent)
-                    }
-                }
-                showWaypoints.value = false
+        AtlasGoToCardHost(
+            services = services,
+            usableFix = if (services.location.status() == AtlasLocationStatus.valid) {
+                services.location.latestFixOrNull()?.position
+            } else {
+                null
             },
+            activeTravelProfile = activeTravelProfile,
+            navigationFeedbackMessage = navigationFeedbackMessage,
+            activityBannerLabel = activityBannerLabel,
+            mapScope = mapScope,
+            context = context,
+            modifier = Modifier.align(Alignment.TopStart),
         )
-        if (showTracks.value) {
-            recorderTick.value.let {
-                TracksDialog(
-                    trackRepository = services.trackRepository,
-                    waypointRepository = services.waypointRepository,
-                    recorder = services.recorder,
-                    locationService = services.location,
-                    exportDir = context.filesDir,
-                    onOpenDetail = { id -> trackDetailId.value = id },
-                    onClose = { showTracks.value = false },
-                )
-            }
-        }
-        trackDetailId.value?.let { id ->
-            TrackDetailDialog(
-                trackRepository = services.trackRepository,
-                scrubState = services.scrubState,
-                demEngine = DemSession.engine,
-                id = id,
-                onClose = { trackDetailId.value = null },
+        if (measureActive.value && drawingMode == DrawingMode.NONE) {
+            AtlasMeasureCardHost(
+                measureSnapshot = measureSnapshot.value,
+                onUnitSelected = { services.measure.setUnit(it) },
+                onClose = { services.measure.clear() },
+                onClear = { services.measure.clear() },
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-        if (showOffline.value) {
-            offlineTick.value.let {
-                OfflineDialog(
-                    store = services.offline,
-                    maps = services.maps,
-                    tileHits = { services.tiles.tileHits() },
-                    basemapHits = { services.tiles.basemapHits() },
-                    demHits = { services.tiles.demHits() },
-                    keyProvider = services.keys,
-                    onUsePack = { packId ->
-                        basePackId.value = packId
-                        styleRef.value?.let { style ->
-                            attribution.value = applyBaseSource(
-                                style,
-                                services,
-                                baseProviderId.value,
-                                packId,
-                            )
-                        }
-                        showOffline.value = false
-                    },
-                    onClose = { showOffline.value = false },
-                )
-            }
-        }
-        if (showLayers.value) {
-            LayersDialog(
-                providerId = baseProviderId.value,
-                onProviderSelected = { id ->
-                    baseProviderId.value = id
-                    basePackId.value = null
-                    styleRef.value?.let { style ->
-                        val baseAttr = applyBaseSource(
-                            style,
-                            services,
-                            id,
-                            null,
-                            services.keys.cartoKey.value,
-                        )
-                        attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
-                    }
-                },
-                showGraticule = showGraticule.value,
-                onGraticuleChanged = { visible ->
-                    showGraticule.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.GRATICULE_LAYER, visible)
-                    }
-                    val map = mapRef.value
-                    if (visible && map != null) pushGraticule(map, sink)
-                },
-                showMgrsGrid = showMgrsGrid.value,
-                onMgrsGridChanged = { visible ->
-                    showMgrsGrid.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LINE_LAYER, visible)
-                        setAtlasLayerVisible(style, AtlasLayerIds.MGRS_LABEL_LAYER, visible)
-                        if (visible) {
-                            mapRef.value?.let { map -> refreshMgrsGrid(map) }
-                        }
-                    }
-                },
-                showRings = showRings.value,
-                onRingsChanged = { visible ->
-                    showRings.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.RINGS_LAYER, visible)
-                    }
-                    if (visible) pushRings(sink, services)
-                },
-                showWaypoints = showWaypointsLayer.value,
-                onWaypointsChanged = { visible ->
-                    showWaypointsLayer.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.WAYPOINTS_LAYER, visible)
-                    }
-                },
-                showTrack = showTrackLayer.value,
-                onTrackChanged = { visible ->
-                    showTrackLayer.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.TRACK_LAYER, visible)
-                    }
-                },
-                showMeasure = showMeasureLayer.value,
-                onMeasureChanged = { visible ->
-                    showMeasureLayer.value = visible
-                    styleRef.value?.let { style ->
-                        setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_LAYER, visible)
-                        setAtlasLayerVisible(style, AtlasLayerIds.MEASURE_DOTS_LAYER, visible)
-                    }
-                },
-                compositor = services.compositor,
-                onCompositorChanged = {
-                    services.settingsRepository.setCompositorSnapshot(services.compositor.exportStateSnapshot())
-                    styleRef.value?.let { style ->
-                        applyOverlayVisibility(
-                            style = style,
-                            compositor = services.compositor,
-                            showGraticule = showGraticule.value,
-                            showMgrsGrid = showMgrsGrid.value,
-                            showRings = showRings.value,
-                            showWaypoints = showWaypointsLayer.value,
-                            showTrack = showTrackLayer.value,
-                            showMeasure = showMeasureLayer.value,
-                            cartoKey = services.keys.cartoKey.value,
-                        )
-                        val baseAttr = OfflineBuiltinProviders.lookup(baseProviderId.value)?.attribution ?: ""
-                        attribution.value = combineAttribution(baseAttr, services.compositor.getAttributionRollup())
-                    }
-                },
-                historicalIndex = services.historicalIndex,
-                selectedEpochYear = selectedEpochYear.value,
-                onEpochYearChanged = { year ->
-                    selectedEpochYear.value = year
-                    pushHistoricalDossiers(sink, services.historicalIndex, year)
-                },
-                onSelectDossier = { dossier ->
-                    selectedHistoricalDossier.value = dossier
-                    showLayers.value = false
-                    mapRef.value?.let { map -> animateToWaypoint(map, dossier.latitude, dossier.longitude) }
-                },
-                onClose = { showLayers.value = false },
-            )
-        }
-        if (showLink.value) {
-            val map = mapRef.value
-            val center = map?.cameraPosition?.target?.let {
-                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
-            }
-            val fix = usableFixOf(services)
-            val target = services.goTo.targetOrNull()?.let {
-                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
-            }
-            LinkDialog(
-                pointA = fix ?: center,
-                pointB = target ?: center,
-                aLabel = if (fix != null) "GPS" else "map center",
-                bLabel = if (target != null) "go-to" else "map center",
-                onClose = { showLink.value = false },
-            )
-        }
-        if (showFence.value) {
-            val map = mapRef.value
-            val center = map?.cameraPosition?.target?.let {
-                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
-            }
-            FenceDialog(
-                center = center,
-                fix = usableFixOf(services),
-                fence = fence.value,
-                onSet = { next ->
-                    fence.value = next
-                    pushFence(sink, next)
-                },
-                onClear = {
-                    fence.value = null
-                    pushFence(sink, null)
-                },
-                onClose = { showFence.value = false },
-            )
-        }
-        if (showSettings.value) {
-            SettingsDialog(
-                keyProvider = services.keys,
-                onClose = { showSettings.value = false },
-            )
-        }
-        if (attribution.value.isNotEmpty()) {
-            Surface(
-                color = androidx.compose.ui.graphics.Color(0xBF10151C),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(start = 12.dp, end = 104.dp, bottom = 6.dp),
-            ) {
-                Text(
-                    text = attribution.value,
-                    fontSize = 9.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-            }
-        }
+        AtlasBottomAttribution(
+            attribution = attribution.value,
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
         AtlasLoadingOverlay(
             visible = mapLoading.value,
             statusLabel = mapLoadingLabel.value,
             reducedMotion = reducedMotion,
         )
     }
-    HistoricalRecordSheet(
-        record = selectedRecord,
-        onDismissRequest = { selectedHistoricalRecord.value = null }
+    AtlasMapDialogsHost(
+        showWaypoints = showWaypoints,
+        showTracks = showTracks,
+        trackDetailId = trackDetailId,
+        showOffline = showOffline,
+        showLayers = showLayers,
+        showLink = showLink,
+        showFence = showFence,
+        showSettings = showSettings,
+        showChat = showChat,
+        showNodeSettings = showNodeSettings,
+        chatSheetState = chatSheetState,
+        nodeSettingsSheetState = nodeSettingsSheetState,
+        chatViewModel = chatViewModel,
+        nodeSettingsViewModel = nodeSettingsViewModel,
+        waypointSelection = waypointSelection,
+        fence = fence,
+        baseProviderId = baseProviderId,
+        basePackId = basePackId,
+        showGraticule = showGraticule,
+        showMgrsGrid = showMgrsGrid,
+        showRings = showRings,
+        showWaypointsLayer = showWaypointsLayer,
+        showTrackLayer = showTrackLayer,
+        showMeasureLayer = showMeasureLayer,
+        selectedEpochYear = selectedEpochYear,
+        selectedHistoricalDossier = selectedHistoricalDossier,
+        services = services,
+        sink = sink,
+        styleRef = styleRef,
+        mapRef = mapRef,
+        attribution = attribution,
+        context = context,
+        refreshMgrsGrid = refreshMgrsGrid,
     )
-    HistoricalAssetSheet(
-        asset = selectedAsset,
-        onDismissRequest = {
+    AtlasHistoricalSheetsHost(
+        selectedRecord = selectedRecord,
+        onDismissRecord = { selectedHistoricalRecord.value = null },
+        selectedAsset = selectedAsset,
+        onDismissAsset = {
             patentTapToken.incrementAndGet()
             selectedHistoricalAsset.value = null
         },
-    )
-    HistoricalDossierSheet(
-        dossier = selectedDossier,
-        onDismissRequest = { selectedHistoricalDossier.value = null },
+        selectedDossier = selectedDossier,
+        onDismissDossier = { selectedHistoricalDossier.value = null },
     )
 }
 

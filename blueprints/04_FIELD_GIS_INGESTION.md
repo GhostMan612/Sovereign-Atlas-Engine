@@ -1,14 +1,14 @@
 # BP-04: Field GIS Ingestion Subsystem (GeoPackage, KML/KMZ, Shapefile)
 
-> **Status:** APPROVED DESIGN SPECIFICATION  
-> **Target:** `gis/ingestion/`, `layers/user/`, `ui/gis/`, `apps/atlas-android/`  
+> **Status:** APPROVED DESIGN SPECIFICATION (AMENDED 2026-10-23)  
+> **Target:** Pure contracts in `gis/ingestion/`, Platform adapters in `gis/adapters/`, UI in `ui/gis/`  
 > **Standards:** OGC GeoPackage 1.3, OGC KML 2.3, GeoJSON RFC 7946, ESRI Shapefile Technical Description
 
 ---
 
 ## 1. Executive Summary
 
-Search-and-rescue teams, wildland firefighters, utility linemen, and military planners operate in environments where situational datasets (incident perimeters, search grids, critical infrastructure, hazard zones) are created in external tools like **CalTopo, ArcGIS, QGIS, or Google Earth**.
+Search-and-rescue teams, wildland firefighters, utility linemen, and tactical operators operate in environments where situational datasets (incident perimeters, search grids, critical infrastructure, hazard zones) are created in external tools like **CalTopo, ArcGIS, QGIS, or Google Earth**.
 
 Currently, the Sovereign Atlas Engine consumes pre-compiled raster MBTiles and binary `.pack` archives. This blueprint designs a universal **Field GIS Ingestion Subsystem** that allows operators to import arbitrary GIS files directly into the live map without an internet connection or desktop conversion step.
 
@@ -16,53 +16,59 @@ Currently, the Sovereign Atlas Engine consumes pre-compiled raster MBTiles and b
 
 ## 2. Ingestion Matrix & Supported Formats
 
-| Format | File Extension | Engine Decoder | Geometric Types |
-|---|---|---|---|
-| **OGC GeoPackage** | `.gpkg` | Pure SQLite Reader + WKB Parser | Points, MultiPoints, LineStrings, Polygons, Multipolygons |
-| **Google Earth / CalTopo** | `.kml`, `.kmz` | Streaming XML Pull Parser + Zip Unpacker | Placemarks, Paths, Polygons, GroundOverlays, ExtendedData |
-| **GeoJSON** | `.geojson`, `.json` | Pure `kotlinx.serialization.json` | FeatureCollection, Features, Geometries |
-| **Zipped Shapefile** | `.zip` (`.shp` + `.dbf` + `.shx`) | Pure ByteStream Shapefile Parser | Points, PolyLines, Polygons + DBF Attribute Table |
+| Format | File Extension | Pure Domain Contract | Adapter Implementation | Geometric Types |
+|---|---|---|---|---|
+| **OGC GeoPackage** | `.gpkg` | `GeoPackageTableParser` + `WkbDecoder` | `AndroidSqliteGpkgAdapter` (`android.database.sqlite`) | Points, MultiPoints, LineStrings, Polygons |
+| **Google Earth / CalTopo** | `.kml`, `.kmz` | `KmlXmlStreamingParser` | `AndroidXmlPullKmlAdapter` (`org.xmlpull.v1`) + `ZipStream` | Placemarks, Paths, Polygons, ExtendedData |
+| **GeoJSON** | `.geojson`, `.json` | Pure `kotlinx.serialization.json` | Direct JVM Parser (no platform dependency) | RFC 7946 Features & Geometries |
+| **Zipped Shapefile** | `.zip` (`.shp` + `.dbf` + `.shx`) | Pure ByteStream Shapefile & DBF Parser | `ZipStream` with Zip-Slip Guard | Points, PolyLines, Polygons + DBF attributes |
 
 ---
 
-## 3. Pure Domain Architecture (`gis/ingestion/`)
+## 3. Architecture & Pure Boundary Discipline
+
+Per `RULES.md` §2.1, pure logic modules must contain **zero Android framework imports**. All platform-specific classes (`android.database.sqlite.SQLiteDatabase`, `org.xmlpull.v1.XmlPullParser`, `android.net.Uri`) are isolated in platform adapter packages.
 
 ```text
                EXTERNAL STORAGE / USB
                           │
           [ .gpkg | .kml | .kmz | .geojson | .zip ]
                           │
-              GisDatasetImporter (Interface)
+            GisDatasetImporter (Platform Adapter)
                           │
          ┌────────────────┼────────────────┐
          ▼                ▼                ▼
-   GeoPackageReader   KmlParser     ShapefileReader
+   GeoPackageAdapter  KmlAdapter     ShapefileAdapter
+   (Android SQLite)  (Android XML)   (ByteStream)
          │                │                │
          └────────────────┼────────────────┘
                           │
-               GisFeatureCollection (Pure)
+               GisFeatureSink (Pure Domain Contract)
          ├── id: String
          ├── name: String
-         ├── crs: CoordinateReferenceSystem (EPSG:4326)
-         ├── features: List<GisFeature>
+         ├── crs: Srid (EPSG:4326 / EPSG:3857 / UTM)
+         ├── features: List<RenderFeature>
          └── attributes: Map<String, Any?>
                           │
              UserLayerManager (Engine)
                           │
-         MapLibre Vector Source & Fill/Line Layers
+         FeatureSink / MapLibre GeoJsonSource
 ```
 
-### 3.1 OGC GeoPackage Reader
-* A `.gpkg` file is a standard SQLite 3 database.
-* The importer queries `gpkg_contents` to discover vector feature tables (`data_type = 'features'`).
-* Queries `gpkg_geometry_columns` for geometry column names and SRID.
-* Decodes the Standard GeoPackage Binary Geometry Header (flags, envelope, WKB payload) into pure `AtlasCoordinate` arrays.
-* Extracts row columns into feature properties for inspector sheets.
+### 3.1 OGC GeoPackage Adapter
+* **Header Parsing:** GeoPackage binary geometries begin with magic bytes `0x47 0x50` (`"GP"`), a 1-byte version, a 1-byte flags field (bit 0 = endianness, bits 1–3 = envelope indicator), followed by a 4-byte SRS ID and the envelope (0, 32, 48, or 64 bytes) preceding the standard ISO WKB geometry.
+* **Adapter Placement:** SQLite querying occurs via `AndroidSqliteGpkgAdapter` in the app module; geometry byte arrays are handed to pure `WkbDecoder` in domain logic.
 
-### 3.2 KML / KMZ Unpacker
-* For `.kmz`, extracts `doc.kml` and local image icons in-memory via `java.util.zip.ZipInputStream`.
-* Uses `XmlPullParser` in streaming mode (low memory footprint, handles 50MB+ KMLs without OutOfMemoryError).
-* Extracts `<coordinates>`, `<Style>` (stroke color, fill color, line width), and `<ExtendedData>` key-values.
+### 3.2 KML / KMZ Adapter
+* **Streaming Unpacker:** For `.kmz`, extracts the root `.kml` stream via `java.util.zip.ZipInputStream` with canonical path verification (preventing zip-slip attacks).
+* **Streaming XML:** Implemented via `AndroidXmlPullKmlAdapter` on Android, emitting pure `GisFeature` objects to `GisFeatureSink` without loading the full document DOM into memory.
+* **Coordinate Ordering:** Standard KML coordinate strings are formatted as `lon,lat[,alt]`. The parser converts them directly to `AtlasCoordinate(lat, lon)`.
+
+### 3.3 Shapefile & Projection Handling
+* **ESRI Shapefile:** Ingests zipped `.shp` (geometry bytecode), `.shx` (index), `.dbf` (dBase III attribute table), and `.prj` (projection definition).
+* **Supported Projections (unknown > invented):**
+  - Native support for **EPSG:4326 (WGS84)**, **EPSG:3857 (Web Mercator)**, and standard **UTM zones** (using `MgrsEngine`).
+  - If `.prj` specifies an unsupported local coordinate system without transform parameters, the importer explicitly refuses the dataset and reports the unsupported projection, preventing silent coordinate distortion.
 
 ---
 
@@ -83,7 +89,7 @@ Currently, the Sovereign Atlas Engine consumes pre-compiled raster MBTiles and b
 
 ---
 
-## 5. Security & Purity Verification
-1. **Purity Boundary:** The geometry conversion and WKB/KML parsers live strictly in pure logic (`gis/ingestion/`) with 0 Android framework imports.
-2. **Zip Slip & Path Traversal Guard:** KMZ and Shapefile ZIP extraction enforces canonical path checks to prevent archive extraction vulnerabilities.
-3. **Memory Ceilings:** Streaming parsing caps feature batches to 100,000 vertices per layer to preserve 60fps MapLibre rendering on budget hardware (BLU View 5).
+## 5. Security & Resource Ceilings
+1. **Pure Boundary:** Pure contracts in `gis/ingestion/` carry 0 Android framework imports, allowing fast host-side JVM unit testing.
+2. **Zip Slip Guard:** All archive streams verify `entry.name` does not contain `..` or escape the temporary scratch directory.
+3. **Vertex Ceilings:** Single layer imports are capped at 100,000 vertices to ensure smooth frame rates on entry-level hardware (Moto G / BLU View 5).

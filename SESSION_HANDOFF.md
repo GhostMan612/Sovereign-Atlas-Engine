@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-23: 1,474 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-23: 1,480 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 6 tests
-  - `:app:testPlayDebugUnitTest`: 728 tests
-  - `:app:testEnterpriseDebugUnitTest`: 728 tests
+  - `:app:testPlayDebugUnitTest`: 734 tests
+  - `:app:testEnterpriseDebugUnitTest`: 734 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -147,24 +147,27 @@
   - Pure `ui/hud/AtlasMotionMath.kt` (shortest-arc unwrap, pack download fraction, boot stage labels) with `AtlasMotionMathTest`. `CompassOverlay` and `CompassTape` animate along the shortest arc when `reducedMotion` is false and keep the 5° snap when it is true.
   - **Physical Device Smoke & Fresh Clean Deployment:** Uninstalled previous packages (`com.sovereignatlas.atlas`, `com.sovereignatlas.atlas.enterprise`) from Moto G `ZT4222BMWN`. Executed full clean build (`clean :app:assemblePlayDebug :app:assembleEnterpriseDebug` in 7m 43s; Play APK SHA-256 `1338b5500d41b9b1ed6a7a258e02c33ee35bdf66409852cf8331f4126982d718` / 125,314,971 bytes; Enterprise APK SHA-256 `0d75154032c9bb3d4e16030683f1dbb4f48770500c1dcbfe3fa1fb6efb34a821` / 125,314,983 bytes). Fresh installed both packages onto Moto G (`ZT4222BMWN`, Android 16 / SDK 36), launched `com.sovereignatlas.atlas/.MainActivity` (PID 32396), and verified 0 runtime crashes / 0 uncaught exceptions.
 
-- **Monolithic Screen Deconstruction & Advanced Roadmap Blueprints (COMPLETE):**
-  - **Monolithic `AtlasMap.kt` Split:** Decomposed 3,618-line `AtlasMap.kt` down to 2,340 lines (-1,278 lines, -35.3%), eliminating the ART compiler instruction limit warning (`Method exceeds compiler instruction limit: 16956`).
+- **Monolithic Screen Deconstruction & Advanced Roadmap Blueprints (AUDITED & AMENDED 2026-10-23):**
+  - **Monolithic `AtlasMap.kt` & `AtlasMapScreen` Deconstructed:** Decomposed 3,618-line `AtlasMap.kt` down to 1,592 lines (-2,026 lines, -56.0%). `AtlasMapScreen` method body was cleanly extracted into cohesive child composables, genuinely eliminating the ART compiler instruction limit warning (`Method exceeds compiler instruction limit: 16956`):
     1. Extracted Turn-by-Turn navigation guidance HUD to `ui/hud/NavigationGuidanceHud.kt`.
     2. Extracted rail pills, chips, and tool row buttons to `map/AtlasMapControls.kt`.
     3. Extracted base layer styling, MBTiles pack sync, DEM raster sources, blueprint rasters, and compositor overlay visibility to `map/MapStyleSync.kt`.
     4. Extracted MapLibre feature pushers (`pushMarkers`, `pushOpsGraphics`, `pushMeshTracks`, `pushPli`, `pushPosition`, `pushMeasure`, `pushFence`, `pushGoTo`, `pushRings`, `pushGraticule`, `pushHistoricalDossiers`, `pushScrubPoint`, `pushRouteResult`, `pushRoadRouteResult`, `pushLosState`), icon decoders, and foot routing to `map/MapFeatureSync.kt`.
-  - **Complete Subsystem Blueprints Authored (`blueprints/`):**
-    1. `BP-01: Modular Map & Screen Architecture` (`blueprints/01_MODULAR_MAP_ARCHITECTURE.md`)
-    2. `BP-02: True 3D DEM Terrain & Dynamic 2D Viewshed Mask` (`blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`)
-    3. `BP-03: Plug-and-Play Meshtastic & LoRa Tactical Transport` (`blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`)
-    4. `BP-04: Field GIS Ingestion Subsystem` (`blueprints/04_FIELD_GIS_INGESTION.md`)
-  - **Verification:** Full host gate passed (`BUILD SUCCESSFUL in 2m 31s`): 1,474 passing tests across `:atlas-sdk:test`, `:sdk-consumer:test`, `:app:testPlayDebugUnitTest`, `:app:testEnterpriseDebugUnitTest`, 0 failures, 0 errors, 0 pure-boundary violations.
+    5. Extracted HUD overlays (`AtlasTopHud`, `AtlasTelemetryHud`, `AtlasNavInstrumentHud`, `AtlasMapRailPills`, `AtlasBottomAttribution`) to `map/AtlasMapOverlays.kt`.
+    6. Extracted GoTo routing computation card and measure panel hosts to `map/AtlasGoToPanel.kt`.
+    7. Extracted Sovereign Command Center, Layer Manager, Target Marker Drop, and all modal dialogs to `map/AtlasMapDialogsHost.kt`.
+  - **Complete Subsystem Blueprints Audited & Corrected (`blueprints/`):**
+    1. `BP-01: Modular Map & Screen Architecture` (`blueprints/01_MODULAR_MAP_ARCHITECTURE.md`) — Updated to reflect the landed 7-file decoupled map presentation architecture.
+    2. `BP-02: 2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask` (`blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`) — Corrected to reflect actual MapLibre Native Android 13.3.1 capabilities (2.5D raster-dem hillshading with camera pitch up to 60°; true 3D meshes are web-only); standardized elevation decoding on Mapbox Terrain-RGB to align with `DemEngine.kt`.
+    3. `BP-03: Plug-and-Play Meshtastic & LoRa Tactical Transport` (`blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`) — Aligned transport with official Meshtastic Client Protobuf specs (`ToRadio`/`FromRadio` over BLE/Serial); grounded DTN reassembly in actual Sovereign Mantle patterns (`FragmentStore`, `FragmentAckCodec`); enforced strict Atlas Network Profile law.
+    4. `BP-04: Field GIS Ingestion Subsystem` (`blueprints/04_FIELD_GIS_INGESTION.md`) — Enforced strict pure boundary: pure streaming interfaces in `gis/ingestion/` with zero Android imports, isolating `XmlPullParser` and `android.database.sqlite` in platform adapters.
+  - **Verification:** Verified 1,480 passing tests (12 :atlas-sdk, 6 :sdk-consumer, 734 Play, 734 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations.
 
 ## Next moves
 
-- **Implementation Roadmap from Blueprints:**
-  1. **Phase 11 (Field GIS Ingestion Subsystem):** Implement universal ingestion engine (`geo.gis`) supporting `.gpkg`, `.kml`, `.kmz`, `.geojson`, and `.zip` Shapefiles based on `blueprints/04_FIELD_GIS_INGESTION.md`.
-  2. **Phase 12 (True 3D DEM Terrain & Dynamic 2D Viewshed Mask):** Implement 3D terrain exaggeration, pitch camera controls, and 360° radial viewshed polygon projection based on `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
-  3. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, 237-byte sub-segment fragmentation, and offline store based on `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md` (mined from `C:\sovereign_mantle`).
+- **Implementation Roadmap from Corrected Blueprints:**
+  1. **Phase 11 (Field GIS Ingestion Subsystem):** Implement universal ingestion engine (`geo.gis`) supporting `.gpkg`, `.kml`, `.kmz`, `.geojson`, and `.zip` Shapefiles based on corrected `blueprints/04_FIELD_GIS_INGESTION.md`.
+  2. **Phase 12 (2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask):** Implement 2.5D hillshade styling, perspective camera pitch controls, and 360° radial viewshed polygon projection based on corrected `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
+  3. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.

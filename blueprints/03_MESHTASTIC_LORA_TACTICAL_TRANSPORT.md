@@ -1,8 +1,8 @@
 # BP-03: Plug-and-Play Meshtastic & LoRa Tactical Transport
 
-> **Status:** APPROVED DESIGN SPECIFICATION  
+> **Status:** APPROVED DESIGN SPECIFICATION (AMENDED 2026-10-23)  
 > **Target:** `tactical/mesh/`, `android/transport/`, `apps/atlas-android/`  
-> **Lineage & Source Ground Truth:** Mined directly from `C:\sovereign_mantle\android_node\app\src\main\java\com\sovereign\mantle\mesh\`
+> **Lineage & Source Ground Truth:** Architecture adapted from `C:\sovereign_mantle\` DTN reassembly patterns (`FragmentStore`, `FragmentAckCodec`) & official Meshtastic Protobuf specifications.
 
 ---
 
@@ -12,68 +12,68 @@ The Sovereign Atlas Engine currently broadcasts and receives Cursor-on-Target (C
 
 While highly effective on local Wi-Fi, modern off-grid operations require long-range radio telemetry spanning miles across mountains and tree canopies where Wi-Fi cannot reach.
 
-This blueprint extracts and ports the proven mesh architecture from `Sovereign_Mantle` into Atlas, providing:
-1. **Meshtastic Radio Hardware Integration:** Direct USB-Serial (OTG) and Bluetooth Low Energy (BLE) connectivity to off-the-shelf Meshtastic hardware (Heltec V3, T-Beam, RAK4631, LilyGO T-Echo).
-2. **LoRa MTU Fragmentation & Reassembly:** Using `FragmentAckCodec` and `MeshSubsegmentReassembly` from `Sovereign_Mantle` to fragment large CoT XML and Protobuf packets across 237-byte LoRa radio frames.
-3. **Delay-Tolerant Networking (DTN):** Store-and-forward bundle retention (`BundleStore`) so peer markers and emergency alerts propagate across the mesh even when nodes move in and out of radio line-of-sight.
+This blueprint establishes:
+1. **Meshtastic Radio Hardware Integration:** Direct USB-Serial (OTG) and Bluetooth Low Energy (BLE) connectivity to off-the-shelf Meshtastic hardware (Heltec V3, T-Beam, RAK4631, LilyGO T-Echo) using the official Meshtastic Client Protobuf API (`ToRadio` / `FromRadio`).
+2. **LoRa MTU Adaptation & DTN Reassembly:** Handling payload constraints across 237-byte LoRa radio frames using compact Protobuf payloads and delay-tolerant chunk reassembly based on Mantle's `FragmentStore` and `FragmentAckCodec` patterns.
+3. **Strict Tactical Profile Interlocks:** Enforcing `AGENTS.md` law: CoT marker transmissions require **"Off-Grid Mesh Only"** or **"Hybrid"** network profiles. When in **Radio Silence** (EMCON) or **Cloud-Only**, transmissions are strictly blocked at the supervisor layer.
 
 ---
 
-## 2. Architectural Blueprint & Mined Lineage
+## 2. Architectural Blueprint & Lineage
 
 ```text
   [ Atlas Tactical Engine (CoT / PLI / Markers) ]
                         │
-         TacticalMeshBridge (Pure Domain)
+          TacticalMeshBridge (Pure Domain)
                         │
          ┌──────────────┴──────────────┐
          ▼                             ▼
-   Local ATAK UDP               MeshtasticLoRaTransport
+   Local ATAK UDP               MeshtasticRadioClient (Adapter)
   (Multicast 6969)                     │
                                ┌───────┴───────┐
                                ▼               ▼
                            USB-Serial     BLE Peripheral
-                           (CP210x/CH340) (Nordic UART/Protobuf)
+                           (CDC/CP210x)   (Meshtastic BLE Service)
                                │               │
                         [ Heltec V3 / RAK4631 / T-Beam ]
                                │
                         ((( 915MHz / 868MHz LoRa )))
 ```
 
-### 2.1 Proven Components from `Sovereign_Mantle`
-The following core assets in `C:\sovereign_mantle\` will be ported into `:atlas-sdk` (pure logic) and `:app` (Android radio drivers):
+### 2.1 Proven Components Adapted from `Sovereign_Mantle`
+The following core assets from `C:\sovereign_mantle\` inform Atlas mesh logic:
 
-| Sovereign Mantle Component | Atlas Role & Destination | Purity Classification |
+| Component / Pattern | Atlas Role & Destination | Purity Classification |
 |---|---|---|
-| `FragmentAckCodec.kt` | Encodes/decodes packets into $\le 237$-byte fragments with bitmask ACK | **Pure Domain** (`tactical/mesh/`) |
-| `FragmentHeader.kt` | 8-byte header: `msgId` (16b), `fragIndex` (8b), `fragCount` (8b), `crc` (32b) | **Pure Domain** (`tactical/mesh/`) |
-| `MeshSubsegmentReassembly.kt` | Reassembles out-of-order radio fragments with TTL eviction | **Pure Domain** (`tactical/mesh/`) |
-| `PeerPenaltyLedger.kt` | Blacklists spamming, jammed, or malformed peer radios | **Pure Domain** (`tactical/mesh/`) |
-| `dtn/BundleStore.kt` | SQLite/In-memory store-and-forward bundle spooling | **Pure Domain** (`tactical/dtn/`) |
-| `SovereignMeshTransport.kt` | Coroutine-driven Inbound/Outbound supervisor channel architecture | **Android Transport** (`android/mesh/`) |
+| `FragmentStore` (from `com.sovereign.mantle.dtn`) | Out-of-order chunk storage, expiration TTL, and reassembly | **Pure Domain** (`tactical/dtn/`) |
+| `FragmentAckCodec.kt` | Encodes/decodes `FragmentAckReport` (high-water mark + missing bitmap) | **Pure Domain** (`tactical/mesh/`) |
+| `PeerPenaltyLedger.kt` | Tracks peer node health, latency, and penalizes malformed radios | **Pure Domain** (`tactical/mesh/`) |
+| `MeshtasticRadioClient` | Handles Meshtastic protobuf wire communication (`ToRadio`/`FromRadio`) | **Android Transport** (`android/mesh/`) |
 
 ---
 
 ## 3. Protocol & Packet Specifications
 
-### 3.1 LoRa Radio MTU Adaptation
-LoRa radio packets have a physical payload ceiling of 237 bytes in standard Meshtastic settings. A typical ATAK CoT marker is 400–1200 bytes of XML.
+### 3.1 Meshtastic Wire Protocol
+External host devices (Android phones) do not emit raw RF LoRa chirps directly; they communicate with the connected Meshtastic radio firmware over serial or BLE using **Meshtastic Protobufs**:
+* **BLE Service:** `6ba1b218-15a8-461f-9fa8-5dcae273eafd`
+  - `toRadio` Characteristic (`f75de93c-4530-4ec4-b399-f442377b8359`): Host writes serialized `ToRadio` packets.
+  - `fromRadio` Characteristic (`2c55e69e-4993-11ea-b77f-2e728ce88125`): Radio notifies serialized `FromRadio` packets.
+* **USB-Serial Framing:** Standard Meshtastic 4-byte framing header (`0x94 0xC3` magic sync bytes, followed by 16-bit big-endian payload length) encapsulating `ToRadio`/`FromRadio` protobuf payloads.
+* **Port Numbers:** CoT markers and tactical telemetry are dispatched on `PortNum.PORTNUM_ATAK_PLUGIN` or `PortNum.PORTNUM_PRIVATE_APP`.
 
-* **Fragmentation Algorithm:**
-  1. Compresses CoT payload using GZIP or Protobuf wire format (reducing 800-byte XML to ~180 bytes).
-  2. If payload exceeds 200 bytes, `FragmentAckCodec` splits the packet into $\le 200$-byte chunks.
-  3. Prepend 8-byte `FragmentHeader`.
-  4. Transmit fragments via Meshtastic `PortNum.ATAK_PLUGIN` or `PortNum.PRIVATE_APP`.
-  5. Receiving nodes reassemble the subsegments and emit the complete `CotMarker` to `AtlasServices.markerStore`.
+### 3.2 LoRa Payload Compression
+A raw XML CoT marker can be 600–1200 bytes, exceeding the 237-byte LoRa physical MTU:
+1. **Compact Protobuf CoT:** Convert XML CoT markers to compact Protobuf binary representations (reducing typical marker footprints to $\le 120$ bytes, fitting comfortably within a single LoRa frame).
+2. **Chunking & Multi-Packet Transport:** For large mission payloads (tactical overlays, route plans), large bundles are partitioned into sequenced chunks with `FragmentAckReport` tracking.
 
-### 3.2 Hardware Driver Layer (`android/mesh/hardware/`)
+### 3.3 Hardware Drivers (`android/mesh/hardware/`)
 * **USB-Serial Driver:**
   - Implements Android USB Host API (`UsbManager`, `UsbDeviceConnection`).
-  - Supports CH340, CP2102, FTDI, and CDC-ACM (standard chips on ESP32/nRF52 boards).
-  - Baud rate: 115200 8N1. Zero root required; prompts user for one-tap USB permission.
+  - Supports CH340, CP2102, FTDI, and CDC-ACM without root permissions.
+  - Default baud: 115200 8N1.
 * **BLE Driver:**
-  - Connects to Meshtastic BLE Service UUID: `6ba1b218-15a8-461f-9fa8-5dcae273eafd`.
-  - Characteristics: `fromRadio` (Notify), `toRadio` (Write), `fromNum` (Read).
+  - Background BLE scanner and GATT client targeting the Meshtastic BLE Service UUID.
 
 ---
 
@@ -81,19 +81,21 @@ LoRa radio packets have a physical payload ceiling of 237 bytes in standard Mesh
 
 1. **Hardware Link Pill in HUD:**
    - When a LoRa radio is connected, top-left telemetry renders:  
-     `LORA: CONNECTED • 915 MHz • 18 dBm • 4 NODES`
+     `LORA: CONNECTED • 915 MHz • 4 NODES`
    - Active radio icon pulses cyan on TX, amber on RX.
 2. **Node Directory in Sovereign Command Center:**
    - Tap "LoRa Mesh" row in Command Center to open the **Mesh Node Roster**:
      - Lists discovered nodes, hop counts, battery percentage, SNR (Signal-to-Noise Ratio), and RSSI.
      - One-tap "Ping Node" and "Send Direct Message".
-3. **Off-Grid Radio Silence (EMCON) Interlock:**
-   - When Network Profile is set to **Radio Silence**, hardware TX is disabled at the driver level (hardware listen-only mode).
+3. **Strict Network Profile Interlocks:**
+   - Transmissions are gated by `AtlasServices.networkProfile`.
+   - **Allowed:** "Off-Grid Mesh Only" and "Hybrid".
+   - **Refused:** "Radio Silence" (hardware listen-only, TX disabled) and "Cloud-Only".
 
 ---
 
 ## 5. Implementation Roadmap
-* **Step 1:** Port pure `FragmentAckCodec.kt`, `FragmentHeader.kt`, and `MeshSubsegmentReassembly.kt` into `:atlas-sdk:tactical.mesh` with unit tests.
-* **Step 2:** Port `PeerPenaltyLedger.kt` to ensure zero trust against replay attacks.
-* **Step 3:** Implement `AndroidUsbSerialTransport` and `AndroidBleMeshTransport` behind the pure `MeshTransport` interface.
-* **Step 4:** Wire received packets into `AtlasServices.markerStore` and `pliStore`.
+* **Step 1:** Implement pure `FragmentStore` and `FragmentAckCodec` in `:atlas-sdk:tactical.mesh` with 100% deterministic unit tests.
+* **Step 2:** Define pure `MeshRadioClient` interface in domain logic with zero Android platform imports.
+* **Step 3:** Implement `AndroidUsbSerialRadioClient` and `AndroidBleRadioClient` in `android/mesh/` using Meshtastic Protobuf framing.
+* **Step 4:** Integrate received peer tracks and markers into `AtlasServices.markerStore` and `pliStore`.
