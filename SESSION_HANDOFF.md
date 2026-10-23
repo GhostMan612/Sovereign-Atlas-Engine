@@ -145,7 +145,7 @@
   - `AtlasLoadingOverlay` rebuilt as a cinematic boot screen: `bg_sovereign_topography.jpg` backdrop (`drawable-nodpi`), `Canvas` radar sweep with counter-rotating astrolabe arcs, boot-stage telemetry from `AtlasMotionMath.bootTelemetryStage`. `AtlasActivityBanner` micro-loader is wired to the MBTiles swap, offline pack scan, road route calculation and LoS profile calculation.
   - 15 new control vector icons (`ic_hud_*`, `ic_draw_*`, `ic_tool_*`) wired into the rail pills, Command Center rows, drawing toolbar and `HudTelemetryPill` (`iconRes`, `pulse`). MIL-STD-2525D symbols and `wp-icon` / `scrub-icon` were redrawn at unchanged pixel sizes.
   - Pure `ui/hud/AtlasMotionMath.kt` (shortest-arc unwrap, pack download fraction, boot stage labels) with `AtlasMotionMathTest`. `CompassOverlay` and `CompassTape` animate along the shortest arc when `reducedMotion` is false and keep the 5° snap when it is true.
-  - Device smoke on the Moto G is deferred until the whole phase set closes (operator directive).
+  - **Physical Device Smoke & Deployment (`app-play-debug.apk`):** Built APK (126,003,025 bytes, SHA-256 `2a527bb93aa48be8f8c03869b69b86c250d38b8d77c01842c153ab4c3c8e9a94`). Successfully deployed to BLU View 5 (`7040016025040287`, `B160V`) and installed to Moto G (`ZT4222BMWN`, Android 16 / SDK 36) with `MainActivity` launched and verified running (PID 15790, 0 runtime crashes, 0 uncaught exceptions in logcat).
 
 ## Next moves
 
