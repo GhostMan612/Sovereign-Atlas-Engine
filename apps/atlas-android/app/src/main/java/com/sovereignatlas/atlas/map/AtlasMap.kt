@@ -157,6 +157,7 @@ import com.sovereignatlas.atlas.tactical.RadialFence
 import com.sovereignatlas.atlas.tactical.fencePolygon
 import com.sovereignatlas.atlas.ui.FenceDialog
 import com.sovereignatlas.atlas.ui.GoToCard
+import com.sovereignatlas.atlas.ui.HudTelemetryPill
 import com.sovereignatlas.atlas.ui.LayersDialog
 import com.sovereignatlas.atlas.ui.MgrsHud
 import com.sovereignatlas.atlas.geo.MgrsConverter
@@ -218,9 +219,6 @@ fun AtlasMapScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val styleRef = remember { mutableStateOf<Style?>(null) }
-    // One sink for the whole composable, reading the style through the state holder
-    // rather than capturing a Style. Every push site used to re-read styleRef and
-    // re-derive the source lookup; this is where that happens now, once.
     val sink: FeatureSink = remember { MapLibreFeatureSink { styleRef.value } }
     val repoWaypoints = remember { mutableStateOf<List<Waypoint>>(emptyList()) }
     val repoTracks = remember { mutableStateOf<List<Track>>(emptyList()) }
@@ -232,15 +230,11 @@ fun AtlasMapScreen(
     val headingUp = remember { mutableStateOf(false) }
     val pendingHeadingUp = remember { mutableStateOf(false) }
     val headingTick = remember { mutableStateOf(0) }
-    // TacNav-X reads the same heading source the compass dial uses: the heading
-    // service is listener-driven (no flow), so the tick is the recomposition key.
-    // A null bearing means no sample yet - the HUD draws no readout rather than
-    // inventing a heading.
     val currentBearing = remember(headingTick.value) { services.heading.displayDeg()?.toFloat() }
     val currentHeadingFrame = remember(headingTick.value) {
         if (services.heading.displayDeg() == null) null else services.heading.frameLabel()
     }
-    val hudAccent = androidx.compose.ui.graphics.Color(0xFF39FF14)
+    val hudAccent = androidx.compose.ui.graphics.Color(0xFF39C5F3)
     val following = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val showLink = remember { mutableStateOf(false) }
@@ -1154,10 +1148,6 @@ fun AtlasMapScreen(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
         )
-        // TacNav-X overlay: full-screen so the center reticle stays on the map
-        // center. Only the reticle is drawn here; the bearing readout is stacked
-        // below the compass tape in the top Column. No pointer input, so map
-        // gestures pass straight through.
         if (tacticalWorkspaceEnabled) {
             TacNavHud(
                 bearing = currentBearing,
@@ -1167,52 +1157,46 @@ fun AtlasMapScreen(
             )
         }
         Column(
-            modifier = Modifier.align(Alignment.BottomEnd)
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(end = 12.dp, bottom = 30.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // No Locate FAB: tapping the compass rose locates, long-press faces
-            // north. The extra button only crowded the rail.
-            FloatingActionButton(
+            AtlasRailPillButton(
+                label = if (following.value) "Unfollow" else "Follow",
+                stateDesc = if (following.value) "Follow active" else "Follow inactive",
+                active = following.value,
                 onClick = onToggleFollow,
-                modifier = Modifier.semantics {
-                    stateDescription = if (following.value) "Follow active" else "Follow inactive"
-                },
-            ) {
-                Text(if (following.value) "Unfollow" else "Follow")
-            }
+            )
             if (studioWorkspaceEnabled) {
-                FloatingActionButton(
+                AtlasRailPillButton(
+                    label = "Measure",
+                    stateDesc = if (measureActive.value) "Measure active" else "Measure inactive",
+                    active = measureActive.value,
                     onClick = onMeasure,
-                    modifier = Modifier.semantics {
-                        stateDescription = if (measureActive.value) "Measure active" else "Measure inactive"
-                    },
-                ) {
-                    Text("Measure")
-                }
+                )
             }
             if (explorerWorkspaceEnabled) {
-                FloatingActionButton(
+                AtlasRailPillButton(
+                    label = "Layers ${activeMbtilesPacks.value.size}",
+                    stateDesc = "Open encyclopedia layer manager",
+                    active = activeMbtilesPacks.value.isNotEmpty(),
                     onClick = {
                         showLayerManager.value = true
                         mapScope.launch {
                             scannedPacks.value = services.mbtilesScanner.scanPacks()
                         }
                     },
-                    modifier = Modifier.semantics {
-                        stateDescription = "Open encyclopedia layer manager"
-                    },
-                ) {
-                    Text("Layers ${activeMbtilesPacks.value.size}")
-                }
+                )
             }
-            FloatingActionButton(
+            AtlasRailPillButton(
+                label = "Tools",
+                stateDesc = "Tools",
+                active = showTools.value,
                 onClick = { showTools.value = true },
-                modifier = Modifier.semantics { stateDescription = "Tools" },
-            ) {
-                Text("Tools")
-            }
+            )
         }
         if (!measureActive.value && tacticalWorkspaceEnabled) {
             TacticalDrawingToolbar(
@@ -1221,8 +1205,6 @@ fun AtlasMapScreen(
                 onModeSelected = { mode ->
                     drawingModeFlow.value = mode
                     inProgressPointsFlow.value = emptyList()
-                    // Exclusivity: taking the glass for drawing releases the
-                    // measurement session (and vice versa via the Measure FAB).
                     if (mode != DrawingMode.NONE && services.measure.isActive()) {
                         services.measure.clear()
                     }
@@ -1259,80 +1241,137 @@ fun AtlasMapScreen(
                     drawingModeFlow.value = DrawingMode.NONE
                     inProgressPointsFlow.value = emptyList()
                 },
-                // The right-rail FABs own the bottom-right corner, so the toolbar
-                // reserves that width (56dp FAB + 16dp rail padding + gap). The
-                // mode picker is collapsed to one button, so the row no longer
-                // needs to scroll.
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(start = 8.dp, end = 88.dp, bottom = 8.dp)
+                    .padding(bottom = 30.dp)
             )
         }
         if (showTools.value) {
             ModalBottomSheet(
                 onDismissRequest = { showTools.value = false },
                 sheetState = toolsSheetState,
+                containerColor = androidx.compose.ui.graphics.Color(0xFF141C24),
+                contentColor = androidx.compose.ui.graphics.Color.White,
             ) {
-                ToolRow("Waypoints", "Open waypoints", openTool(showWaypoints))
-                ToolRow("Tracks", "Open tracks", openTool(showTracks))
-                ToolRow("Offline", "Open offline packs", openTool(showOffline))
-                ToolRow("Layers", "Open layers", openTool(showLayers))
-                ToolRow("Link", "Open radio link", openTool(showLink))
-                ToolRow("Fence", "Open geofence", openTool(showFence))
-                ToolRow("API Keys", "Open API keys", openTool(showSettings))
-                ToolRow("Settings", "Open node settings", openTool(showNodeSettings))
-                ToolRow(
-                    "Chat",
-                    "Open tactical chat",
-                    {
-                        toolsScope.launch {
-                            try {
-                                toolsSheetState.hide()
-                            } finally {
-                                showTools.value = false
-                                showChat.value = true
-                            }
-                        }
-                    },
-                )
-                ToolRow(
-                    if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
-                    if (losMode != LoSMode.Inactive) {
-                        "Cancel line-of-sight"
-                    } else {
-                        "Start line-of-sight"
-                    },
-                    {
-                        toolsScope.launch {
-                            try {
-                                toolsSheetState.hide()
-                            } finally {
-                                showTools.value = false
-                                if (losMode != LoSMode.Inactive) {
-                                    services.losState.reset()
-                                } else {
-                                    services.losState.reset()
-                                    services.losState.setMode(LoSMode.AwaitingObserver)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "Sovereign Command Center",
+                        fontSize = 16.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        WorkspaceQuickChip(
+                            label = "All",
+                            active = explorerWorkspaceEnabled && tacticalWorkspaceEnabled && studioWorkspaceEnabled,
+                            onClick = {
+                                services.settingsRepository.setExplorerWorkspaceEnabled(true)
+                                services.settingsRepository.setTacticalWorkspaceEnabled(true)
+                                services.settingsRepository.setStudioWorkspaceEnabled(true)
+                            },
+                        )
+                        WorkspaceQuickChip(
+                            label = "Clean Nav",
+                            active = !explorerWorkspaceEnabled && !tacticalWorkspaceEnabled && !studioWorkspaceEnabled,
+                            onClick = {
+                                services.settingsRepository.setExplorerWorkspaceEnabled(false)
+                                services.settingsRepository.setTacticalWorkspaceEnabled(false)
+                                services.settingsRepository.setStudioWorkspaceEnabled(false)
+                            },
+                        )
+                        WorkspaceQuickChip(
+                            label = "Explorer",
+                            active = explorerWorkspaceEnabled,
+                            onClick = {
+                                services.settingsRepository.setExplorerWorkspaceEnabled(!explorerWorkspaceEnabled)
+                            },
+                        )
+                        WorkspaceQuickChip(
+                            label = "Tactical",
+                            active = tacticalWorkspaceEnabled,
+                            onClick = {
+                                services.settingsRepository.setTacticalWorkspaceEnabled(!tacticalWorkspaceEnabled)
+                            },
+                        )
+                        WorkspaceQuickChip(
+                            label = "Studio",
+                            active = studioWorkspaceEnabled,
+                            onClick = {
+                                services.settingsRepository.setStudioWorkspaceEnabled(!studioWorkspaceEnabled)
+                            },
+                        )
+                    }
+                    ToolRow("Waypoints", "Open waypoints", openTool(showWaypoints))
+                    ToolRow("Tracks", "Open tracks", openTool(showTracks))
+                    ToolRow("Offline", "Open offline packs", openTool(showOffline))
+                    ToolRow("Layers", "Open layers", openTool(showLayers))
+                    ToolRow("Link", "Open radio link", openTool(showLink))
+                    ToolRow("Fence", "Open geofence", openTool(showFence))
+                    ToolRow("API Keys", "Open API keys", openTool(showSettings))
+                    ToolRow("Settings", "Open node settings", openTool(showNodeSettings))
+                    ToolRow(
+                        "Chat",
+                        "Open tactical chat",
+                        {
+                            toolsScope.launch {
+                                try {
+                                    toolsSheetState.hide()
+                                } finally {
+                                    showTools.value = false
+                                    showChat.value = true
                                 }
                             }
-                        }
-                    },
-                )
-                ToolRow(
-                    if (headingUp.value) "North-up" else "Head-up",
-                    if (headingUp.value) "Head-up on" else "Head-up off",
-                    {
-                        toolsScope.launch {
-                            try {
-                                toolsSheetState.hide()
-                            } finally {
-                                showTools.value = false
-                                onToggleHeadingUp()
+                        },
+                    )
+                    ToolRow(
+                        if (losMode != LoSMode.Inactive) "LoS off" else "LoS",
+                        if (losMode != LoSMode.Inactive) {
+                            "Cancel line-of-sight"
+                        } else {
+                            "Start line-of-sight"
+                        },
+                        {
+                            toolsScope.launch {
+                                try {
+                                    toolsSheetState.hide()
+                                } finally {
+                                    showTools.value = false
+                                    if (losMode != LoSMode.Inactive) {
+                                        services.losState.reset()
+                                    } else {
+                                        services.losState.reset()
+                                        services.losState.setMode(LoSMode.AwaitingObserver)
+                                    }
+                                }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
+                    ToolRow(
+                        if (headingUp.value) "North-up" else "Head-up",
+                        if (headingUp.value) "Head-up on" else "Head-up off",
+                        {
+                            toolsScope.launch {
+                                try {
+                                    toolsSheetState.hide()
+                                } finally {
+                                    showTools.value = false
+                                    onToggleHeadingUp()
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
         if (showChat.value) {
@@ -1632,15 +1671,13 @@ fun AtlasMapScreen(
                 )
             }
         }
-        // Left column: MGRS readout plus the LoS status line, both inset below
-        // the black band so they never collide with it.
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(start = 8.dp, top = 48.dp),
+                .padding(start = 10.dp, top = 54.dp),
             horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             if (tacticalWorkspaceEnabled) {
                 MgrsHud(mgrsText = mgrsText)
@@ -1652,10 +1689,9 @@ fun AtlasMapScreen(
                         String.format(Locale.US, " • %.1f km/h", s * 3.6f)
                     } ?: ""
                     val packCount = services.offline.packs().size
-                    Text(
+                    HudTelemetryPill(
                         text = "GPS: $locStatus$speedText • OFFLINE: $packCount packs",
-                        fontSize = 11.sp,
-                        color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                        textColor = androidx.compose.ui.graphics.Color(0xFFE2E8F0),
                     )
                 }
             }
@@ -1663,22 +1699,22 @@ fun AtlasMapScreen(
                 ?: OfflineBuiltinProviders.lookup(baseProviderId.value)?.maxZoom
                 ?: 19
             if (OverscalePolicy.isOverscaled(scaleInput.first, activeSourceMaxZoom)) {
-                Text(
+                HudTelemetryPill(
                     text = OverscalePolicy.formatBadge(scaleInput.first, activeSourceMaxZoom),
-                    fontSize = 11.sp,
-                    color = androidx.compose.ui.graphics.Color(0xFFFFA500),
+                    textColor = androidx.compose.ui.graphics.Color(0xFFF4B85C),
+                    borderColor = androidx.compose.ui.graphics.Color(0x80F4B85C),
                 )
             }
             when (losMode) {
-                LoSMode.AwaitingObserver -> Text(
+                LoSMode.AwaitingObserver -> HudTelemetryPill(
                     text = "LoS: tap observer point",
-                    fontSize = 12.sp,
-                    color = hudAccent,
+                    textColor = hudAccent,
+                    borderColor = hudAccent,
                 )
-                LoSMode.AwaitingTarget -> Text(
+                LoSMode.AwaitingTarget -> HudTelemetryPill(
                     text = "LoS: tap target point",
-                    fontSize = 12.sp,
-                    color = hudAccent,
+                    textColor = hudAccent,
+                    borderColor = hudAccent,
                 )
                 LoSMode.Inactive -> {
                     val verdict = losProfile?.lineOfSight
@@ -1686,25 +1722,23 @@ fun AtlasMapScreen(
                     if (verdict == null) {
                         Unit
                     } else if (error != null) {
-                        // Undetermined, not blocked. Red would claim a terrain
-                        // finding; amber says the question was not answered.
-                        Text(
+                        HudTelemetryPill(
                             text = error,
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color(0xFFFFA500),
+                            textColor = androidx.compose.ui.graphics.Color(0xFFF4B85C),
+                            borderColor = androidx.compose.ui.graphics.Color(0x80F4B85C),
                         )
                     } else {
                         if (verdict.status == LoSStatus.Clear) {
-                            Text(
+                            HudTelemetryPill(
                                 text = "CLEAR",
-                                fontSize = 12.sp,
-                                color = androidx.compose.ui.graphics.Color(0xFF39FF14),
+                                textColor = androidx.compose.ui.graphics.Color(0xFF39FF14),
+                                borderColor = androidx.compose.ui.graphics.Color(0x8039FF14),
                             )
                         } else {
-                            Text(
+                            HudTelemetryPill(
                                 text = "OBSTRUCTED at ${verdict.blockingDistanceMeters?.toInt()}m",
-                                fontSize = 12.sp,
-                                color = androidx.compose.ui.graphics.Color.Red,
+                                textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
+                                borderColor = androidx.compose.ui.graphics.Color(0x80FF4444),
                             )
                         }
                     }
@@ -1715,17 +1749,16 @@ fun AtlasMapScreen(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
-                .padding(end = 8.dp, top = 48.dp),
+                .padding(end = 10.dp, top = 54.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (recorderTick.value >= 0 && services.recorder.isRecording()) {
-                Surface {
-                    Text(
-                        text = "REC • ${services.recorder.pointCount()} pts",
-                        modifier = Modifier.padding(8.dp),
-                    )
-                }
+                HudTelemetryPill(
+                    text = "REC • ${services.recorder.pointCount()} pts",
+                    textColor = androidx.compose.ui.graphics.Color(0xFFFF4444),
+                    borderColor = androidx.compose.ui.graphics.Color(0x99FF4444),
+                )
             }
             CompassOverlay(
                 bearing = bearingHud,
@@ -1738,8 +1771,6 @@ fun AtlasMapScreen(
                     }
                 },
             )
-            // Bearing readout sits directly under the rose, mirroring the TacNav
-            // readout style so the right column carries heading, not the center.
             if (tacticalWorkspaceEnabled) {
                 TacNavHud(
                     bearing = currentBearing,
@@ -1748,17 +1779,35 @@ fun AtlasMapScreen(
                     showReticle = false,
                     fillScreen = false,
                     topPadding = 0.dp,
-                    modifier = Modifier.width(160.dp).height(56.dp),
+                    modifier = Modifier.width(136.dp).height(46.dp),
                 )
             }
         }
-        Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(start = 12.dp, bottom = 30.dp),
+        ) {
             ScaleBar(metersPerPixel = metersPerPixel)
         }
         goToTick.value.let {
             positionTick.value.let {
                 if (services.goTo.isActive()) {
-                    Surface(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+                    Surface(
+                        color = androidx.compose.ui.graphics.Color(0xF0141C24),
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            androidx.compose.ui.graphics.Color(0x4DA8B5C1),
+                        ),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
+                            .padding(start = 10.dp, top = 54.dp),
+                    ) {
                         GoToCard(
                             goTo = services.goTo,
                             usableFix =
@@ -1849,7 +1898,21 @@ fun AtlasMapScreen(
                 }
             }
         }
-        if (measureActive.value && drawingMode == DrawingMode.NONE) {            Surface(modifier = Modifier.align(Alignment.BottomCenter)) {
+        if (measureActive.value && drawingMode == DrawingMode.NONE) {
+            Surface(
+                color = androidx.compose.ui.graphics.Color(0xF0141C24),
+                contentColor = androidx.compose.ui.graphics.Color.White,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    androidx.compose.ui.graphics.Color(0x4DA8B5C1),
+                ),
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 12.dp, end = 104.dp, bottom = 30.dp),
+            ) {
                 MeasurePanel(
                     snapshot = measureSnapshot.value,
                     units = MeasureUnit.values().toList(),
@@ -2041,7 +2104,8 @@ fun AtlasMapScreen(
                 onClose = { showLayers.value = false },
             )
         }
-        if (showLink.value) {            val map = mapRef.value
+        if (showLink.value) {
+            val map = mapRef.value
             val center = map?.cameraPosition?.target?.let {
                 AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
             }
@@ -2057,7 +2121,8 @@ fun AtlasMapScreen(
                 onClose = { showLink.value = false },
             )
         }
-        if (showFence.value) {            val map = mapRef.value
+        if (showFence.value) {
+            val map = mapRef.value
             val center = map?.cameraPosition?.target?.let {
                 AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
             }
@@ -2083,24 +2148,23 @@ fun AtlasMapScreen(
             )
         }
         if (attribution.value.isNotEmpty()) {
-            // No Surface: an opaque panel buried the lower-left glass. White text
-            // with a shadow stays legible over snow, sand, and satellite imagery
-            // without hiding the map behind it.
-            Text(
-                text = attribution.value,
-                fontSize = 9.sp,
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                style = TextStyle(
-                    shadow = Shadow(
-                        color = androidx.compose.ui.graphics.Color.Black,
-                        blurRadius = 6f,
-                    )
-                ),
+            Surface(
+                color = androidx.compose.ui.graphics.Color(0xBF10151C),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(start = 8.dp, bottom = 8.dp),
-            )
+                    .padding(start = 12.dp, end = 104.dp, bottom = 6.dp),
+            ) {
+                Text(
+                    text = attribution.value,
+                    fontSize = 9.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
         }
         AtlasLoadingOverlay(visible = mapLoading.value)
     }
@@ -2122,14 +2186,100 @@ fun AtlasMapScreen(
 }
 
 @Composable
-private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
-    TextButton(
+private fun AtlasRailPillButton(
+    label: String,
+    stateDesc: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
-            .semantics { stateDescription = description },
+        color = if (active) androidx.compose.ui.graphics.Color(0xE6162E3D) else androidx.compose.ui.graphics.Color(0xE6141C24),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x55A8B5C1),
+        ),
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .defaultMinSize(minWidth = 88.dp, minHeight = 40.dp)
+            .semantics { stateDescription = stateDesc },
     ) {
-        Text(label)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                color = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceQuickChip(
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        color = if (active) androidx.compose.ui.graphics.Color(0xFF1B3A4B) else androidx.compose.ui.graphics.Color(0xFF1B2631),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0x33A8B5C1),
+        ),
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = if (active) androidx.compose.ui.graphics.Color(0xFF39C5F3) else androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@Composable
+private fun ToolRow(label: String, description: String, onClick: () -> Unit) {
+    Surface(
+        color = androidx.compose.ui.graphics.Color(0xFF1B2631),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            androidx.compose.ui.graphics.Color(0x26A8B5C1),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        TextButton(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 44.dp)
+                .semantics { stateDescription = description },
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 14.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = androidx.compose.ui.graphics.Color.White,
+                )
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = androidx.compose.ui.graphics.Color(0xFFA8B5C1),
+                )
+            }
+        }
     }
 }
 

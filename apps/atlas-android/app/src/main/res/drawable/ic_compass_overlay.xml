@@ -3,28 +3,31 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- Outer ring, radius 20 about (24,24): spans 4..44, transparent field. -->
+    <path
+        android:fillColor="#D910151C"
+        android:strokeColor="#A8B5C1"
+        android:strokeWidth="1.8"
+        android:pathData="M24,3a21,21 0 1,1 0,42a21,21 0 1,1 0,-42z" />
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2"
-        android:pathData="M4,24a20,20 0 1,1 40,0a20,20 0 1,1 -40,0" />
-    <!-- North arrow, terminal green. -->
+        android:strokeColor="#33A8B5C1"
+        android:strokeWidth="1"
+        android:pathData="M24,7a17,17 0 1,1 0,34a17,17 0 1,1 0,-34z" />
     <path
-        android:fillColor="#39FF14"
-        android:pathData="M24,5l5,17h-10z" />
-    <!-- South/east/west points, white. -->
+        android:fillColor="#39C5F3"
+        android:pathData="M24,6l4.5,16h-9z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M24,43l5,-17h-10z" />
+        android:fillColor="#6B7D8D"
+        android:pathData="M24,42l4.5,-16h-9z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M43,24l-17,-5v10z" />
+        android:fillColor="#A8B5C1"
+        android:pathData="M42,24l-16,-4v8z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M5,24l17,-5v10z" />
-    <!-- Center pivot, terminal green. -->
+        android:fillColor="#A8B5C1"
+        android:pathData="M6,24l16,-4v8z" />
     <path
-        android:fillColor="#39FF14"
-        android:pathData="M22,22h4v4h-4z" />
+        android:fillColor="#10151C"
+        android:strokeColor="#39C5F3"
+        android:strokeWidth="1.5"
+        android:pathData="M24,21a3,3 0 1,1 0,6a3,3 0 1,1 0,-6z" />
 </vector>

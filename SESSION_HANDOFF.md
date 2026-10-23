@@ -133,11 +133,13 @@
   4. Completed `docs/atlas-production/evidence/ARTIFACT_CHAIN.md` and `docs/atlas-production/evidence/RELEASE_ACCEPTANCE.md`.
   5. Sanctioned multi-module host gate green: **1,474 passing unit tests** (`12 :atlas-sdk`, `6 :sdk-consumer`, `728 Play`, `728 Enterprise`), 0 failures, 0 errors, and 0 pure-boundary violations across 98 pure files.
   6. **Physical Device Smoke (`G10`) Verified on Moto G `ZT4222BMWN` (`moto g - 2025`, Android 16 / SDK 36, `10.1.10.13:45099`):** Both `app-play-debug.apk` and `app-enterprise-debug.apk` assembled and installed via wireless ADB (`Success`); `com.sovereignatlas.atlas/.MainActivity` launched (`pid: 30540`, `topResumedActivity`), 0 fatal logcat exceptions, and live `CompassTape`, `MGRS` (`15T VK 92031 75105`), `GPS: VALID • OFFLINE: 0 packs`, `TacNavHud` (`275° / 4885 mils TRUE`), and multi-source attribution rollup verified on screen.
+  7. **Sovereign Cockpit UI/UX Overhaul (`TacticalHud.kt`, `TacNavHud.kt`, `TacticalDrawingToolbar.kt`, `ic_compass_overlay.xml`, `AtlasMap.kt`):**
+     - Replaced unframed floating HUD text with high-contrast Matte Charcoal (`#D910151C`) + Brushed Chrome (`#4DA8B5C1`) instrument pills (`MgrsHud`, `HudTelemetryPill`, `ScaleBar` with bracketed end ticks, and framed `TacNavHud` bearing/mils card).
+     - Upgraded `ic_compass_overlay.xml` to a filled dark charcoal/chrome HSI compass dial with Navigation Cyan (`#39C5F3`) north pointer, and refined `TacNavHud` center reticle with a dark contrast halo and precision sight ticks.
+     - Eliminated the bottom-left triple overlap by stacking `ScaleBar` (`bottom = 30.dp`) and `TacticalDrawingToolbar` (`bottom = 30.dp`) cleanly above the single-line bottom attribution micro-pill (`bottom = 6.dp`).
+     - Replaced the clipped square right-rail FABs with `AtlasRailPillButton` controls (`minWidth = 88.dp`, active cyan border/fill) and upgraded the `Tools` bottom sheet into the **Sovereign Command Center** with a one-tap **Quick Workspace Switcher** (`All`, `Clean Nav`, `Explorer`, `Tactical`, `Studio`) and structured Graphite command cards.
 
 ## Next moves
 
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.
-
-
-
