@@ -17,15 +17,15 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-23: 1,530 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-10-23: 1,550 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 12 tests
   - `:sdk-consumer:test`: 6 tests
-  - `:app:testPlayDebugUnitTest`: 756 tests
-  - `:app:testEnterpriseDebugUnitTest`: 756 tests
+  - `:app:testPlayDebugUnitTest`: 766 tests
+  - `:app:testEnterpriseDebugUnitTest`: 766 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
-- Pure boundary scan passes: 104 Kotlin files across pure packages, `:atlas-sdk`, and
+- Pure boundary scan passes: 108 Kotlin files across pure packages, `:atlas-sdk`, and
   `samples/sdk-consumer` have 0 forbidden imports (100% clean).
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
@@ -171,10 +171,16 @@
     5. Interactive map hit-testing: wired click interrogation on active user GIS layers in `AtlasMap.kt`.
     6. Verified 100% green host gate: **1,530 passing unit tests** (+50 tests: 12 :atlas-sdk, 6 :sdk-consumer, 756 Play, 756 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 104 pure files.
 
+  - **Phase 12 (2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask - COMPLETE & INTEGRATED):**
+    1. Pure domain DEM & viewshed contracts implemented with 0 Android/Compose/MapLibre imports (`geo.elevation`, `geo.viewshed`): `MapboxDemDecoder.kt` (Terrain-RGB decoding formula with 0.1m precision and clamping), `ViewshedModels.kt` (`ViewshedConfig`, `ViewshedSample`, `ViewshedRay`, `ViewshedResult`, `toVisiblePolygon`, `toBoundaryLine`, `toObscuredPolygon`), `ViewshedEngine.kt` ($N$ radial rays with $k = 4/3$ Earth curvature and atmospheric refraction drop, tangent obstacle evaluation against horizon), and `ViewshedState.kt` (reactive thread-safe holder).
+    2. MapLibre dynamic hillshading & viewshed layers: added `TERRAIN_DEM_SOURCE`, `TERRAIN_HILLSHADE_LAYER`, `VIEWSHED_SOURCE`, `VIEWSHED_FILL_LAYER`, `VIEWSHED_LINE_LAYER` to `AtlasLayerInstaller.kt`, dynamic `syncTerrainHillshade` in `MapStyleSync.kt`, and `pushViewshed` in `MapFeatureSync.kt`.
+    3. Two-finger perspective camera pitch & HUD controls: added `tilt: Double` to `CameraState` in `AtlasMap.kt`, enabled `isTiltGesturesEnabled = true`, added clickable pitch badge (`PERSPECTIVE • PITCH: XX°`) in `AtlasTelemetryHud` and `HudTelemetryPill` with one-tap instant 2D reset to $0^\circ$.
+    4. Sovereign Command Center & Target Drop integration: added Radial Viewshed tool row in `AtlasCommandCenterSheet` and "Compute Viewshed From Here" action in `AtlasTargetDropSheet`.
+    5. Verified 100% green host gate: **1,550 passing unit tests** (+20 tests: 12 :atlas-sdk, 6 :sdk-consumer, 766 Play, 766 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 108 pure files.
+
 ## Next moves
 
 - **Implementation Roadmap from Corrected Blueprints:**
-  1. **Phase 12 (2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask):** Implement 2.5D hillshade styling, perspective camera pitch controls, and 360° radial viewshed polygon projection based on corrected `blueprints/02_TRUE_3D_DEM_AND_VIEWSHED.md`.
-  2. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
+  1. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.

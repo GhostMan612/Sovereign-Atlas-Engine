@@ -129,6 +129,8 @@ fun AtlasTelemetryHud(
     losProfile: TerrainProfile?,
     hudAccent: Color,
     reducedMotion: Boolean,
+    tilt: Double = 0.0,
+    onResetTilt: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -138,6 +140,14 @@ fun AtlasTelemetryHud(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        if (tilt > 5.0) {
+            HudTelemetryPill(
+                text = "PERSPECTIVE • PITCH: ${tilt.toInt()}°",
+                textColor = hudAccent,
+                borderColor = hudAccent,
+                onClick = onResetTilt,
+            )
+        }
         if (tacticalWorkspaceEnabled) {
             MgrsHud(mgrsText = mgrsText)
         }

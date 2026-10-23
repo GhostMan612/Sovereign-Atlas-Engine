@@ -79,6 +79,11 @@ object AtlasLayerIds {
     const val USER_GIS_FILL_PREFIX = "user-gis-fill-"
     const val USER_GIS_LINE_PREFIX = "user-gis-line-"
     const val USER_GIS_CIRCLE_PREFIX = "user-gis-circle-"
+    const val TERRAIN_DEM_SOURCE = "terrain-dem-source"
+    const val TERRAIN_HILLSHADE_LAYER = "atlas-terrain-hillshade"
+    const val VIEWSHED_SOURCE = "atlas-viewshed-source"
+    const val VIEWSHED_FILL_LAYER = "atlas-viewshed-fill-layer"
+    const val VIEWSHED_LINE_LAYER = "atlas-viewshed-line-layer"
 
     /**
      * Image name the LoS observer layer requests.
@@ -128,6 +133,7 @@ fun installAtlasLayers(style: Style) {
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_TARGET_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_SOURCE))
     style.addSource(GeoJsonSource(AtlasLayerIds.LOS_BLOCK_SOURCE))
+    style.addSource(GeoJsonSource(AtlasLayerIds.VIEWSHED_SOURCE))
     style.addLayer(
         SymbolLayer(
             AtlasLayerIds.WAYPOINTS_LAYER,
@@ -379,6 +385,53 @@ fun installAtlasLayers(style: Style) {
                 PropertyFactory.iconAllowOverlap(true),
             ),
     )
+    if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+        style.addLayerBelow(
+            FillLayer(AtlasLayerIds.VIEWSHED_FILL_LAYER, AtlasLayerIds.VIEWSHED_SOURCE)
+                .withProperties(
+                    PropertyFactory.fillColor("#10151C"),
+                    PropertyFactory.fillOpacity(0.45f),
+                )
+                .withFilter(
+                    Expression.eq(Expression.geometryType(), Expression.literal("Polygon")),
+                ),
+            AtlasLayerIds.WAYPOINTS_LAYER,
+        )
+        style.addLayerBelow(
+            LineLayer(AtlasLayerIds.VIEWSHED_LINE_LAYER, AtlasLayerIds.VIEWSHED_SOURCE)
+                .withProperties(
+                    PropertyFactory.lineColor("#39C5F3"),
+                    PropertyFactory.lineWidth(2.5f),
+                    PropertyFactory.lineOpacity(0.9f),
+                )
+                .withFilter(
+                    Expression.eq(Expression.geometryType(), Expression.literal("LineString")),
+                ),
+            AtlasLayerIds.WAYPOINTS_LAYER,
+        )
+    } else {
+        style.addLayer(
+            FillLayer(AtlasLayerIds.VIEWSHED_FILL_LAYER, AtlasLayerIds.VIEWSHED_SOURCE)
+                .withProperties(
+                    PropertyFactory.fillColor("#10151C"),
+                    PropertyFactory.fillOpacity(0.45f),
+                )
+                .withFilter(
+                    Expression.eq(Expression.geometryType(), Expression.literal("Polygon")),
+                ),
+        )
+        style.addLayer(
+            LineLayer(AtlasLayerIds.VIEWSHED_LINE_LAYER, AtlasLayerIds.VIEWSHED_SOURCE)
+                .withProperties(
+                    PropertyFactory.lineColor("#39C5F3"),
+                    PropertyFactory.lineWidth(2.5f),
+                    PropertyFactory.lineOpacity(0.9f),
+                )
+                .withFilter(
+                    Expression.eq(Expression.geometryType(), Expression.literal("LineString")),
+                ),
+        )
+    }
 }
 
 fun setAtlasLayerVisible(style: Style, layerId: String, visible: Boolean) {
@@ -390,6 +443,7 @@ fun setAtlasLayerVisible(style: Style, layerId: String, visible: Boolean) {
         is CircleLayer -> layer.setProperties(PropertyFactory.visibility(value))
         is FillLayer -> layer.setProperties(PropertyFactory.visibility(value))
         is RasterLayer -> layer.setProperties(PropertyFactory.visibility(value))
+        is org.maplibre.android.style.layers.HillshadeLayer -> layer.setProperties(PropertyFactory.visibility(value))
     }
 }
 
@@ -407,9 +461,3 @@ fun setAtlasLayerOpacity(style: Style, layerId: String, opacity: Float) {
         )
     }
 }
-
-// The old pushFeatures(style, sourceId, FeatureCollection) is gone. Every one of
-// its call sites now goes through FeatureSink, which replaced the raw sourceId String
-// with the AtlasLayer sealed type. Nothing should be adding to a source by string id
-// any more: a typo produced a write to a source that does not exist, and two of the
-// three call paths did so silently.

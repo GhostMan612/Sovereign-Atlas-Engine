@@ -98,6 +98,8 @@ fun AtlasCommandCenterSheet(
     onOpenNodeSettings: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenGisLayers: () -> Unit = {},
+    viewshedActive: Boolean = false,
+    onToggleViewshed: () -> Unit = {},
     onToggleLoS: () -> Unit,
     onToggleHeadingUp: () -> Unit,
 ) {
@@ -246,6 +248,13 @@ fun AtlasCommandCenterSheet(
                 onClick = onToggleLoS,
             )
             ToolRow(
+                label = if (viewshedActive) "Viewshed off" else "Radial Viewshed",
+                description = if (viewshedActive) "Clear viewshed mask" else "Compute 360° terrain viewshed",
+                iconRes = R.drawable.ic_tool_los,
+                active = viewshedActive,
+                onClick = onToggleViewshed,
+            )
+            ToolRow(
                 label = if (headingUp) "North-up" else "Head-up",
                 description = if (headingUp) "Head-up on" else "Head-up off",
                 iconRes = R.drawable.ic_tool_heading,
@@ -322,6 +331,7 @@ fun AtlasTargetDropSheet(
     currentLocationFix: GeoPoint?,
     onDismissRequest: () -> Unit,
     onAnalyzeLoS: () -> Unit,
+    onComputeViewshed: (() -> Unit)? = null,
     onSendMarker: (label: String, type: String, color: Color) -> Unit,
 ) {
     if (targetDropPoint == null) return
@@ -385,6 +395,18 @@ fun AtlasTargetDropSheet(
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
+            }
+            if (onComputeViewshed != null) {
+                Button(
+                    onClick = onComputeViewshed,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1B2631),
+                        contentColor = Color(0xFF39C5F3),
+                    ),
+                ) {
+                    Text("Compute Viewshed From Here")
+                }
             }
             val types = listOf(
                 Triple("Hostile", "a-h-G", MaterialTheme.colorScheme.error),

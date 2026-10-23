@@ -104,6 +104,7 @@ final class MainActivity : ComponentActivity() {
             compositor = appServices.compositor,
             historicalIndex = appServices.historicalIndex,
             gisRepository = appServices.gisRepository,
+            viewshedState = appServices.viewshedState,
         )
     }
 

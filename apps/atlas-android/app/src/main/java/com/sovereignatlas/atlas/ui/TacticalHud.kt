@@ -17,6 +17,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -123,6 +124,7 @@ fun HudTelemetryPill(
     iconTint: Color = textColor,
     pulse: Boolean = false,
     reducedMotion: Boolean = false,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val pulseAlpha = if (pulse && !reducedMotion) {
@@ -140,11 +142,16 @@ fun HudTelemetryPill(
     } else {
         1.0f
     }
+    val surfaceModifier = if (onClick != null) {
+        modifier.clickable(onClick = onClick)
+    } else {
+        modifier
+    }
     Surface(
         color = Color(0xD910151C),
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, borderColor),
-        modifier = modifier,
+        modifier = surfaceModifier,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

@@ -22,6 +22,8 @@ import com.sovereignatlas.atlas.android.comms.AtakMulticastListener
 import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.los.ElevationProvider
 import com.sovereignatlas.atlas.geo.los.LineOfSightEngine
+import com.sovereignatlas.atlas.geo.viewshed.ViewshedEngine
+import com.sovereignatlas.atlas.geo.viewshed.ViewshedState
 import com.sovereignatlas.atlas.offline.OfflineMapRepository
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
 import com.sovereignatlas.atlas.track.TrackRepository
@@ -50,8 +52,6 @@ class AtlasServices(
     val behavior: MapBehavior,
     val offline: OfflineStore,
     val heading: HeadingService,
-    // Typed as the pure contract, not the socket implementation (ADR-006). The
-    // composition root below is the only place that names PackTileServer.
     val tiles: LocalTileServer,
     val keys: KeyProvider,
     val maps: OfflineMapRepository,
@@ -77,8 +77,18 @@ class AtlasServices(
     val compositor: LayerCompositor = LayerCompositor(),
     val historicalIndex: HistoricalKnowledgeIndex = HistoricalKnowledgeIndex(),
     val gisRepository: GisRepository = InMemoryGisRepository(),
+    val viewshedState: ViewshedState = ViewshedState(),
 ) {
     val lineOfSightEngine = LineOfSightEngine(
+        elevationProvider = object : ElevationProvider {
+            override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> {
+                val engine = DemSession.engine
+                return engine?.getElevationsBatch(points) ?: List(points.size) { null }
+            }
+        },
+    )
+
+    val viewshedEngine = ViewshedEngine(
         elevationProvider = object : ElevationProvider {
             override suspend fun getElevations(points: List<Pair<Double, Double>>): List<Double?> {
                 val engine = DemSession.engine

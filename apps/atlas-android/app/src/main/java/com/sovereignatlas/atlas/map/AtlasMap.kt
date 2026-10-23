@@ -229,6 +229,7 @@ data class CameraState(
     val zoom: Double,
     val bearing: Double,
     val isIdle: Boolean,
+    val tilt: Double = 0.0,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -269,6 +270,10 @@ fun AtlasMapScreen(
     val cartoKey by services.keys.cartoKey.collectAsState()
     val losMode by services.losState.mode.collectAsStateWithLifecycle(initialValue = LoSMode.Inactive)
     val losProfile by services.losState.profile.collectAsStateWithLifecycle(initialValue = null)
+    val viewshedResult by services.viewshedState.result.collectAsStateWithLifecycle(initialValue = null)
+    LaunchedEffect(viewshedResult) {
+        pushViewshed(sink, viewshedResult)
+    }
     val activeOfflineMap by services.maps.activeMap.collectAsState()
     val activeDem by services.maps.activeDem.collectAsState()
     val demStoreState = remember { mutableStateOf<DemTileStore?>(null) }
@@ -509,10 +514,14 @@ fun AtlasMapScreen(
             center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
             zoom = map.cameraPosition.zoom,
             bearing = map.cameraPosition.bearing,
+            tilt = map.cameraPosition.tilt,
             isIdle = true,
         )
         services.tiles.demTileUrl()?.let { demUrl ->
-            if (services.tiles.demAvailable()) ensureDemSource(style, demUrl)
+            if (services.tiles.demAvailable()) {
+                ensureDemSource(style, demUrl)
+                syncTerrainHillshade(style, demUrl)
+            }
         }
         if (applyOnlineBase) {
             applyBaseSource(style, services, baseProviderId.value, basePackId.value)
@@ -586,6 +595,7 @@ fun AtlasMapScreen(
         syncMbtilesPackLayers(style, services, activeMbtilesPacks.value)
         syncUserGisLayers(style, services.gisRepository.datasets.value)
         pushUserGisDatasets(sink, services.gisRepository.datasets.value)
+        pushViewshed(sink, services.viewshedState.result.value)
         if (showGraticule.value) pushGraticule(map, sink)
         val baseAttr = if (applyOnlineBase) {
             applyBaseSource(
@@ -611,6 +621,7 @@ fun AtlasMapScreen(
                 map.uiSettings.apply {
                     // Compose HUD owns compass + scale: native widgets stay off.
                     isCompassEnabled = false
+                    isTiltGesturesEnabled = true
                 }
                 // Global camera ceiling, pinned once here. The MapLibre default is
                 // 22.0; 24.0 permits 4 levels of overzoom past the Carto source
@@ -632,6 +643,7 @@ fun AtlasMapScreen(
                     cameraState.value = current.copy(
                         zoom = map.cameraPosition.zoom,
                         bearing = map.cameraPosition.bearing,
+                        tilt = map.cameraPosition.tilt,
                         isIdle = false,
                     )
                 }
@@ -898,6 +910,7 @@ fun AtlasMapScreen(
                         center = map.cameraPosition.target ?: LatLng(0.0, 0.0),
                         zoom = map.cameraPosition.zoom,
                         bearing = map.cameraPosition.bearing,
+                        tilt = map.cameraPosition.tilt,
                         isIdle = true,
                     )
                     if (showMgrsGrid.value) refreshMgrsGrid(map)
@@ -1342,6 +1355,39 @@ fun AtlasMapScreen(
                     }
                 }
             },
+            viewshedActive = viewshedResult != null,
+            onToggleViewshed = {
+                toolsScope.launch {
+                    try {
+                        toolsSheetState.hide()
+                    } finally {
+                        showTools.value = false
+                        if (viewshedResult != null) {
+                            services.viewshedState.clear()
+                        } else {
+                            val observerCoord = usableFixOf(services) ?: mapRef.value?.cameraPosition?.target?.let {
+                                AtlasCoordinate(latitude = it.latitude, longitude = it.longitude)
+                            }
+                            if (observerCoord != null) {
+                                activityBannerLabel.value = "COMPUTING 360° RADIAL VIEWSHED"
+                                try {
+                                    val config = com.sovereignatlas.atlas.geo.viewshed.ViewshedConfig(
+                                        observer = observerCoord,
+                                        maxRadiusMeters = 10000.0,
+                                        angularStepDeg = 2.0,
+                                    )
+                                    val result = withContext(Dispatchers.IO) {
+                                        services.viewshedEngine.computeViewshed(config)
+                                    }
+                                    services.viewshedState.setResult(result)
+                                } finally {
+                                    activityBannerLabel.value = null
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             onToggleLoS = {
                 toolsScope.launch {
                     try {
@@ -1410,6 +1456,28 @@ fun AtlasMapScreen(
                         activeTerrainProfile.value = profile
                     } finally {
                         activityBannerLabel.value = null
+                    }
+                }
+            },
+            onComputeViewshed = {
+                val drop = targetDropPointState
+                if (drop != null) {
+                    targetDropPoint.value = null
+                    mapScope.launch {
+                        activityBannerLabel.value = "COMPUTING 360° RADIAL VIEWSHED"
+                        try {
+                            val config = com.sovereignatlas.atlas.geo.viewshed.ViewshedConfig(
+                                observer = AtlasCoordinate(drop.latitude, drop.longitude),
+                                maxRadiusMeters = 10000.0,
+                                angularStepDeg = 2.0,
+                            )
+                            val result = withContext(Dispatchers.IO) {
+                                services.viewshedEngine.computeViewshed(config)
+                            }
+                            services.viewshedState.setResult(result)
+                        } finally {
+                            activityBannerLabel.value = null
+                        }
                     }
                 }
             },
@@ -1530,6 +1598,10 @@ fun AtlasMapScreen(
             losProfile = losProfile,
             hudAccent = hudAccent,
             reducedMotion = reducedMotion,
+            tilt = cameraState.value.tilt,
+            onResetTilt = {
+                mapRef.value?.animateCamera(CameraUpdateFactory.tiltTo(0.0), 300)
+            },
             modifier = Modifier.align(Alignment.TopStart),
         )
         AtlasNavInstrumentHud(

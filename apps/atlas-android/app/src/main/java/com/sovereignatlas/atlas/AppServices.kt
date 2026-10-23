@@ -26,6 +26,7 @@ import com.sovereignatlas.atlas.field.WaypointRepository
 import com.sovereignatlas.atlas.geo.LoSState
 import com.sovereignatlas.atlas.geo.gis.GisRepository
 import com.sovereignatlas.atlas.geo.gis.InMemoryGisRepository
+import com.sovereignatlas.atlas.geo.viewshed.ViewshedState
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.geo.cot.SyncProvider
@@ -113,6 +114,7 @@ class AppServices(private val context: Context) {
         AndroidRoadGraphLoader.loadSynchronousOrEmpty(appContext, allowDemoSimulation = false),
     )
     val gisRepository: GisRepository = InMemoryGisRepository()
+    val viewshedState: ViewshedState = ViewshedState()
 
     val compositor: LayerCompositor = LayerCompositor().apply {
         registerLayer(

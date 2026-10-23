@@ -99,6 +99,10 @@ sealed class AtlasLayer(
     /** The first blocking point, when the engine found one. */
     data object LosBlock : AtlasLayer("atlas-los-block", "atlas-los-block-layer")
 
+    data object ViewshedFill : AtlasLayer("atlas-viewshed-source", "atlas-viewshed-fill-layer")
+
+    data object ViewshedLine : AtlasLayer("atlas-viewshed-source", "atlas-viewshed-line-layer")
+
     companion object {
         /**
          * The source a layer reads from, for the handful of places that genuinely

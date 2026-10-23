@@ -22,6 +22,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.Layer
@@ -473,6 +474,32 @@ fun ensureDemSource(style: Style, demUrl: String) {
 fun removeDemSource(style: Style) {
     if (style.getSource(DEM_SOURCE_ID) != null) {
         style.removeSource(DEM_SOURCE_ID)
+    }
+}
+
+fun syncTerrainHillshade(
+    style: Style,
+    demUrl: String,
+    exaggeration: Float = 0.8f,
+) {
+    if (style.getSource(DEM_SOURCE_ID) == null) {
+        ensureDemSource(style, demUrl)
+    }
+    if (style.getLayer(AtlasLayerIds.TERRAIN_HILLSHADE_LAYER) == null) {
+        val hillshadeLayer = org.maplibre.android.style.layers.HillshadeLayer(
+            AtlasLayerIds.TERRAIN_HILLSHADE_LAYER,
+            DEM_SOURCE_ID,
+        ).withProperties(
+            PropertyFactory.hillshadeExaggeration(exaggeration),
+            PropertyFactory.hillshadeShadowColor(Expression.color(Color.parseColor("#10151C"))),
+            PropertyFactory.hillshadeHighlightColor(Expression.color(Color.parseColor("#FFFFFF"))),
+            PropertyFactory.hillshadeAccentColor(Expression.color(Color.parseColor("#39C5F3"))),
+        )
+        if (style.getLayer(AtlasLayerIds.WAYPOINTS_LAYER) != null) {
+            style.addLayerBelow(hillshadeLayer, AtlasLayerIds.WAYPOINTS_LAYER)
+        } else {
+            style.addLayer(hillshadeLayer)
+        }
     }
 }
 

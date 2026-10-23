@@ -1,6 +1,6 @@
 # BP-02: 2.5D DEM Hillshade, Pitch Perspective & Dynamic 2D Viewshed Mask
 
-> **Status:** APPROVED DESIGN SPECIFICATION (AMENDED 2026-10-23)  
+> **Status:** COMPLETE & INTEGRATED (Phase 12, 2026-10-23)  
 > **Target:** `geo/elevation/`, `map/terrain/`, `ui/hud/`, `apps/atlas-android/`  
 > **Prerequisites:** BP-01 Modular Map Architecture
 

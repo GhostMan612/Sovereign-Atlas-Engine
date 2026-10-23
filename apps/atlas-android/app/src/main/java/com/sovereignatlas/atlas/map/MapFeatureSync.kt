@@ -551,3 +551,27 @@ fun pushUserGisDatasets(
         mlSink.replaceSourceFeatures(sourceId, collection)
     }
 }
+
+fun pushViewshed(
+    sink: FeatureSink,
+    result: com.sovereignatlas.atlas.geo.viewshed.ViewshedResult?,
+) {
+    if (result == null) {
+        sink.replace(AtlasLayer.ViewshedFill, RenderFeatureCollection.EMPTY)
+        sink.replace(AtlasLayer.ViewshedLine, RenderFeatureCollection.EMPTY)
+        return
+    }
+    val fillFeature = RenderFeature(
+        geometry = result.toObscuredPolygon(),
+        id = "viewshed-obscured",
+    )
+    val lineFeature = RenderFeature(
+        geometry = result.toBoundaryLine(),
+        id = "viewshed-perimeter",
+    )
+    val collection = RenderFeatureCollection(listOf(fillFeature, lineFeature))
+    (sink as? MapLibreFeatureSink)?.replaceSourceFeatures(
+        AtlasLayerIds.VIEWSHED_SOURCE,
+        collection,
+    ) ?: sink.replace(AtlasLayer.ViewshedFill, collection)
+}
