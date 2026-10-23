@@ -17,15 +17,15 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-23: 1,550 tests, 0 failures+errors across all modules:**
-  - `:atlas-sdk:test`: 12 tests
-  - `:sdk-consumer:test`: 6 tests
-  - `:app:testPlayDebugUnitTest`: 766 tests
-  - `:app:testEnterpriseDebugUnitTest`: 766 tests
+- **Last measured 2026-10-23: 1,574 tests, 0 failures+errors across all modules:**
+  - `:atlas-sdk:test`: 27 tests
+  - `:sdk-consumer:test`: 7 tests
+  - `:app:testPlayDebugUnitTest`: 770 tests
+  - `:app:testEnterpriseDebugUnitTest`: 770 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
-- Pure boundary scan passes: 108 Kotlin files across pure packages, `:atlas-sdk`, and
+- Pure boundary scan passes: 115 Kotlin files across pure packages, `:atlas-sdk`, and
   `samples/sdk-consumer` have 0 forbidden imports (100% clean).
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
@@ -178,9 +178,29 @@
     4. Sovereign Command Center & Target Drop integration: added Radial Viewshed tool row in `AtlasCommandCenterSheet` and "Compute Viewshed From Here" action in `AtlasTargetDropSheet`.
     5. Verified 100% green host gate: **1,550 passing unit tests** (+20 tests: 12 :atlas-sdk, 6 :sdk-consumer, 766 Play, 766 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 108 pure files.
 
+  - **Phase 13 (Plug-and-Play Meshtastic & LoRa Tactical Transport - COMPLETE & INTEGRATED):**
+    1. Pure domain DTN and Meshtastic framing in `:atlas-sdk` (`tactical.mesh`, `tactical.dtn`) with 0 Android/MapLibre imports:
+       - `MeshtasticFrameCodec.kt`: `0x94 0xC3` sync header stream framing/deframing.
+       - `MeshtasticWireModels.kt`: `PortNum`, `MeshPacket`, `MeshNodeInfo`, `RadioHardwareInfo`, `RadioConnectionState`.
+       - `FragmentStore.kt`: Delay-Tolerant Networking chunk reassembly store with inbound/outbox lifecycle, expiration eviction, and out-of-order frame tracking adapted from `Sovereign_Mantle`.
+       - `FragmentAckCodec.kt`: `FRA1` bitmap NACK wire codec with bit-level truncation guards.
+       - `PeerPenaltyLedger.kt`: Peer node rate limiting and bad frame penalization.
+       - `MeshRadioClient.kt` & `MockMeshRadioClient.kt`: Unified radio interface.
+       - `AtlasSdk.Tactical`: Exposed tactical mesh capabilities in `:atlas-sdk` and verified in `samples/sdk-consumer` (`ExternalConsumerVerificationTest.kt`).
+    2. Android hardware radio adapters (`android.mesh`):
+       - `AndroidUsbSerialRadioClient.kt`: UsbManager CDC-ACM / CP210x / FTDI / CH34x driver via `0x94 0xC3` framing.
+       - `AndroidBleRadioClient.kt`: BluetoothLeScanner / BluetoothGatt client targeting Meshtastic service UUID `6ba1b218-15a8-461f-9fa8-5dcae273eafd` and ToRadio/FromRadio characteristics.
+       - `MeshTransportSupervisor.kt`: Central lifecycle supervisor handling radio connection state, EMCON fail-closed network profile enforcement (`RADIO_SILENCE` and `CLOUD_ONLY` strictly reject TX; `MESH_ONLY` and `HYBRID_BRIDGE` allow TX), DTN chunk fragmentation/reassembly for CoT events exceeding LoRa MTU (237 bytes), and bidirectional routing with `CotMessageRouter`.
+    3. Sovereign Cockpit & UI Integration:
+       - Wired `meshSupervisor` into `AtlasServices`, `AppServices`, `MainActivity.kt`, and `AtakBroadcaster.kt`.
+       - Added `MeshNodeRosterSheet.kt`: Tactical node roster displaying active mesh radio status, battery %, SNR, RSSI, channel, discovered peers, and ping action.
+       - Added interactive `MESH` HUD telemetry pill to `AtlasMapOverlays.kt` (`CONNECTED`, `STREAMING`, `SCANNING`, `DISCONNECTED` states) opening `MeshNodeRosterSheet`.
+       - Registered `MeshNodeRosterSheet` in `AtlasMapDialogsHost.kt`.
+    4. Verified 100% green host gate: **1,574 passing unit tests** (+24 tests: 27 :atlas-sdk, 7 :sdk-consumer, 770 Play, 770 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 115 pure files.
+
 ## Next moves
 
 - **Implementation Roadmap from Corrected Blueprints:**
-  1. **Phase 13 (Plug-and-Play Meshtastic / LoRa Tactical Transport):** Integrate USB-Serial & BLE hardware drivers, Protobuf wire framing, and delay-tolerant store based on corrected `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
+  - All Phase 11-13 blueprints (`BP-01`, `BP-02`, `BP-03`, `BP-04`) are 100% COMPLETE & INTEGRATED.
 - **Remaining Release Action (`G12`):**
   1. **`G12` (Signed Release Packaging):** Provide release signing credentials (`keystore.properties` or `-PKEYSTORE_*`) when ready to emit signed release APKs.

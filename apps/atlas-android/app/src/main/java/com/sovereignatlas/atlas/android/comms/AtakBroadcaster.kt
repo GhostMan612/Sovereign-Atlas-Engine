@@ -5,11 +5,15 @@
 
 package com.sovereignatlas.atlas.android.comms
 
+import com.sovereignatlas.atlas.android.mesh.MeshTransportSupervisor
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
 import com.sovereignatlas.atlas.geo.cot.SyncProvider
+import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
+import com.sovereignatlas.atlas.tactical.mesh.PortNum
+import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +25,7 @@ class AtakBroadcaster(
     private val settingsRepository: SettingsRepository,
     private val syncProvider: SyncProvider? = null,
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
+    private val meshSupervisor: MeshTransportSupervisor? = null,
 ) {
     private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -58,6 +63,23 @@ class AtakBroadcaster(
             ceFallback = ce,
         )
         listener.sendMulticast(payload)
+        val supervisor = meshSupervisor
+        if (supervisor != null && supervisor.canTransmit()) {
+            val radio = supervisor.radioClient
+            if (radio.connectionState.value == RadioConnectionState.CONNECTED ||
+                radio.connectionState.value == RadioConnectionState.STREAMING
+            ) {
+                val myNode = supervisor.activeRadioInfo.value?.nodeNum ?: 0L
+                radio.transmitPacket(
+                    MeshPacket(
+                        from = myNode,
+                        to = 0xFFFFFFFFL,
+                        portNum = PortNum.PORTNUM_ATAK_PLUGIN,
+                        payload = payload,
+                    )
+                )
+            }
+        }
     }
 
     suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double): MarkerSendResult {
@@ -67,9 +89,6 @@ class AtakBroadcaster(
             throw IllegalStateException("Markers require an active mesh profile")
         }
         val geoPoint = com.sovereignatlas.atlas.geo.GeoPoint(lat, lon, null, null, null, System.currentTimeMillis())
-        // The uid is minted here and returned so the caller can echo the marker
-        // into the local store under the SAME uid the wire carries, keeping the
-        // mesh round-trip idempotent instead of duplicating the marker.
         val markerUid = CotProtobufGenerator.buildMarkerUid(localUid)
         val payload = CotProtobufGenerator.generateMarkerProto(
             localUid = localUid,
@@ -78,8 +97,16 @@ class AtakBroadcaster(
             geoPoint = geoPoint,
             markerUid = markerUid
         )
-        val sent = listener.sendMulticast(payload)
-        return MarkerSendResult(markerUid, sent)
+        val sentMulticast = listener.sendMulticast(payload)
+        val supervisor = meshSupervisor
+        val sentMesh = if (supervisor != null && supervisor.canTransmit()) {
+            runCatching {
+                supervisor.sendCotMarker(type, callsign, lat, lon)
+            }.getOrDefault(false)
+        } else {
+            false
+        }
+        return MarkerSendResult(markerUid, sentMulticast || sentMesh)
     }
 
     suspend fun sendChatMessage(

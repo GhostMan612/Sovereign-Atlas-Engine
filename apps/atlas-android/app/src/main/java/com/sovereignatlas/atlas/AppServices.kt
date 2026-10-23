@@ -19,6 +19,8 @@ import com.sovereignatlas.atlas.android.data.LocalHistoricalAssetRepository
 import com.sovereignatlas.atlas.android.location.AndroidLocationEngine
 import com.sovereignatlas.atlas.android.map.mbtiles.AndroidMetadataReader
 import com.sovereignatlas.atlas.android.map.mbtiles.MbtilesCache
+import com.sovereignatlas.atlas.android.mesh.AndroidUsbSerialRadioClient
+import com.sovereignatlas.atlas.android.mesh.MeshTransportSupervisor
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
 import com.sovereignatlas.atlas.android.sync.FirestoreSyncProvider
 import com.sovereignatlas.atlas.db.AtlasDatabase
@@ -38,6 +40,8 @@ import com.sovereignatlas.atlas.android.offline.PackTileServer
 import com.sovereignatlas.atlas.offline.LocalTileServer
 import com.sovereignatlas.atlas.offline.mbtiles.DefaultMbtilesScanner
 import com.sovereignatlas.atlas.offline.mbtiles.MbtilesScanner
+import com.sovereignatlas.atlas.tactical.dtn.FragmentStore
+import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
 import com.sovereignatlas.atlas.track.TrackRepository
 import com.sovereignatlas.atlas.track.TrackScrubState
 import com.sovereignatlas.atlas.android.navigation.AndroidRoadGraphLoader
@@ -485,11 +489,30 @@ class AppServices(private val context: Context) {
 
     val settingsRepository = SettingsRepository(appContext)
 
+    val meshRadioClient: MeshRadioClient = AndroidUsbSerialRadioClient(
+        context = appContext,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
+
+    val meshFragmentStore = FragmentStore(
+        storageDir = File(appContext.filesDir, "mesh_fragments"),
+    )
+
+    val meshSupervisor = MeshTransportSupervisor(
+        radioClient = meshRadioClient,
+        settingsRepository = settingsRepository,
+        cotRouter = cotRouter,
+        fragmentStore = meshFragmentStore,
+        localUid = localDeviceUid,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
+
     val atakBroadcaster = AtakBroadcaster(
         listener = multicastListener,
         localUid = localDeviceUid,
         settingsRepository = settingsRepository,
         syncProvider = syncProvider,
+        meshSupervisor = meshSupervisor,
     )
 
     init {

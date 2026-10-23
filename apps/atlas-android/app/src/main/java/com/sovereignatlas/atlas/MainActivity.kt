@@ -105,6 +105,8 @@ final class MainActivity : ComponentActivity() {
             historicalIndex = appServices.historicalIndex,
             gisRepository = appServices.gisRepository,
             viewshedState = appServices.viewshedState,
+            meshRadioClient = appServices.meshRadioClient,
+            meshSupervisor = appServices.meshSupervisor,
         )
     }
 

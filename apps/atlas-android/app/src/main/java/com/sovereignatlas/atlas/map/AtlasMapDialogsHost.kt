@@ -20,11 +20,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sovereignatlas.atlas.AtlasServices
+import kotlinx.coroutines.launch
 import com.sovereignatlas.atlas.R
 import com.sovereignatlas.atlas.android.DemSession
 import com.sovereignatlas.atlas.core.HistoricalAsset
@@ -66,8 +69,10 @@ import com.sovereignatlas.atlas.ui.historical.HistoricalAssetSheet
 import com.sovereignatlas.atlas.ui.historical.HistoricalDossierSheet
 import com.sovereignatlas.atlas.ui.historical.HistoricalRecordSheet
 import com.sovereignatlas.atlas.ui.los.TerrainProfileChart
+import com.sovereignatlas.atlas.ui.mesh.MeshNodeRosterSheet
 import com.sovereignatlas.atlas.ui.settings.SettingsScreen
 import com.sovereignatlas.atlas.ui.settings.SettingsViewModel
+import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -100,6 +105,7 @@ fun AtlasCommandCenterSheet(
     onOpenGisLayers: () -> Unit = {},
     viewshedActive: Boolean = false,
     onToggleViewshed: () -> Unit = {},
+    onOpenMeshRoster: () -> Unit = {},
     onToggleLoS: () -> Unit,
     onToggleHeadingUp: () -> Unit,
 ) {
@@ -253,6 +259,12 @@ fun AtlasCommandCenterSheet(
                 iconRes = R.drawable.ic_tool_los,
                 active = viewshedActive,
                 onClick = onToggleViewshed,
+            )
+            ToolRow(
+                label = "LoRa Tactical Mesh",
+                description = "Meshtastic node directory & hardware telemetry",
+                iconRes = R.drawable.ic_hud_gps,
+                onClick = onOpenMeshRoster,
             )
             ToolRow(
                 label = if (headingUp) "North-up" else "Head-up",
@@ -490,7 +502,48 @@ fun AtlasMapDialogsHost(
     gisDatasets: List<GisDataset> = emptyList(),
     onImportGis: () -> Unit = {},
     selectedGisFeature: MutableState<Pair<GisFeature, String>?> = remember { mutableStateOf(null) },
+    showMeshRoster: MutableState<Boolean> = remember { mutableStateOf(false) },
 ) {
+    if (showMeshRoster.value) {
+        val meshSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val radioInfo = services.meshSupervisor?.activeRadioInfo?.value
+        val connectionState = services.meshSupervisor?.connectionState?.value ?: RadioConnectionState.DISCONNECTED
+        val networkProfile = services.settingsRepository.networkProfile.value
+        val nodes = services.meshSupervisor?.discoveredNodes?.value ?: emptyList()
+        val scope = rememberCoroutineScope()
+        MeshNodeRosterSheet(
+            visible = showMeshRoster.value,
+            sheetState = meshSheetState,
+            onDismissRequest = { showMeshRoster.value = false },
+            radioInfo = radioInfo,
+            connectionState = connectionState,
+            networkProfile = networkProfile,
+            nodes = nodes,
+            onPingNode = { nodeNum ->
+                scope.launch {
+                    services.meshSupervisor?.pingNode(nodeNum)
+                }
+            },
+            onDirectTargetDrop = { node ->
+                val lat = node.latitude
+                val lon = node.longitude
+                if (lat != null && lon != null) {
+                    services.goTo.activate(
+                        id = node.nodeIdHex,
+                        latitude = lat,
+                        longitude = lon,
+                        label = node.callsign.ifBlank { node.user },
+                    )
+                    showMeshRoster.value = false
+                }
+            },
+            onConnectRadio = {
+                scope.launch {
+                    services.meshSupervisor?.radioClient?.connect()
+                }
+            },
+        )
+    }
     if (showChat.value) {
         ModalBottomSheet(
             onDismissRequest = { showChat.value = false },

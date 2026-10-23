@@ -1037,6 +1037,7 @@ fun AtlasMapScreen(
     }
     val showTools = remember { mutableStateOf(false) }
     val showChat = remember { mutableStateOf(false) }
+    val showMeshRoster = remember { mutableStateOf(false) }
     val chatViewModel: GeoChatViewModel = viewModel { GeoChatViewModel(services) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1355,6 +1356,16 @@ fun AtlasMapScreen(
                     }
                 }
             },
+            onOpenMeshRoster = {
+                toolsScope.launch {
+                    try {
+                        toolsSheetState.hide()
+                    } finally {
+                        showTools.value = false
+                        showMeshRoster.value = true
+                    }
+                }
+            },
             viewshedActive = viewshedResult != null,
             onToggleViewshed = {
                 toolsScope.launch {
@@ -1585,6 +1596,12 @@ fun AtlasMapScreen(
         val activeSourceMaxZoom = basePackId.value?.let { services.offline.lookup(it)?.zMax }
             ?: OfflineBuiltinProviders.lookup(baseProviderId.value)?.maxZoom
             ?: 19
+        val meshConnectionState by (services.meshSupervisor?.connectionState
+            ?: MutableStateFlow(com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState.DISCONNECTED))
+            .collectAsStateWithLifecycle()
+        val meshNodes by (services.meshSupervisor?.discoveredNodes
+            ?: MutableStateFlow(emptyList()))
+            .collectAsStateWithLifecycle()
         AtlasTelemetryHud(
             tacticalWorkspaceEnabled = tacticalWorkspaceEnabled,
             mgrsText = mgrsText,
@@ -1602,6 +1619,9 @@ fun AtlasMapScreen(
             onResetTilt = {
                 mapRef.value?.animateCamera(CameraUpdateFactory.tiltTo(0.0), 300)
             },
+            meshState = meshConnectionState,
+            meshNodeCount = meshNodes.size,
+            onOpenMeshRoster = { showMeshRoster.value = true },
             modifier = Modifier.align(Alignment.TopStart),
         )
         AtlasNavInstrumentHud(
@@ -1702,6 +1722,7 @@ fun AtlasMapScreen(
         gisDatasets = gisDatasets,
         onImportGis = { openGisLauncher.launch(arrayOf("*/*")) },
         selectedGisFeature = selectedGisFeature,
+        showMeshRoster = showMeshRoster,
     )
     AtlasHistoricalSheetsHost(
         selectedRecord = selectedRecord,

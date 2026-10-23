@@ -43,6 +43,7 @@ import com.sovereignatlas.atlas.geo.navigation.NavigationUpdate
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteResult
 import com.sovereignatlas.atlas.layers.compositor.OverscalePolicy
 import com.sovereignatlas.atlas.location.AtlasLocationStatus
+import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import com.sovereignatlas.atlas.ui.AtlasActivityBanner
 import com.sovereignatlas.atlas.ui.CompassOverlay
 import com.sovereignatlas.atlas.ui.HudTelemetryPill
@@ -131,6 +132,9 @@ fun AtlasTelemetryHud(
     reducedMotion: Boolean,
     tilt: Double = 0.0,
     onResetTilt: () -> Unit = {},
+    meshState: RadioConnectionState = RadioConnectionState.DISCONNECTED,
+    meshNodeCount: Int = 0,
+    onOpenMeshRoster: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -140,6 +144,18 @@ fun AtlasTelemetryHud(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        if (meshState == RadioConnectionState.CONNECTED || meshState == RadioConnectionState.STREAMING) {
+            HudTelemetryPill(
+                text = "LORA: CONNECTED • 915 MHz • $meshNodeCount NODES",
+                textColor = hudAccent,
+                borderColor = hudAccent,
+                iconRes = R.drawable.ic_hud_gps,
+                iconTint = hudAccent,
+                pulse = (meshState == RadioConnectionState.STREAMING),
+                reducedMotion = reducedMotion,
+                onClick = onOpenMeshRoster,
+            )
+        }
         if (tilt > 5.0) {
             HudTelemetryPill(
                 text = "PERSPECTIVE • PITCH: ${tilt.toInt()}°",

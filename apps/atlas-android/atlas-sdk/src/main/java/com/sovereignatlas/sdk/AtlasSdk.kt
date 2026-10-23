@@ -25,6 +25,12 @@ import com.sovereignatlas.atlas.layers.compositor.LayerCompositor
 import com.sovereignatlas.atlas.layers.compositor.LayerDescriptor
 import com.sovereignatlas.atlas.layers.compositor.LayerType
 import com.sovereignatlas.atlas.layers.compositor.OverscalePolicy
+import com.sovereignatlas.atlas.tactical.dtn.FragmentStore
+import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
+import com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport
+import com.sovereignatlas.atlas.tactical.mesh.FrameDecodeResult
+import com.sovereignatlas.atlas.tactical.mesh.MeshtasticFrameCodec
+import com.sovereignatlas.atlas.tactical.mesh.PeerPenaltyLedger
 
 sealed class SdkResult<out T> {
     data class Success<out T>(val value: T) : SdkResult<T>()
@@ -138,6 +144,32 @@ object AtlasSdk {
 
         fun getSerializer(): KnowledgeBundleSerializer {
             return KnowledgeBundleSerializer
+        }
+    }
+
+    object Tactical {
+        fun createFragmentStore(storageDir: java.io.File? = null): FragmentStore {
+            return FragmentStore(storageDir)
+        }
+
+        fun encodeAckReports(reports: List<FragmentAckReport>): ByteArray {
+            return FragmentAckCodec.encode(reports)
+        }
+
+        fun decodeAckReports(bytes: ByteArray): List<FragmentAckReport>? {
+            return FragmentAckCodec.decode(bytes)
+        }
+
+        fun encodeMeshtasticFrame(payload: ByteArray): ByteArray {
+            return MeshtasticFrameCodec.encodeFrame(payload)
+        }
+
+        fun decodeMeshtasticStream(buffer: ByteArray): FrameDecodeResult {
+            return MeshtasticFrameCodec.decodeStream(buffer)
+        }
+
+        fun <K : Any> createPeerPenaltyLedger(clock: () -> Long = System::currentTimeMillis): PeerPenaltyLedger<K> {
+            return PeerPenaltyLedger(clock)
         }
     }
 }

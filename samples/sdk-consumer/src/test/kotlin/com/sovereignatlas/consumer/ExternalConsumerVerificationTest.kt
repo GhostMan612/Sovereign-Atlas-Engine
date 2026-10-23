@@ -149,5 +149,37 @@ class ExternalConsumerVerificationTest {
         assertTrue(AtlasSdk.Layers.cleanNavigateWorkspace().isCleanNavigateOnly)
         assertTrue(AtlasSdk.Layers.isOverscaled(20.5, 19))
     }
+
+    @Test
+    fun externalConsumerCanUseTacticalMeshDtn() {
+        val frame = AtlasSdk.Tactical.encodeMeshtasticFrame("TEST".toByteArray())
+        val decoded = AtlasSdk.Tactical.decodeMeshtasticStream(frame)
+        assertEquals(1, decoded.frames.size)
+
+        val report = com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport(
+            transferId = "xfer-ext",
+            round = 1,
+            totalChunks = 2,
+            contiguousHigh = 1,
+            windowBase = 1,
+            missing = booleanArrayOf(true),
+        )
+        val encodedReport = AtlasSdk.Tactical.encodeAckReports(listOf(report))
+        val decodedReport = AtlasSdk.Tactical.decodeAckReports(encodedReport)
+        assertNotNull(decodedReport)
+        assertEquals("xfer-ext", decodedReport!!.first().transferId)
+
+        val store = AtlasSdk.Tactical.createFragmentStore()
+        val outcome = store.registerInbound(
+            transferId = "xfer-ext",
+            chunkIndex = 0,
+            totalChunks = 2,
+            tier = com.sovereignatlas.atlas.tactical.dtn.FragmentTier.PUBLIC,
+            counterpartyId = "node-1",
+            expiresAt = 0L,
+            frame = "CHUNK0".toByteArray(),
+        )
+        assertEquals(com.sovereignatlas.atlas.tactical.dtn.RegisterOutcome.STORED, outcome)
+    }
 }
 

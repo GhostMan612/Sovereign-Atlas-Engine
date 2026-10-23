@@ -19,6 +19,7 @@ import com.sovereignatlas.atlas.geo.navigation.TravelProfile
 import com.sovereignatlas.atlas.layers.compositor.LayerAttribution
 import com.sovereignatlas.atlas.layers.compositor.LayerType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -112,5 +113,41 @@ class AtlasSdkTest {
         val hits = index.querySpatial(queryBox)
         assertEquals(1, hits.size)
         assertEquals("Fort Point", hits.first().name)
+    }
+
+    @Test
+    fun sdkTacticalExposesMeshAndDtnFacets() {
+        val payload = "RADAR-REPORT".toByteArray()
+        val frame = AtlasSdk.Tactical.encodeMeshtasticFrame(payload)
+        val decoded = AtlasSdk.Tactical.decodeMeshtasticStream(frame)
+        assertEquals(1, decoded.frames.size)
+
+        val report = com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport(
+            transferId = "xfer-facade",
+            round = 2,
+            totalChunks = 5,
+            contiguousHigh = 2,
+            windowBase = 2,
+            missing = booleanArrayOf(true, false, true),
+        )
+        val encodedReport = AtlasSdk.Tactical.encodeAckReports(listOf(report))
+        val decodedReport = AtlasSdk.Tactical.decodeAckReports(encodedReport)
+        assertNotNull(decodedReport)
+        assertEquals(5, decodedReport!!.first().totalChunks)
+
+        val store = AtlasSdk.Tactical.createFragmentStore()
+        val outcome = store.registerInbound(
+            transferId = "xfer-facade",
+            chunkIndex = 0,
+            totalChunks = 3,
+            tier = com.sovereignatlas.atlas.tactical.dtn.FragmentTier.PUBLIC,
+            counterpartyId = "peer-alpha",
+            expiresAt = 0L,
+            frame = "P0".toByteArray(),
+        )
+        assertEquals(com.sovereignatlas.atlas.tactical.dtn.RegisterOutcome.STORED, outcome)
+
+        val ledger = AtlasSdk.Tactical.createPeerPenaltyLedger<String>()
+        assertFalse(ledger.isBlocked("node-ok"))
     }
 }
