@@ -49,11 +49,11 @@ fun AtlasGoToCardHost(
 ) {
     if (!services.goTo.isActive()) return
     Surface(
-        color = Color(0xF0141C24),
+        color = Color(0x8C10151C),
         contentColor = Color.White,
         shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, Color(0x4DA8B5C1)),
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color(0x26A8B5C1)),
+        shadowElevation = 2.dp,
         modifier = modifier
             .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars))
             .padding(start = 10.dp, top = 54.dp),
@@ -169,14 +169,14 @@ fun AtlasMeasureCardHost(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = Color(0xF0141C24),
+        color = Color(0x8C10151C),
         contentColor = Color.White,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0x4DA8B5C1)),
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color(0x26A8B5C1)),
+        shadowElevation = 2.dp,
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 12.dp, end = 104.dp, bottom = 30.dp),
+            .padding(start = 10.dp, end = 104.dp, bottom = 30.dp),
     ) {
         MeasurePanel(
             snapshot = measureSnapshot,

@@ -17,11 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-23: 1,574 tests, 0 failures+errors across all modules:**
-  - `:atlas-sdk:test`: 27 tests
-  - `:sdk-consumer:test`: 7 tests
-  - `:app:testPlayDebugUnitTest`: 770 tests
-  - `:app:testEnterpriseDebugUnitTest`: 770 tests
+- **Last measured 2026-10-24: 1,589 tests, 0 failures+errors across all modules:**
+  - `:atlas-sdk:test`: 29 tests
+  - `:sdk-consumer:test`: 6 tests
+  - `:app:testPlayDebugUnitTest`: 777 tests
+  - `:app:testEnterpriseDebugUnitTest`: 777 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -197,6 +197,24 @@
        - Added interactive `MESH` HUD telemetry pill to `AtlasMapOverlays.kt` (`CONNECTED`, `STREAMING`, `SCANNING`, `DISCONNECTED` states) opening `MeshNodeRosterSheet`.
        - Registered `MeshNodeRosterSheet` in `AtlasMapDialogsHost.kt`.
     4. Verified 100% green host gate: **1,574 passing unit tests** (+24 tests: 27 :atlas-sdk, 7 :sdk-consumer, 770 Play, 770 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 115 pure files.
+
+  - **UI/UX Refinement Pass (Translucent Cockpit & Compass Overhaul - COMPLETE):**
+    1. Modernized Compass Overlay:
+       - Single-tap: locate user without bearing reset.
+       - Double-tap: locate user AND reset bearing smoothly to 0° North in a single coherent animation, disabling `headingUp` and `pendingHeadingUp` to avoid sensor override loops.
+       - Long-press: retained north reset as secondary gesture.
+       - Swapped visual positions in `AtlasNavInstrumentHud`: `TacNavHud` bearing card now sits on top, and `CompassOverlay` rose sits below it.
+    2. Translucent HUD Visual System:
+       - Converted HUD cards/pills from opaque `0xD910151C` to translucent `0x8010151C` (50% opacity) / `0x8C10151C` / `0x9910151C` with subtle outlines (`0x26A8B5C1` / `0x26FFFFFF`).
+       - Stripped redundant black background around `CompassTape` in `AtlasTopHud` to reveal underlying map imagery.
+    3. Spacing & Edge Alignment:
+       - Standardized edge insets to 10.dp across rail pills, scale bar, measure host, navigation guidance HUD, and attribution.
+       - Guaranteed minimum 48.dp touch targets with tighter internal padding (`padding(horizontal = 10.dp, vertical = 6.dp)`).
+    4. Redesigned Attribution:
+       - Replaced opaque Surface with transparent, shadow-projected Box at `BottomEnd` (`end = 10.dp, bottom = 6.dp`, 8sp text, 3f blur radius dark shadow).
+    5. Unit Testing & Verification Gate:
+       - Added `CompassInteractionTest.kt` (7 tests).
+       - Verified 100% green host gate: **1,589 passing unit tests** (+15 test executions: 29 :atlas-sdk, 6 :sdk-consumer, 777 Play, 777 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 115 pure files.
 
 ## Next moves
 

@@ -124,13 +124,13 @@ fun TacNavHud(
         val corner = CornerRadius(6.dp.toPx(), 6.dp.toPx())
 
         drawRoundRect(
-            color = Color(0xD910151C),
+            color = Color(0x8010151C),
             topLeft = Offset(boxLeft, boxTop),
             size = Size(boxWidth, boxHeight),
             cornerRadius = corner,
         )
         drawRoundRect(
-            color = Color(0x4DA8B5C1),
+            color = Color(0x26A8B5C1),
             topLeft = Offset(boxLeft, boxTop),
             size = Size(boxWidth, boxHeight),
             cornerRadius = corner,

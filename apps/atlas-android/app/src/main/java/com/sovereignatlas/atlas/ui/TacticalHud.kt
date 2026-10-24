@@ -89,9 +89,9 @@ fun scaleLabel(niceMeters: Double): String {
 fun MgrsHud(mgrsText: String) {
     if (mgrsText.isEmpty()) return
     Surface(
-        color = Color(0xD910151C),
+        color = Color(0x8010151C),
         shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, Color(0x4DA8B5C1)),
+        border = BorderStroke(1.dp, Color(0x26A8B5C1)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -119,7 +119,7 @@ fun MgrsHud(mgrsText: String) {
 fun HudTelemetryPill(
     text: String,
     textColor: Color = Color(0xFFE2E8F0),
-    borderColor: Color = Color(0x40A8B5C1),
+    borderColor: Color = Color(0x26A8B5C1),
     @DrawableRes iconRes: Int? = null,
     iconTint: Color = textColor,
     pulse: Boolean = false,
@@ -148,7 +148,7 @@ fun HudTelemetryPill(
         modifier
     }
     Surface(
-        color = Color(0xD910151C),
+        color = Color(0x8010151C),
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, borderColor),
         modifier = surfaceModifier,
@@ -211,6 +211,7 @@ fun CompassOverlay(
     bearing: Double,
     onLocate: () -> Unit,
     onFaceNorth: () -> Unit,
+    onResetNorthAndLocate: () -> Unit = onFaceNorth,
     reducedMotion: Boolean = false,
 ) {
     var unwrappedTarget by remember { mutableFloatStateOf(bearing.toFloat()) }
@@ -232,13 +233,14 @@ fun CompassOverlay(
     )
     Image(
         painter = painterResource(R.drawable.ic_compass_overlay),
-        contentDescription = "Compass - tap to locate, long-press to face north",
+        contentDescription = "Compass - tap to locate, double-tap to reset north and locate, long-press to face north",
         modifier = Modifier
             .size(48.dp)
             .rotate(-animatedBearing)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onDoubleClick = onResetNorthAndLocate,
                 onLongClick = onFaceNorth,
                 onClick = onLocate,
             ),
@@ -252,9 +254,9 @@ fun ScaleBar(metersPerPixel: Double, targetPixels: Int = 100) {
     if (nice <= 0.0) return
     val widthPx = (nice / metersPerPixel).coerceIn(28.0, 160.0)
     Surface(
-        color = Color(0xD910151C),
+        color = Color(0x8010151C),
         shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, Color(0x4DA8B5C1)),
+        border = BorderStroke(1.dp, Color(0x26A8B5C1)),
     ) {
         Column(
             horizontalAlignment = Alignment.Start,

@@ -49,12 +49,12 @@ fun AtlasRailPillButton(
 ) {
     val animMs = if (reducedMotion) 0 else 180
     val fill by animateColorAsState(
-        targetValue = if (active) Color(0xE6162E3D) else Color(0xE6141C24),
+        targetValue = if (active) Color(0xA6162E3D) else Color(0x8010151C),
         animationSpec = tween(animMs),
         label = "railPillFill",
     )
     val border by animateColorAsState(
-        targetValue = if (active) Color(0xFF39C5F3) else Color(0x55A8B5C1),
+        targetValue = if (active) Color(0xFF39C5F3) else Color(0x26A8B5C1),
         animationSpec = tween(animMs),
         label = "railPillBorder",
     )
@@ -81,17 +81,17 @@ fun AtlasRailPillButton(
     Surface(
         onClick = onClick,
         color = fill,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, border),
-        shadowElevation = 4.dp,
+        shadowElevation = 2.dp,
         modifier = Modifier
-            .defaultMinSize(minWidth = 88.dp, minHeight = 40.dp)
+            .defaultMinSize(minWidth = 88.dp, minHeight = 48.dp)
             .semantics { stateDescription = stateDesc },
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             if (iconRes != null) {
                 Icon(
@@ -122,12 +122,12 @@ fun WorkspaceQuickChip(
 ) {
     val animMs = if (reducedMotion) 0 else 160
     val fill by animateColorAsState(
-        targetValue = if (active) Color(0xFF1B3A4B) else Color(0xFF1B2631),
+        targetValue = if (active) Color(0xA61B3A4B) else Color(0x8010151C),
         animationSpec = tween(animMs),
         label = "chipFill",
     )
     val border by animateColorAsState(
-        targetValue = if (active) Color(0xFF39C5F3) else Color(0x33A8B5C1),
+        targetValue = if (active) Color(0xFF39C5F3) else Color(0x26A8B5C1),
         animationSpec = tween(animMs),
         label = "chipBorder",
     )
@@ -161,7 +161,7 @@ fun ToolRow(
     onClick: () -> Unit,
 ) {
     Surface(
-        color = Color(0xFF1B2631),
+        color = Color(0x8010151C),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(
             1.dp,
@@ -173,7 +173,7 @@ fun ToolRow(
             onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 44.dp)
+                .defaultMinSize(minHeight = 48.dp)
                 .semantics { stateDescription = description },
         ) {
             Row(

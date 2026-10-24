@@ -65,7 +65,7 @@ fun CompassTape(
     } else {
         (((animatedBearing.toDouble() % 360.0) + 360.0) % 360.0)
     }
-    val backgroundColor = Color(0xFF10151C).copy(alpha = 0.85f)
+    val backgroundColor = Color(0xFF10151C).copy(alpha = 0.50f)
     val chromeMajor = Color(0xFFA8B5C1)
     val chromeMinor = Color(0xFF6B7D8D)
     val navCyan = Color(0xFF39C5F3)

@@ -947,37 +947,45 @@ fun AtlasMapScreen(
         }
     }
     DisposableEffect(services) {
-        val onLocation = {
-            positionTick.value += 1
-            val fix = usableFixOf(services)
-            if (fix != null) {
-                services.roadNavigation.updateLocation(fix)
-            }
-            val map = mapRef.value
-            val style = styleRef.value
-            if (map != null && style != null) {
-                pushPosition(sink, services)
-                if (showRings.value) pushRings(sink, services)
-                if (following.value) {
-                    if (fix != null) {
-                        val followed = AtlasCameraState(
-                            center = fix,
-                            zoom = map.cameraPosition.zoom,
-                            bearing = map.cameraPosition.bearing,
-                            pitch = 0.0,
-                        )
-                        if (followed.validate().isValid) {
-                            applyCameraIntent(map, followed)
+        val onLocation: () -> Unit = {
+            val runUpdate = {
+                positionTick.value += 1
+                val fix = usableFixOf(services)
+                if (fix != null) {
+                    services.roadNavigation.updateLocation(fix)
+                }
+                val map = mapRef.value
+                val style = styleRef.value
+                if (map != null && style != null) {
+                    pushPosition(sink, services)
+                    if (showRings.value) pushRings(sink, services)
+                    if (following.value) {
+                        if (fix != null) {
+                            val followed = AtlasCameraState(
+                                center = fix,
+                                zoom = map.cameraPosition.zoom,
+                                bearing = map.cameraPosition.bearing,
+                                pitch = 0.0,
+                            )
+                            if (followed.validate().isValid) {
+                                applyCameraIntent(map, followed)
+                            }
                         }
                     }
-                }
-                services.behavior.onLocationUpdate(
-                    map.cameraPosition.zoom,
-                    map.cameraPosition.bearing,
-                )?.let { intent ->
-                    applyCameraIntent(map, intent)
+                    services.behavior.onLocationUpdate(
+                        map.cameraPosition.zoom,
+                        map.cameraPosition.bearing,
+                    )?.let { intent ->
+                        applyCameraIntent(map, intent)
+                    }
                 }
             }
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                runUpdate()
+            } else {
+                android.os.Handler(android.os.Looper.getMainLooper()).post(runUpdate)
+            }
+            Unit
         }
         val onMeasure: () -> Unit = {
             measureActive.value = services.measure.isActive()
@@ -1138,6 +1146,54 @@ fun AtlasMapScreen(
             ) {
                 is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
                 LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
+            }
+        }
+    }
+    val onFaceNorth: () -> Unit = {
+        headingUp.value = false
+        pendingHeadingUp.value = false
+        val map = mapRef.value
+        if (map != null) {
+            val targetCamera = CameraPosition.Builder()
+                .target(map.cameraPosition.target)
+                .zoom(map.cameraPosition.zoom)
+                .bearing(0.0)
+                .tilt(map.cameraPosition.tilt)
+                .build()
+            val durationMs = if (reducedMotion) 0 else 300
+            if (durationMs > 0) {
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
+            } else {
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
+            }
+        }
+    }
+    val onResetNorthAndLocate: () -> Unit = {
+        headingUp.value = false
+        pendingHeadingUp.value = false
+        val map = mapRef.value
+        if (map != null) {
+            val validFix = if (services.location.status() == AtlasLocationStatus.valid) {
+                services.location.latestFixOrNull()?.position
+            } else {
+                null
+            }
+            val targetLatLng = if (validFix != null) {
+                LatLng(validFix.latitude, validFix.longitude)
+            } else {
+                map.cameraPosition.target
+            }
+            val targetCamera = CameraPosition.Builder()
+                .target(targetLatLng)
+                .zoom(map.cameraPosition.zoom)
+                .bearing(0.0)
+                .tilt(map.cameraPosition.tilt)
+                .build()
+            val durationMs = if (reducedMotion) 0 else 300
+            if (durationMs > 0) {
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
+            } else {
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
             }
         }
     }
@@ -1634,20 +1690,15 @@ fun AtlasMapScreen(
             hudAccent = hudAccent,
             reducedMotion = reducedMotion,
             onLocate = onLocate,
-            onFaceNorth = {
-                headingUp.value = false
-                pendingHeadingUp.value = false
-                mapRef.value?.let { map ->
-                    map.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
-                }
-            },
+            onFaceNorth = onFaceNorth,
+            onResetNorthAndLocate = onResetNorthAndLocate,
             modifier = Modifier.align(Alignment.TopEnd),
         )
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(start = 12.dp, bottom = 30.dp),
+                .padding(start = 10.dp, bottom = 30.dp),
         ) {
             ScaleBar(metersPerPixel = metersPerPixel)
         }
@@ -1676,7 +1727,7 @@ fun AtlasMapScreen(
         }
         AtlasBottomAttribution(
             attribution = attribution.value,
-            modifier = Modifier.align(Alignment.BottomStart),
+            modifier = Modifier.align(Alignment.BottomEnd),
         )
         AtlasLoadingOverlay(
             visible = mapLoading.value,

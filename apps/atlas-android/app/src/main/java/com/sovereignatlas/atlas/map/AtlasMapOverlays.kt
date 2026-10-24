@@ -31,7 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,7 +76,6 @@ fun AtlasTopHud(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .background(Color.Black)
                 .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.statusBars)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -246,6 +248,7 @@ fun AtlasNavInstrumentHud(
     reducedMotion: Boolean,
     onLocate: () -> Unit,
     onFaceNorth: () -> Unit,
+    onResetNorthAndLocate: () -> Unit = onFaceNorth,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -264,12 +267,6 @@ fun AtlasNavInstrumentHud(
                 reducedMotion = reducedMotion,
             )
         }
-        CompassOverlay(
-            bearing = bearingHud,
-            onLocate = onLocate,
-            onFaceNorth = onFaceNorth,
-            reducedMotion = reducedMotion,
-        )
         if (tacticalWorkspaceEnabled) {
             TacNavHud(
                 bearing = currentBearing,
@@ -283,6 +280,13 @@ fun AtlasNavInstrumentHud(
                     .height(46.dp),
             )
         }
+        CompassOverlay(
+            bearing = bearingHud,
+            onLocate = onLocate,
+            onFaceNorth = onFaceNorth,
+            onResetNorthAndLocate = onResetNorthAndLocate,
+            reducedMotion = reducedMotion,
+        )
     }
 }
 
@@ -304,7 +308,7 @@ fun AtlasMapRailPills(
     Column(
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(end = 12.dp, bottom = 30.dp),
+            .padding(end = 10.dp, bottom = 30.dp),
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -354,20 +358,24 @@ fun AtlasBottomAttribution(
     modifier: Modifier = Modifier,
 ) {
     if (attribution.isEmpty()) return
-    Surface(
-        color = Color(0xBF10151C),
-        shape = RoundedCornerShape(4.dp),
+    Box(
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 12.dp, end = 104.dp, bottom = 6.dp),
+            .padding(end = 10.dp, bottom = 6.dp),
     ) {
         Text(
             text = attribution,
-            fontSize = 9.sp,
+            fontSize = 8.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = Color(0xFFA8B5C1),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = TextStyle(
+                shadow = Shadow(
+                    color = Color(0xCC000000),
+                    offset = Offset(1f, 1f),
+                    blurRadius = 3f,
+                ),
+            ),
         )
     }
 }

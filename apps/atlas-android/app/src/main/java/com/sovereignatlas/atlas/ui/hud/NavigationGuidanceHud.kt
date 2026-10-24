@@ -5,6 +5,7 @@
 
 package com.sovereignatlas.atlas.ui.hud
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,11 +61,12 @@ fun NavigationGuidanceHud(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = Color(0xF0141C24),
+        color = Color(0x9910151C),
         shape = RoundedCornerShape(8.dp),
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color(0x3339C5F3)),
+        shadowElevation = 2.dp,
         modifier = modifier
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 10.dp)
             .fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
