@@ -249,6 +249,7 @@ fun AtlasMapScreen(
     val showTracks = remember { mutableStateOf(false) }
     val trackDetailId = remember { mutableStateOf<String?>(null) }
     val showOffline = remember { mutableStateOf(false) }
+    val offlineInitialTab = remember { mutableStateOf(0) }
     val offlineTick = remember { mutableStateOf(0) }
     val headingUp = remember { mutableStateOf(false) }
     val pendingHeadingUp = remember { mutableStateOf(false) }
@@ -1395,7 +1396,14 @@ fun AtlasMapScreen(
             studioWorkspaceEnabled = studioWorkspaceEnabled,
             onOpenWaypoints = openTool(showWaypoints),
             onOpenTracks = openTool(showTracks),
-            onOpenOffline = openTool(showOffline),
+            onOpenOffline = {
+                offlineInitialTab.value = 0
+                openTool(showOffline)()
+            },
+            onOpenDataCatalogs = {
+                offlineInitialTab.value = 5
+                openTool(showOffline)()
+            },
             onOpenLayers = openTool(showLayers),
             onOpenGisLayers = openTool(showGisLayers),
             onOpenLink = openTool(showLink),
@@ -1740,6 +1748,7 @@ fun AtlasMapScreen(
         showTracks = showTracks,
         trackDetailId = trackDetailId,
         showOffline = showOffline,
+        offlineInitialTab = offlineInitialTab,
         showLayers = showLayers,
         showLink = showLink,
         showFence = showFence,

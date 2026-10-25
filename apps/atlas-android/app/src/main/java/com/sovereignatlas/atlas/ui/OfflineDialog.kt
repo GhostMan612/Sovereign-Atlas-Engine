@@ -5,9 +5,13 @@
 
 package com.sovereignatlas.atlas.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,10 +23,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sovereignatlas.atlas.R
 import com.sovereignatlas.atlas.core.MapNameFormatter
@@ -69,6 +79,161 @@ import kotlin.concurrent.thread
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+data class CatalogResource(
+    val name: String,
+    val category: String,
+    val description: String,
+    val subsystem: String,
+    val onDeviceLocation: String,
+    val url: String,
+)
+
+private val CATALOG_RESOURCES = listOf(
+    // Vector & Raster Basemaps
+    CatalogResource(
+        name = "Protomaps Extracts",
+        category = "Vector Basemaps",
+        description = "Free custom OpenStreetMap extracts for any bounding box worldwide in PMTiles & MBTiles format.",
+        subsystem = "Vector Basemap & Overlays",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/",
+        url = "https://protomaps.com/extracts",
+    ),
+    CatalogResource(
+        name = "OpenMapTiles",
+        category = "Vector Basemaps",
+        description = "Pre-rendered city, country, and global vector tiles using the open Mapbox Vector Tile schema.",
+        subsystem = "Vector Basemap",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/",
+        url = "https://openmaptiles.org/downloads/",
+    ),
+    CatalogResource(
+        name = "Geofabrik OSM Extracts",
+        category = "Raw GIS & Routing",
+        description = "Daily regional OpenStreetMap raw (.osm.pbf) data extracts covering every continent and country.",
+        subsystem = "Road Network Compiler & GIS",
+        onDeviceLocation = "/Android/data/.../files/navigation/roads.pack",
+        url = "https://download.geofabrik.de/",
+    ),
+    CatalogResource(
+        name = "Tilemaker Tool",
+        category = "MBTiles Generator",
+        description = "High-performance CLI tool to generate vector MBTiles from .osm.pbf files with zero database dependencies.",
+        subsystem = "Workstation Converter",
+        onDeviceLocation = "Compile on PC -> Push to mbtiles/",
+        url = "https://tilemaker.org/",
+    ),
+    CatalogResource(
+        name = "Tippecanoe (Felt)",
+        category = "Vector Tile Compiler",
+        description = "Mapbox tool to build scale-independent vector MBTiles from GeoJSON, Shapefiles, and spatial geometries.",
+        subsystem = "Workstation Converter",
+        onDeviceLocation = "Compile on PC -> Push to mbtiles/",
+        url = "https://github.com/felt/tippecanoe",
+    ),
+
+    // Elevation & Viewshed
+    CatalogResource(
+        name = "USGS 3DEP Elevation",
+        category = "LiDAR & DEM",
+        description = "1m, 3m LiDAR point clouds and 10m/30m National Elevation Dataset DEMs covering the United States.",
+        subsystem = "2.5D Hillshading & Dynamic Viewshed",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/*_dem.mbtiles",
+        url = "https://apps.nationalmap.gov/downloader/",
+    ),
+    CatalogResource(
+        name = "AWS Terrain-RGB (Mapzen)",
+        category = "Global Terrain-RGB",
+        description = "Global 30m Copernicus and SRTM elevation tiles pre-encoded in Mapbox Terrain-RGB formula.",
+        subsystem = "Terrain DEM & Line-of-Sight",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/*_dem.mbtiles",
+        url = "https://registry.opendata.aws/terrain-tiles/",
+    ),
+    CatalogResource(
+        name = "OpenDEM",
+        category = "Global Elevation",
+        description = "Worldwide open digital elevation models, shaded relief hillshades, and topographic contours.",
+        subsystem = "Terrain Elevation & Contours",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/*_dem.mbtiles",
+        url = "https://www.opendem.info/",
+    ),
+
+    // Historical Archival & Blueprints
+    CatalogResource(
+        name = "Library of Congress Sanborn Maps",
+        category = "Historical Blueprints",
+        description = "Over 12,000 American towns georeferenced fire insurance blueprints detailing structural building footprints.",
+        subsystem = "Sanborn Historical Blueprint Layer",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/",
+        url = "https://www.loc.gov/collections/sanborn-maps/",
+    ),
+    CatalogResource(
+        name = "USGS Historical Topographic Maps (HTMC)",
+        category = "Historical Quad Maps",
+        description = "Over 178,000 archival US topographic quadrangle maps spanning 1884 through 2006.",
+        subsystem = "Historical Topo Overlays",
+        onDeviceLocation = "/Android/data/.../files/mbtiles/",
+        url = "https://www.usgs.gov/programs/national-geospatial-program/historical-topographic-maps-preserving-past",
+    ),
+    CatalogResource(
+        name = "BLM General Land Office Records",
+        category = "Land Patents & Surveys",
+        description = "Access official federal land titles, homestead patents, survey plats, and township/range section lines.",
+        subsystem = "BLM Land Patent Layer",
+        onDeviceLocation = "Field GIS Import (.geojson)",
+        url = "https://glorecords.blm.gov/",
+    ),
+    CatalogResource(
+        name = "David Rumsey Map Collection",
+        category = "Archival Cartography",
+        description = "Premier digital collection of 130,000+ georeferenced historical maps from 1500 to present.",
+        subsystem = "Historical Dossiers & Archival Overlays",
+        onDeviceLocation = "/Android/data/.../files/knowledge/",
+        url = "https://www.davidrumsey.com/",
+    ),
+    CatalogResource(
+        name = "National Archives (NARA) Maps",
+        category = "Military & Boundary Cartography",
+        description = "Over 15 million maps and battlefield charts documenting civil defense, military campaigns, and frontiers.",
+        subsystem = "Historical Research Dossiers",
+        onDeviceLocation = "/Android/data/.../files/knowledge/",
+        url = "https://www.archives.gov/research/military/maps",
+    ),
+
+    // Field GIS
+    CatalogResource(
+        name = "USGS National Hydrography Dataset",
+        category = "Hydrography Vectors",
+        description = "High-resolution river flowlines, watershed basins, lakes, canals, and stream gauge networks.",
+        subsystem = "Field GIS (Shapefile / GeoPackage)",
+        onDeviceLocation = "Command Center -> Field GIS -> Import",
+        url = "https://www.usgs.gov/national-hydrography",
+    ),
+    CatalogResource(
+        name = "Natural Earth Data",
+        category = "Physical & Cultural GIS",
+        description = "Public domain vector and raster map datasets at 1:10m, 1:50m, and 1:110m scales for world mapping.",
+        subsystem = "Field GIS (Shapefile / GeoPackage)",
+        onDeviceLocation = "Command Center -> Field GIS -> Import",
+        url = "https://www.naturalearthdata.com/",
+    ),
+    CatalogResource(
+        name = "NOAA Nautical Charts",
+        category = "Maritime Navigation",
+        description = "Official US electronic navigational charts (ENC) and bathymetric depth sounding charts.",
+        subsystem = "Field GIS / Nautical Overlays",
+        onDeviceLocation = "Field GIS Import",
+        url = "https://charts.noaa.gov/",
+    ),
+    CatalogResource(
+        name = "OpenSeaMap",
+        category = "Maritime Hydrography",
+        description = "Crowdsourced nautical charting with beacons, buoys, harbor information, and navigation warnings.",
+        subsystem = "Marine Layers & Field GIS",
+        onDeviceLocation = "Field GIS / Online Tile Layer",
+        url = "https://map.openseamap.org/",
+    ),
+)
+
 @Composable
 fun OfflineDialog(
     store: OfflineStore,
@@ -78,36 +243,40 @@ fun OfflineDialog(
     demHits: () -> Long,
     keyProvider: KeyProvider,
     onUsePack: (String) -> Unit,
+    initialTab: Int = 0,
     onClose: () -> Unit,
 ) {
-    val tab = remember { mutableStateOf(0) }
+    val tab = remember { mutableStateOf(initialTab) }
     val cancels = remember { mutableMapOf<String, AtomicBoolean>() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    // The flow itself is passed down, not its current value, so a download started
-    // from a tab composed before the key was saved still reads the key as it is at
-    // the moment of the click.
     val cartoKey = keyProvider.cartoKey
     AlertDialog(
         onDismissRequest = {
             cancels.values.forEach { it.set(true) }
             onClose()
         },
-        title = { Text("Offline Areas") },
+        title = { Text("Offline Areas & Catalogs") },
         text = {
             Column {
-                Row {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                ) {
                     TextButton(onClick = { tab.value = 0 }) { Text("Packs") }
                     TextButton(onClick = { tab.value = 1 }) { Text("Plan") }
                     TextButton(onClick = { tab.value = 2 }) { Text("Providers") }
                     TextButton(onClick = { tab.value = 3 }) { Text("Diag") }
                     TextButton(onClick = { tab.value = 4 }) { Text("Maps") }
+                    TextButton(onClick = { tab.value = 5 }) { Text("Catalogs") }
                 }
                 when (tab.value) {
                     0 -> PacksTab(store, cancels, mainHandler, cartoKey, onUsePack)
                     1 -> PlanTab(store)
                     2 -> ProvidersTab()
                     3 -> DiagnosticsTab(store, tileHits, basemapHits, demHits)
-                    else -> MapsTab(maps, onClose)
+                    4 -> MapsTab(maps, onExploreCatalogs = { tab.value = 5 }, onClose = onClose)
+                    else -> CatalogsTab()
                 }
             }
         },
@@ -423,6 +592,7 @@ private fun DiagnosticsTab(
 @Composable
 private fun MapsTab(
     maps: OfflineMapRepository,
+    onExploreCatalogs: () -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -437,7 +607,7 @@ private fun MapsTab(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -455,7 +625,7 @@ private fun MapsTab(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Push .mbtiles files via ADB/USB to",
+                text = "Push .mbtiles files via ADB/USB to:",
                 color = Color(0xFFA8B5C1),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -464,10 +634,38 @@ private fun MapsTab(
                 color = Color(0xFF6B7D8D),
                 style = MaterialTheme.typography.bodySmall,
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onExploreCatalogs,
+                border = BorderStroke(1.dp, Color(0x8039C5F3)),
+            ) {
+                Text(
+                    text = "Browse Data Catalogs & Sources",
+                    color = Color(0xFF39C5F3),
+                )
+            }
         }
         return
     }
     LazyColumn {
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${available.size} offline map(s) found",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFA8B5C1),
+                )
+                TextButton(onClick = onExploreCatalogs) {
+                    Text("Get More", color = Color(0xFF39C5F3))
+                }
+            }
+        }
         items(available, key = { it.absolutePath }) { map ->
             val isDem = map.kind == OfflineMapKind.DEM
             ListItem(
@@ -502,6 +700,104 @@ private fun MapsTab(
                     }
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun CatalogsTab() {
+    val context = LocalContext.current
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            Column(modifier = Modifier.padding(bottom = 6.dp)) {
+                Text(
+                    text = "Authoritative Subsystem Data Sources",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF39C5F3),
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Tap 'Visit Portal' to open the provider's website. Downloaded .mbtiles, .pack, and GIS datasets can be pushed to their target folder or imported on-device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFA8B5C1),
+                )
+            }
+        }
+        items(CATALOG_RESOURCES, key = { it.name }) { item ->
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x8010151C),
+                border = BorderStroke(1.dp, Color(0x26A8B5C1)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0x3339C5F3),
+                            border = BorderStroke(1.dp, Color(0x6639C5F3)),
+                        ) {
+                            Text(
+                                text = item.category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF39C5F3),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = item.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFCBD5E1),
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Subsystem: ${item.subsystem}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF94A3B8),
+                    )
+                    Text(
+                        text = "Target: ${item.onDeviceLocation}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF64748B),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                            }
+                        },
+                        border = BorderStroke(1.dp, Color(0x6639C5F3)),
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text(
+                            text = "Visit Portal",
+                            color = Color(0xFF39C5F3),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
         }
     }
 }

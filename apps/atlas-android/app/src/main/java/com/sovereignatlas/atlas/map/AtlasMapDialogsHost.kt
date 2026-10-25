@@ -103,6 +103,7 @@ fun AtlasCommandCenterSheet(
     onOpenNodeSettings: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenGisLayers: () -> Unit = {},
+    onOpenDataCatalogs: () -> Unit = onOpenOffline,
     viewshedActive: Boolean = false,
     onToggleViewshed: () -> Unit = {},
     onOpenMeshRoster: () -> Unit = {},
@@ -197,6 +198,12 @@ fun AtlasCommandCenterSheet(
                 description = "Open offline packs",
                 iconRes = R.drawable.ic_tool_offline,
                 onClick = onOpenOffline,
+            )
+            ToolRow(
+                label = "Data Catalogs",
+                description = "MBTiles, DEM & archival sources",
+                iconRes = R.drawable.ic_tool_offline,
+                onClick = onOpenDataCatalogs,
             )
             ToolRow(
                 label = "Layers",
@@ -503,6 +510,7 @@ fun AtlasMapDialogsHost(
     onImportGis: () -> Unit = {},
     selectedGisFeature: MutableState<Pair<GisFeature, String>?> = remember { mutableStateOf(null) },
     showMeshRoster: MutableState<Boolean> = remember { mutableStateOf(false) },
+    offlineInitialTab: MutableState<Int> = remember { mutableStateOf(0) },
 ) {
     if (showMeshRoster.value) {
         val meshSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -622,6 +630,7 @@ fun AtlasMapDialogsHost(
             basemapHits = { services.tiles.basemapHits() },
             demHits = { services.tiles.demHits() },
             keyProvider = services.keys,
+            initialTab = offlineInitialTab.value,
             onUsePack = { packId ->
                 basePackId.value = packId
                 styleRef.value?.let { style ->
