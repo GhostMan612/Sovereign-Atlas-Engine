@@ -430,4 +430,42 @@ class KmlStreamingParserTest {
         assertTrue(dataset.features[0].geometry is RenderGeometry.Point)
         assertTrue(dataset.features[1].geometry is RenderGeometry.Polygon)
     }
+
+    @Test
+    fun justBelowCapPlacemarkIsNotDiscardedByTrailingContent() {
+        val nearCapDescription = "a".repeat(1_995_000)
+        val kml = "<kml><Placemark><name>Near Cap</name>" +
+            "<description>$nearCapDescription</description>" +
+            "<Point><coordinates>-105.0,40.0</coordinates></Point></Placemark>" +
+            "<Placemark><name>Small</name>" +
+            "<Point><coordinates>-104.0,41.0</coordinates></Point></Placemark></kml>"
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(2, dataset.features.size)
+        assertEquals(
+            RenderProperty.Text("Near Cap"),
+            dataset.features[0].properties["name"],
+        )
+        assertEquals(
+            RenderProperty.Text("Small"),
+            dataset.features[1].properties["name"],
+        )
+    }
+
+    @Test
+    fun oversizedCdataPlacemarkDoesNotLeakFakePlacemark() {
+        val padding = "a".repeat(2_100_000)
+        val kml = "<kml><Placemark><name>Too Big</name>" +
+            "<description><![CDATA[$padding</Placemark>" +
+            "<Placemark><name>Fake</name>" +
+            "<Point><coordinates>-103.0,42.0</coordinates></Point></Placemark>]]></description>" +
+            "</Placemark>" +
+            "<Placemark><name>Small</name>" +
+            "<Point><coordinates>-104.0,41.0</coordinates></Point></Placemark></kml>"
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        assertEquals(
+            RenderProperty.Text("Small"),
+            dataset.features.first().properties["name"],
+        )
+    }
 }
