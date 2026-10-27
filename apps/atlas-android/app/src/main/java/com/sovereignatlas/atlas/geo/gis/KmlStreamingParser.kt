@@ -68,14 +68,15 @@ object KmlStreamingParser {
                 val context = skipContext
                 if (context != null) {
                     val scanText = skipTail + chunkText
-                    val closingEnd = scanForPlacemarkClose(scanText, context, 0)
+                    val scan = scanForPlacemarkClose(scanText, context, 0)
+                    val closingEnd = scan.first
                     if (closingEnd != -1) {
                         skipContext = null
                         skipTail = ""
                         buffer.setLength(0)
                         buffer.append(scanText.substring(closingEnd))
                     } else {
-                        skipTail = scanText.takeLast(64)
+                        skipTail = scanText.substring(scan.second)
                         buffer.setLength(0)
                         continue
                     }
@@ -156,32 +157,44 @@ object KmlStreamingParser {
         return BlockExtraction(block, false, null)
     }
 
-    private fun scanForPlacemarkClose(text: String, context: SkipContext, fromIndex: Int): Int {
+    private fun scanForPlacemarkClose(
+        text: String,
+        context: SkipContext,
+        fromIndex: Int,
+    ): Pair<Int, Int> {
         var index = fromIndex
         while (index < text.length) {
             if (context.inCdata) {
                 val cdataEnd = text.indexOf("]]>", index)
-                if (cdataEnd == -1) return -1
+                if (cdataEnd == -1) {
+                    return Pair(-1, maxOf(fromIndex, text.length - 2))
+                }
                 index = cdataEnd + 3
                 context.inCdata = false
                 continue
             }
             if (context.inComment) {
                 val commentEnd = text.indexOf("-->", index)
-                if (commentEnd == -1) return -1
+                if (commentEnd == -1) {
+                    return Pair(-1, maxOf(fromIndex, text.length - 2))
+                }
                 index = commentEnd + 3
                 context.inComment = false
                 continue
             }
             if (context.inProcessingInstruction) {
                 val piEnd = text.indexOf("?>", index)
-                if (piEnd == -1) return -1
+                if (piEnd == -1) {
+                    return Pair(-1, maxOf(fromIndex, text.length - 1))
+                }
                 index = piEnd + 2
                 context.inProcessingInstruction = false
                 continue
             }
             val lt = text.indexOf('<', index)
-            if (lt == -1) return -1
+            if (lt == -1) {
+                return Pair(-1, text.length)
+            }
             if (text.startsWith("<![CDATA[", lt)) {
                 context.inCdata = true
                 index = lt + 9
@@ -199,18 +212,20 @@ object KmlStreamingParser {
             }
             if (text.startsWith("<!", lt)) {
                 val gt = text.indexOf('>', lt + 2)
-                if (gt == -1) return -1
+                if (gt == -1) {
+                    return Pair(-1, lt)
+                }
                 index = gt + 1
                 continue
             }
-            val parsed = parseTagName(text, lt) ?: return -1
+            val parsed = parseTagName(text, lt) ?: return Pair(-1, lt)
             val isClosing = lt + 1 < text.length && text[lt + 1] == '/'
             if (isClosing && parsed.first == "Placemark") {
-                return parsed.second
+                return Pair(parsed.second, parsed.second)
             }
             index = parsed.second
         }
-        return -1
+        return Pair(-1, text.length)
     }
 
     private fun discardBeforePlacemarkStart(buffer: StringBuilder) {
