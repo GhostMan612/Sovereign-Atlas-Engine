@@ -88,7 +88,7 @@ object KmlStreamingParser {
                 val extraction = extractNextPlacemarkBlock(buffer, endOfInput)
                 if (extraction.oversized) {
                     skipContext = extraction.skipContext
-                    skipTail = ""
+                    skipTail = extraction.skipTail
                     buffer.setLength(0)
                     break
                 }
@@ -128,6 +128,7 @@ object KmlStreamingParser {
         val block: String?,
         val oversized: Boolean,
         val skipContext: SkipContext?,
+        val skipTail: String = "",
     )
 
     private class SkipContext(
@@ -144,8 +145,8 @@ object KmlStreamingParser {
         if (closing == null) {
             if (text.length - start.start > MAX_PLACEMARK_CHARS) {
                 val context = SkipContext()
-                scanForPlacemarkClose(text, context, start.start)
-                return BlockExtraction(null, true, context)
+                val scan = scanForPlacemarkClose(text, context, start.start)
+                return BlockExtraction(null, true, context, text.substring(scan.second))
             }
             if (endOfInput) {
                 buffer.setLength(0)
