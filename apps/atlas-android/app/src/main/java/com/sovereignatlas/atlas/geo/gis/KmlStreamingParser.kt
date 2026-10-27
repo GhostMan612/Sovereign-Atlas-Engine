@@ -19,7 +19,9 @@ object KmlStreamingParser {
     const val MAX_VERTICES = 100_000
 
     private const val READ_CHUNK_SIZE = 8192
-    private const val MAX_TAG_TAIL = 256
+    private const val MAX_PLACEMARK_CHARS = 2_000_000
+    private const val MAX_GEOMETRY_NESTING = 16
+    private const val MAX_PARTIAL_TAG_CHARS = 8192
 
     fun parse(
         inputStream: InputStream,
@@ -29,7 +31,7 @@ object KmlStreamingParser {
         isKmz: Boolean = false,
     ): GisDataset {
         val reader = inputStream.bufferedReader(StandardCharsets.UTF_8)
-        return parseFromReader(reader, datasetId, datasetName, sourcePathOrUri, isKmz)
+        return reader.use { parseFromReader(it, datasetId, datasetName, sourcePathOrUri, isKmz) }
     }
 
     fun parseString(
@@ -39,7 +41,8 @@ object KmlStreamingParser {
         sourcePathOrUri: String? = null,
         isKmz: Boolean = false,
     ): GisDataset {
-        return parseFromReader(StringReader(kmlText), datasetId, datasetName, sourcePathOrUri, isKmz)
+        val reader = StringReader(kmlText)
+        return reader.use { parseFromReader(it, datasetId, datasetName, sourcePathOrUri, isKmz) }
     }
 
     private fun parseFromReader(
@@ -63,7 +66,7 @@ object KmlStreamingParser {
             }
             while (vertexCount < MAX_VERTICES) {
                 val block = extractNextPlacemarkBlock(buffer, endOfInput) ?: break
-                val placemark = parsePlacemarkBlock(block, features.size)
+                val placemark = parsePlacemarkBlock(block, features.size, MAX_VERTICES - vertexCount)
                 for (geometry in placemark.geometries) {
                     val geometryVertices = geometry.allCoordinates().size
                     if (geometryVertices == 0) continue
@@ -94,30 +97,54 @@ object KmlStreamingParser {
     }
 
     private fun extractNextPlacemarkBlock(buffer: StringBuilder, endOfInput: Boolean): String? {
+        if (buffer.length > MAX_PLACEMARK_CHARS) {
+            val closing = findClosingTag(buffer.toString(), "Placemark", 0)
+            if (closing != null) {
+                buffer.delete(0, closing.end)
+            } else {
+                buffer.setLength(0)
+            }
+            return null
+        }
         val text = buffer.toString()
         val start = findOpeningTag(text, "Placemark", 0) ?: return null
-        val closing = findClosingTag(text, "Placemark", start.second)
+        val closing = findClosingTag(text, "Placemark", start.contentStart)
         if (closing == null) {
             if (endOfInput) {
                 buffer.setLength(0)
             }
             return null
         }
-        val block = text.substring(start.first, closing.second)
-        buffer.delete(0, closing.second)
+        val block = text.substring(start.start, closing.end)
+        buffer.delete(0, closing.end)
         return block
     }
 
     private fun discardBeforePlacemarkStart(buffer: StringBuilder) {
         val text = buffer.toString()
         val start = findOpeningTag(text, "Placemark", 0)
-        if (start == null) {
-            if (buffer.length > MAX_TAG_TAIL) {
-                buffer.delete(0, buffer.length - MAX_TAG_TAIL)
+        if (start != null) {
+            if (start.start > 0) {
+                buffer.delete(0, start.start)
             }
-        } else if (start.first > 0) {
-            buffer.delete(0, start.first)
+            return
         }
+        val lastLt = text.lastIndexOf('<')
+        if (lastLt == -1) {
+            buffer.setLength(0)
+            return
+        }
+        if (text.indexOf('>', lastLt) == -1) {
+            if (text.length - lastLt <= MAX_PARTIAL_TAG_CHARS) {
+                if (lastLt > 0) {
+                    buffer.delete(0, lastLt)
+                }
+            } else {
+                buffer.setLength(0)
+            }
+            return
+        }
+        buffer.setLength(0)
     }
 
     private class ElementRange(
@@ -128,11 +155,15 @@ object KmlStreamingParser {
         val selfClosing: Boolean,
     )
 
-    private fun findOpeningTag(
-        text: String,
-        localName: String,
-        fromIndex: Int,
-    ): ElementRange? {
+    private class TagOccurrence(
+        val start: Int,
+        val end: Int,
+        val localName: String,
+        val isClosing: Boolean,
+        val selfClosing: Boolean,
+    )
+
+    private fun nextTag(text: String, fromIndex: Int): TagOccurrence? {
         var index = fromIndex
         while (index < text.length) {
             val lt = text.indexOf('<', index)
@@ -142,17 +173,41 @@ object KmlStreamingParser {
                 index = if (commentEnd == -1) text.length else commentEnd + 3
                 continue
             }
-            if (lt + 1 < text.length && (text[lt + 1] == '/' || text[lt + 1] == '!' || text[lt + 1] == '?')) {
-                index = lt + 2
+            if (text.startsWith("<![CDATA[", lt)) {
+                val cdataEnd = text.indexOf("]]>", lt + 9)
+                index = if (cdataEnd == -1) text.length else cdataEnd + 3
+                continue
+            }
+            if (text.startsWith("<?", lt)) {
+                val piEnd = text.indexOf("?>", lt + 2)
+                index = if (piEnd == -1) text.length else piEnd + 2
+                continue
+            }
+            if (text.startsWith("<!", lt)) {
+                val gt = text.indexOf('>', lt + 2)
+                index = if (gt == -1) text.length else gt + 1
                 continue
             }
             val parsed = parseTagName(text, lt) ?: return null
-            if (parsed.first == localName) {
-                return ElementRange(lt, parsed.second, -1, parsed.second, parsed.third)
-            }
-            index = parsed.second
+            val isClosing = lt + 1 < text.length && text[lt + 1] == '/'
+            return TagOccurrence(lt, parsed.second, parsed.first, isClosing, parsed.third)
         }
         return null
+    }
+
+    private fun findOpeningTag(
+        text: String,
+        localName: String,
+        fromIndex: Int,
+    ): ElementRange? {
+        var index = fromIndex
+        while (true) {
+            val tag = nextTag(text, index) ?: return null
+            if (!tag.isClosing && tag.localName == localName) {
+                return ElementRange(tag.start, tag.end, -1, tag.end, tag.selfClosing)
+            }
+            index = tag.end
+        }
     }
 
     private fun findClosingTag(
@@ -161,16 +216,13 @@ object KmlStreamingParser {
         fromIndex: Int,
     ): ElementRange? {
         var index = fromIndex
-        while (index < text.length) {
-            val lt = text.indexOf("</", index)
-            if (lt == -1) return null
-            val parsed = parseTagName(text, lt + 1) ?: return null
-            if (parsed.first == localName) {
-                return ElementRange(lt, -1, lt, parsed.second, false)
+        while (true) {
+            val tag = nextTag(text, index) ?: return null
+            if (tag.isClosing && tag.localName == localName) {
+                return ElementRange(tag.start, -1, tag.start, tag.end, false)
             }
-            index = parsed.second
+            index = tag.end
         }
-        return null
     }
 
     private fun parseTagName(text: String, ltIndex: Int): Triple<String, Int, Boolean>? {
@@ -185,17 +237,14 @@ object KmlStreamingParser {
                 break
             }
         }
+        val gt = text.indexOf('>', index)
+        if (gt == -1) return null
+        val selfClosing = gt > index && text[gt - 1] == '/'
         if (index == nameStart) {
-            val gt = text.indexOf('>', index)
-            if (gt == -1) return null
-            val selfClosing = gt > index && text[gt - 1] == '/'
             return Triple("", gt + 1, selfClosing)
         }
         val qualifiedName = text.substring(nameStart, index)
         val localName = qualifiedName.substringAfter(':')
-        val gt = text.indexOf('>', index)
-        if (gt == -1) return null
-        val selfClosing = gt > index && text[gt - 1] == '/'
         return Triple(localName, gt + 1, selfClosing)
     }
 
@@ -208,8 +257,23 @@ object KmlStreamingParser {
         if (opening.selfClosing) {
             return ElementRange(opening.start, opening.contentStart, opening.contentStart, opening.end, true)
         }
-        val closing = findClosingTag(text, localName, opening.contentStart) ?: return null
-        return ElementRange(opening.start, opening.contentStart, closing.start, closing.end, false)
+        var depth = 1
+        var searchFrom = opening.contentStart
+        while (depth > 0) {
+            val tag = nextTag(text, searchFrom) ?: return null
+            if (tag.localName == localName) {
+                if (tag.isClosing) {
+                    depth -= 1
+                    if (depth == 0) {
+                        return ElementRange(opening.start, opening.contentStart, tag.start, tag.end, false)
+                    }
+                } else if (!tag.selfClosing) {
+                    depth += 1
+                }
+            }
+            searchFrom = tag.end
+        }
+        return null
     }
 
     private fun elementText(text: String, localName: String, fromIndex: Int = 0): String? {
@@ -293,7 +357,7 @@ object KmlStreamingParser {
         val geometries: List<RenderGeometry>,
     )
 
-    private fun parsePlacemarkBlock(block: String, baseFeatureCount: Int): ParsedPlacemark {
+    private fun parsePlacemarkBlock(block: String, baseFeatureCount: Int, vertexBudget: Int): ParsedPlacemark {
         val name = elementText(block, "name") ?: "Feature ${baseFeatureCount + 1}"
         val description = elementText(block, "description")
         val properties = HashMap<String, RenderProperty>()
@@ -305,14 +369,15 @@ object KmlStreamingParser {
         while (true) {
             val dataElement = extractElement(block, "Data", searchFrom) ?: break
             val attrName = attributeValue(block, dataElement.start, "name")
-            val value = elementText(block, "value", dataElement.contentStart)
+            val dataText = block.substring(dataElement.start, dataElement.end)
+            val value = elementText(dataText, "value")
             if (attrName != null && value != null) {
                 properties[attrName] = RenderProperty.Text(value)
             }
             searchFrom = dataElement.end
             if (searchFrom >= block.length) break
         }
-        return ParsedPlacemark(properties, parseGeometries(block))
+        return ParsedPlacemark(properties, parseGeometries(block, vertexBudget, 0))
     }
 
     private fun attributeValue(text: String, elementStart: Int, attributeName: String): String? {
@@ -323,6 +388,13 @@ object KmlStreamingParser {
         while (true) {
             val attrIndex = openingTag.indexOf(attributeName, searchFrom)
             if (attrIndex == -1) return null
+            if (attrIndex > 0) {
+                val before = openingTag[attrIndex - 1]
+                if (before.isLetterOrDigit() || before == '_' || before == '-' || before == '.' || before == ':') {
+                    searchFrom = attrIndex + attributeName.length
+                    continue
+                }
+            }
             val afterName = attrIndex + attributeName.length
             if (afterName < openingTag.length && (openingTag[afterName].isLetterOrDigit() || openingTag[afterName] == '_' || openingTag[afterName] == '-')) {
                 searchFrom = afterName
@@ -345,16 +417,18 @@ object KmlStreamingParser {
         }
     }
 
-    private fun parseGeometries(block: String): List<RenderGeometry> {
+    private fun parseGeometries(block: String, budget: Int, depth: Int): List<RenderGeometry> {
+        if (depth > MAX_GEOMETRY_NESTING || budget <= 0) return emptyList()
         val geometries = ArrayList<RenderGeometry>()
+        var used = 0
         var index = 0
-        while (index < block.length) {
+        while (index < block.length && used < budget) {
             val next = findNextGeometry(block, index) ?: break
             val element = extractElement(block, next.second, next.first) ?: break
             when (next.second) {
                 "MultiGeometry" -> {
                     val innerText = if (element.selfClosing) "" else block.substring(element.contentStart, element.closingStart)
-                    val inner = parseGeometries(innerText)
+                    val inner = parseGeometries(innerText, budget - used, depth + 1)
                     if (inner.size > 1 && inner.all { it is RenderGeometry.Polygon }) {
                         geometries.add(
                             RenderGeometry.MultiPolygon(
@@ -364,22 +438,32 @@ object KmlStreamingParser {
                     } else {
                         geometries.addAll(inner)
                     }
+                    used += inner.sumOf { it.allCoordinates().size }
                 }
                 "Polygon" -> {
-                    parsePolygon(block.substring(element.start, element.end))?.let { geometries.add(it) }
+                    val polygon = parsePolygon(block.substring(element.start, element.end), budget - used)
+                    if (polygon != null) {
+                        geometries.add(polygon)
+                        used += polygon.allCoordinates().size
+                    }
                 }
                 "LineString" -> {
-                    val coordinates = extractCoordinates(block.substring(element.start, element.end))
-                    if (coordinates.size >= 2) {
-                        geometries.add(RenderGeometry.LineString(coordinates))
-                    } else if (coordinates.size == 1) {
-                        geometries.add(RenderGeometry.Point(coordinates.first()))
+                    val result = extractCoordinates(block.substring(element.start, element.end), budget - used)
+                    if (!result.truncated) {
+                        if (result.points.size >= 2) {
+                            geometries.add(RenderGeometry.LineString(result.points))
+                            used += result.points.size
+                        } else if (result.points.size == 1) {
+                            geometries.add(RenderGeometry.Point(result.points.first()))
+                            used += 1
+                        }
                     }
                 }
                 "Point" -> {
-                    val coordinates = extractCoordinates(block.substring(element.start, element.end))
-                    if (coordinates.isNotEmpty()) {
-                        geometries.add(RenderGeometry.Point(coordinates.first()))
+                    val result = extractCoordinates(block.substring(element.start, element.end), budget - used)
+                    if (!result.truncated && result.points.isNotEmpty()) {
+                        geometries.add(RenderGeometry.Point(result.points.first()))
+                        used += 1
                     }
                 }
             }
@@ -391,58 +475,54 @@ object KmlStreamingParser {
 
     private fun findNextGeometry(block: String, fromIndex: Int): Pair<Int, String>? {
         var index = fromIndex
-        while (index < block.length) {
-            val lt = block.indexOf('<', index)
-            if (lt == -1) return null
-            if (block.startsWith("<!--", lt)) {
-                val commentEnd = block.indexOf("-->", lt + 4)
-                index = if (commentEnd == -1) block.length else commentEnd + 3
-                continue
+        while (true) {
+            val tag = nextTag(block, index) ?: return null
+            if (!tag.isClosing && (tag.localName == "Point" || tag.localName == "LineString" || tag.localName == "Polygon" || tag.localName == "MultiGeometry")) {
+                return tag.start to tag.localName
             }
-            if (lt + 1 < block.length && (block[lt + 1] == '/' || block[lt + 1] == '!' || block[lt + 1] == '?')) {
-                index = lt + 2
-                continue
-            }
-            val parsed = parseTagName(block, lt) ?: return null
-            if (parsed.first == "Point" || parsed.first == "LineString" || parsed.first == "Polygon" || parsed.first == "MultiGeometry") {
-                return lt to parsed.first
-            }
-            index = parsed.second
+            index = tag.end
         }
-        return null
     }
 
-    private fun parsePolygon(elementText: String): RenderGeometry.Polygon? {
+    private fun parsePolygon(elementText: String, budget: Int): RenderGeometry.Polygon? {
+        if (budget <= 0) return null
         val outerElement = extractElement(elementText, "outerBoundaryIs", 0)
         if (outerElement != null) {
-            val outerCoordinates = extractCoordinates(elementText.substring(outerElement.start, outerElement.end))
-            if (outerCoordinates.isNotEmpty()) {
-                val rings = ArrayList<List<LngLat>>()
-                rings.add(ensureClosed(outerCoordinates))
-                var searchFrom = outerElement.end
-                while (true) {
-                    val innerElement = extractElement(elementText, "innerBoundaryIs", searchFrom) ?: break
-                    val innerCoordinates = extractCoordinates(elementText.substring(innerElement.start, innerElement.end))
-                    if (innerCoordinates.isNotEmpty()) {
-                        rings.add(ensureClosed(innerCoordinates))
-                    }
-                    searchFrom = innerElement.end
-                    if (searchFrom >= elementText.length) break
+            val outerResult = extractCoordinates(elementText.substring(outerElement.start, outerElement.end), budget)
+            if (outerResult.truncated || outerResult.points.isEmpty()) return null
+            val rings = ArrayList<List<LngLat>>()
+            rings.add(ensureClosed(outerResult.points))
+            var used = outerResult.points.size
+            var searchFrom = outerElement.end
+            while (true) {
+                val innerElement = extractElement(elementText, "innerBoundaryIs", searchFrom) ?: break
+                val innerResult = extractCoordinates(elementText.substring(innerElement.start, innerElement.end), budget - used)
+                if (innerResult.truncated) return null
+                if (innerResult.points.isNotEmpty()) {
+                    rings.add(ensureClosed(innerResult.points))
+                    used += innerResult.points.size
                 }
-                return RenderGeometry.Polygon(rings)
+                searchFrom = innerElement.end
+                if (searchFrom >= elementText.length) break
             }
-            return null
+            return RenderGeometry.Polygon(rings)
         }
-        val coordinates = extractCoordinates(elementText)
-        if (coordinates.isEmpty()) return null
-        return RenderGeometry.Polygon(listOf(ensureClosed(coordinates)))
+        val result = extractCoordinates(elementText, budget)
+        if (result.truncated || result.points.isEmpty()) return null
+        return RenderGeometry.Polygon(listOf(ensureClosed(result.points)))
     }
 
-    private fun extractCoordinates(text: String): List<LngLat> {
-        val raw = elementText(text, "coordinates") ?: return emptyList()
-        if (raw.isEmpty()) return emptyList()
+    private class CoordinatesResult(
+        val points: List<LngLat>,
+        val truncated: Boolean,
+    )
+
+    private fun extractCoordinates(text: String, maxPoints: Int): CoordinatesResult {
+        val raw = elementText(text, "coordinates") ?: return CoordinatesResult(emptyList(), false)
+        if (raw.isEmpty() || maxPoints <= 0) return CoordinatesResult(emptyList(), false)
         val tokens = raw.split("\\s+".toRegex())
-        val points = ArrayList<LngLat>(tokens.size)
+        val points = ArrayList<LngLat>(minOf(tokens.size, maxPoints))
+        var truncated = false
         for (token in tokens) {
             val parts = token.split(",")
             if (parts.size >= 2) {
@@ -450,12 +530,16 @@ object KmlStreamingParser {
                 val lat = parts[1].trim().toDoubleOrNull()
                 if (lon != null && lat != null && lon.isFinite() && lat.isFinite()) {
                     if (lon in -180.0..180.0 && lat in -90.0..90.0) {
-                        points.add(LngLat(lon, lat))
+                        if (points.size < maxPoints) {
+                            points.add(LngLat(lon, lat))
+                        } else {
+                            truncated = true
+                        }
                     }
                 }
             }
         }
-        return points
+        return CoordinatesResult(points, truncated)
     }
 
     private fun ensureClosed(ring: List<LngLat>): List<LngLat> {
