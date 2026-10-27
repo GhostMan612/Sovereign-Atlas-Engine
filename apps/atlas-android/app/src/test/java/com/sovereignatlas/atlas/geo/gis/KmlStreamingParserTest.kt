@@ -473,6 +473,25 @@ class KmlStreamingParserTest {
     }
 
     @Test
+    fun oversizedCdataTerminatorSplitAcrossOverLimitChunkBoundary() {
+        val chunkSize = 8192
+        val prefixLength = 58
+        val paddingLength = chunkSize * 245 - 2 - prefixLength
+        val padding = "a".repeat(paddingLength)
+        val kml = "<kml><Placemark><name>Too Big</name>" +
+            "<description><![CDATA[$padding]]></description>" +
+            "</Placemark>" +
+            "<Placemark><name>Small</name>" +
+            "<Point><coordinates>-104.0,41.0</coordinates></Point></Placemark></kml>"
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        assertEquals(
+            RenderProperty.Text("Small"),
+            dataset.features.first().properties["name"],
+        )
+    }
+
+    @Test
     fun oversizedCdataTerminatorAtChunkBoundaryDoesNotReplayFakeClosingTag() {
         val chunkSize = 8192
         val prefixAndFakeLength = 167
