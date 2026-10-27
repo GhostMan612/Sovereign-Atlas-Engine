@@ -292,4 +292,142 @@ class KmlStreamingParserTest {
         assertEquals(-105.0, line.coordinates[0].longitude, 1e-9)
         assertEquals(-105.0 - 599 * 0.0001, line.coordinates[599].longitude, 1e-9)
     }
+
+    @Test
+    fun parsesNestedMultiGeometryWithoutLosingPoints() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Nested</name>
+            <MultiGeometry>
+              <MultiGeometry>
+                <Point>
+                  <coordinates>-105.0,40.0</coordinates>
+                </Point>
+              </MultiGeometry>
+              <Point>
+                <coordinates>-104.0,41.0</coordinates>
+              </Point>
+            </MultiGeometry>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(2, dataset.features.size)
+        val first = dataset.features[0].geometry as RenderGeometry.Point
+        val second = dataset.features[1].geometry as RenderGeometry.Point
+        assertEquals(-105.0, first.coordinates.longitude, 1e-9)
+        assertEquals(-104.0, second.coordinates.longitude, 1e-9)
+    }
+
+    @Test
+    fun cdataContainingClosingTagTextDoesNotTerminatePlacemark() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Tagged Note</name>
+            <description><![CDATA[Note </Placemark> and <Point> here]]></description>
+            <Point>
+              <coordinates>-105.2500,40.1250</coordinates>
+            </Point>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        assertTrue(dataset.features.first().geometry is RenderGeometry.Point)
+        assertEquals(
+            RenderProperty.Text("Note </Placemark> and <Point> here"),
+            dataset.features.first().properties["description"],
+        )
+    }
+
+    @Test
+    fun extendedDataMissingValueDoesNotTakeLaterValue() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Data Check</name>
+            <ExtendedData>
+              <Data name="Empty"></Data>
+              <Data name="Filled"><value>Yes</value></Data>
+              <Data othername="Nope" name="Real"><value>Ok</value></Data>
+            </ExtendedData>
+            <Point>
+              <coordinates>-105.2500,40.1250</coordinates>
+            </Point>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        val properties = dataset.features.first().properties
+        assertTrue(!properties.containsKey("Empty"))
+        assertEquals(RenderProperty.Text("Yes"), properties["Filled"])
+        assertEquals(RenderProperty.Text("Ok"), properties["Real"])
+        assertTrue(!properties.containsKey("Nope"))
+    }
+
+    @Test
+    fun parsesPlacemarkWithOpeningTagSplitAcrossReadChunks() {
+        val longId = "x".repeat(9000)
+        val kml = "<kml><Placemark id=\"$longId\"><name>Long Tag</name>" +
+            "<Point><coordinates>-105.2500,40.1250</coordinates></Point>" +
+            "</Placemark></kml>"
+        val stream = ByteArrayInputStream(kml.toByteArray(StandardCharsets.UTF_8))
+        val dataset = KmlStreamingParser.parse(stream)
+        assertEquals(1, dataset.features.size)
+        assertTrue(dataset.features.first().geometry is RenderGeometry.Point)
+        assertEquals(
+            RenderProperty.Text("Long Tag"),
+            dataset.features.first().properties["name"],
+        )
+    }
+
+    @Test
+    fun oversizedPlacemarkIsSkippedAndLaterPlacemarkStillParses() {
+        val oversizedDescription = "a".repeat(2_100_000)
+        val kml = "<kml><Placemark><name>Too Big</name>" +
+            "<description>$oversizedDescription</description>" +
+            "<Point><coordinates>-105.0,40.0</coordinates></Point></Placemark>" +
+            "<Placemark><name>Small</name>" +
+            "<Point><coordinates>-104.0,41.0</coordinates></Point></Placemark></kml>"
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        assertEquals(
+            RenderProperty.Text("Small"),
+            dataset.features.first().properties["name"],
+        )
+    }
+
+    @Test
+    fun mixedPointAndPolygonInMultiGeometryStaySeparateFeatures() {
+        val kml = """
+        <kml>
+          <Placemark>
+            <name>Mixed</name>
+            <MultiGeometry>
+              <Point>
+                <coordinates>-105.0,40.0</coordinates>
+              </Point>
+              <Polygon>
+                <outerBoundaryIs>
+                  <LinearRing>
+                    <coordinates>-105.0,40.0 -104.0,40.0 -104.0,41.0 -105.0,41.0</coordinates>
+                  </LinearRing>
+                </outerBoundaryIs>
+              </Polygon>
+            </MultiGeometry>
+          </Placemark>
+        </kml>
+        """.trimIndent()
+
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(2, dataset.features.size)
+        assertTrue(dataset.features[0].geometry is RenderGeometry.Point)
+        assertTrue(dataset.features[1].geometry is RenderGeometry.Polygon)
+    }
 }
