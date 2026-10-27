@@ -452,11 +452,35 @@ class KmlStreamingParserTest {
     }
 
     @Test
-    fun oversizedCdataPlacemarkDoesNotLeakFakePlacemark() {
-        val padding = "a".repeat(2_100_000)
+    fun oversizedCdataTerminatorNearChunkEndDoesNotReplayFakeClosingTag() {
+        val chunkSize = 8192
+        val prefixAndFakeLength = 167
+        val paddingLength = chunkSize * 246 - 30 - prefixAndFakeLength
+        val padding = "a".repeat(paddingLength)
         val kml = "<kml><Placemark><name>Too Big</name>" +
             "<description><![CDATA[$padding</Placemark>" +
-            "<Placemark><name>Fake</name>" +
+            "<Placemark><name>Fake2</name>" +
+            "<Point><coordinates>-103.0,42.0</coordinates></Point></Placemark>]]></description>" +
+            "</Placemark>" +
+            "<Placemark><name>Small</name>" +
+            "<Point><coordinates>-104.0,41.0</coordinates></Point></Placemark></kml>"
+        val dataset = KmlStreamingParser.parseString(kml)
+        assertEquals(1, dataset.features.size)
+        assertEquals(
+            RenderProperty.Text("Small"),
+            dataset.features.first().properties["name"],
+        )
+    }
+
+    @Test
+    fun oversizedCdataTerminatorAtChunkBoundaryDoesNotReplayFakeClosingTag() {
+        val chunkSize = 8192
+        val prefixAndFakeLength = 167
+        val paddingLength = chunkSize * 246 - prefixAndFakeLength
+        val padding = "a".repeat(paddingLength)
+        val kml = "<kml><Placemark><name>Too Big</name>" +
+            "<description><![CDATA[$padding</Placemark>" +
+            "<Placemark><name>Fake2</name>" +
             "<Point><coordinates>-103.0,42.0</coordinates></Point></Placemark>]]></description>" +
             "</Placemark>" +
             "<Placemark><name>Small</name>" +
