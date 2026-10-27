@@ -57,15 +57,42 @@ object KmlStreamingParser {
         val buffer = StringBuilder()
         val chunk = CharArray(READ_CHUNK_SIZE)
         var endOfInput = false
+        var skipTail = ""
+        var skipContext: SkipContext? = null
         while (!endOfInput && vertexCount < MAX_VERTICES) {
             val read = reader.read(chunk)
             if (read == -1) {
                 endOfInput = true
             } else if (read > 0) {
-                buffer.append(String(chunk, 0, read))
+                val chunkText = String(chunk, 0, read)
+                val context = skipContext
+                if (context != null) {
+                    val scanText = skipTail + chunkText
+                    val closingEnd = scanForPlacemarkClose(scanText, context, 0)
+                    if (closingEnd != -1) {
+                        skipContext = null
+                        skipTail = ""
+                        buffer.setLength(0)
+                        buffer.append(scanText.substring(closingEnd))
+                    } else {
+                        skipTail = scanText.takeLast(64)
+                        buffer.setLength(0)
+                        continue
+                    }
+                } else {
+                    buffer.append(chunkText)
+                }
             }
             while (vertexCount < MAX_VERTICES) {
-                val block = extractNextPlacemarkBlock(buffer, endOfInput) ?: break
+                val extraction = extractNextPlacemarkBlock(buffer, endOfInput)
+                if (extraction.oversized) {
+                    skipContext = extraction.skipContext
+                    skipTail = ""
+                    buffer.setLength(0)
+                    break
+                }
+                val block = extraction.block ?: break
+                if (block.length > MAX_PLACEMARK_CHARS) continue
                 val placemark = parsePlacemarkBlock(block, features.size, MAX_VERTICES - vertexCount)
                 for (geometry in placemark.geometries) {
                     val geometryVertices = geometry.allCoordinates().size
@@ -96,28 +123,94 @@ object KmlStreamingParser {
         )
     }
 
-    private fun extractNextPlacemarkBlock(buffer: StringBuilder, endOfInput: Boolean): String? {
-        if (buffer.length > MAX_PLACEMARK_CHARS) {
-            val closing = findClosingTag(buffer.toString(), "Placemark", 0)
-            if (closing != null) {
-                buffer.delete(0, closing.end)
-            } else {
-                buffer.setLength(0)
-            }
-            return null
-        }
+    private class BlockExtraction(
+        val block: String?,
+        val oversized: Boolean,
+        val skipContext: SkipContext?,
+    )
+
+    private class SkipContext(
+        var inCdata: Boolean = false,
+        var inComment: Boolean = false,
+        var inProcessingInstruction: Boolean = false,
+    )
+
+    private fun extractNextPlacemarkBlock(buffer: StringBuilder, endOfInput: Boolean): BlockExtraction {
         val text = buffer.toString()
-        val start = findOpeningTag(text, "Placemark", 0) ?: return null
+        val start = findOpeningTag(text, "Placemark", 0)
+            ?: return BlockExtraction(null, false, null)
         val closing = findClosingTag(text, "Placemark", start.contentStart)
         if (closing == null) {
+            if (text.length - start.start > MAX_PLACEMARK_CHARS) {
+                val context = SkipContext()
+                scanForPlacemarkClose(text, context, start.start)
+                return BlockExtraction(null, true, context)
+            }
             if (endOfInput) {
                 buffer.setLength(0)
             }
-            return null
+            return BlockExtraction(null, false, null)
         }
         val block = text.substring(start.start, closing.end)
         buffer.delete(0, closing.end)
-        return block
+        return BlockExtraction(block, false, null)
+    }
+
+    private fun scanForPlacemarkClose(text: String, context: SkipContext, fromIndex: Int): Int {
+        var index = fromIndex
+        while (index < text.length) {
+            if (context.inCdata) {
+                val cdataEnd = text.indexOf("]]>", index)
+                if (cdataEnd == -1) return -1
+                index = cdataEnd + 3
+                context.inCdata = false
+                continue
+            }
+            if (context.inComment) {
+                val commentEnd = text.indexOf("-->", index)
+                if (commentEnd == -1) return -1
+                index = commentEnd + 3
+                context.inComment = false
+                continue
+            }
+            if (context.inProcessingInstruction) {
+                val piEnd = text.indexOf("?>", index)
+                if (piEnd == -1) return -1
+                index = piEnd + 2
+                context.inProcessingInstruction = false
+                continue
+            }
+            val lt = text.indexOf('<', index)
+            if (lt == -1) return -1
+            if (text.startsWith("<![CDATA[", lt)) {
+                context.inCdata = true
+                index = lt + 9
+                continue
+            }
+            if (text.startsWith("<!--", lt)) {
+                context.inComment = true
+                index = lt + 4
+                continue
+            }
+            if (text.startsWith("<?", lt)) {
+                context.inProcessingInstruction = true
+                index = lt + 2
+                continue
+            }
+            if (text.startsWith("<!", lt)) {
+                val gt = text.indexOf('>', lt + 2)
+                if (gt == -1) return -1
+                index = gt + 1
+                continue
+            }
+            val parsed = parseTagName(text, lt) ?: return -1
+            val isClosing = lt + 1 < text.length && text[lt + 1] == '/'
+            if (isClosing && parsed.first == "Placemark") {
+                return parsed.second
+            }
+            index = parsed.second
+        }
+        return -1
     }
 
     private fun discardBeforePlacemarkStart(buffer: StringBuilder) {
