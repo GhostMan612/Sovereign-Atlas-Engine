@@ -9,6 +9,8 @@ import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
 import com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 
 enum class RegisterOutcome {
     STORED,
@@ -351,18 +353,30 @@ class FragmentStore(
     }
 
     private fun persistFrame(transferId: String, chunkIndex: Int, frame: ByteArray, isInbound: Boolean) {
-        val dir = storageDir ?: return
-        val subDir = if (isInbound) File(dir, "inbox") else File(dir, "outbox")
-        val transferDir = File(subDir, transferId)
+        val transferDir = transferDirectory(transferId, isInbound) ?: return
         transferDir.mkdirs()
         File(transferDir, "chunk_%04d.dat".format(chunkIndex)).writeBytes(frame)
     }
 
     private fun deleteTransferDir(transferId: String, isInbound: Boolean) {
-        val dir = storageDir ?: return
-        val subDir = if (isInbound) File(dir, "inbox") else File(dir, "outbox")
-        val transferDir = File(subDir, transferId)
+        val transferDir = transferDirectory(transferId, isInbound) ?: return
         transferDir.deleteRecursively()
+    }
+
+    private fun transferDirectory(transferId: String, isInbound: Boolean): File? {
+        val dir = storageDir ?: return null
+        val subDir = File(dir, if (isInbound) "inbox" else "outbox")
+        val candidate = File(subDir, directoryName(transferId))
+        return try {
+            if (candidate.canonicalFile.parentFile == subDir.canonicalFile) candidate else null
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    private fun directoryName(transferId: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(transferId.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
     companion object {

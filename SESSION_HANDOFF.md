@@ -17,13 +17,13 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-06 (`DEC-024`): 1,590 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-11-06: 1,600 tests, 0 failures+errors, 0 skipped across all modules:**
   - `:atlas-sdk:test`: 29 tests
   - `:sdk-consumer:test`: 7 tests. The 2026-10-24 record said 6, which does not match
     the suite: it has had 7 `@Test` methods since `f8383a1`, before that record. No
     test changed in `DEC-024`.
-  - `:app:testPlayDebugUnitTest`: 777 tests
-  - `:app:testEnterpriseDebugUnitTest`: 777 tests
+  - `:app:testPlayDebugUnitTest`: 782 tests (777 at `DEC-024`, plus the 5 of `FragmentStoreStorageLayoutTest`)
+  - `:app:testEnterpriseDebugUnitTest`: 782 tests
   Counts recorded from JUnit XML across module build directories.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
@@ -223,6 +223,10 @@
   - `AtlasMap.kt` and `HistoricalRecordSheet.kt` each copy a moved property into a local `val` before a null check: Kotlin does not smart-cast another module's property.
   - The parsers' tests stay in `:app`, where CI runs. 0 forbidden imports in the 41 `:atlas-sdk` sources. Host gate: three runs; the first failed to compile on those smart casts, the second passed with 1,590 tests, the third (after the 1.7.3 pin and the 1.1.0 bump, tests forced to re-execute) passed with 1,590.
   - Next, outside this repo: Sovereign Mantle's P5b consumes `:atlas-sdk:1.1.0` as a Maven artifact (ADR-008's `maven-publish` block); none is published for this change yet.
+- **`FragmentStore` storage layout (2026-11-06):**
+  - Each transfer directory under `inbox/` and `outbox/` is named by the SHA-256 of its transfer id (64 lowercase hex characters), and its canonical path must be a direct child of that folder before the store writes to or deletes it.
+  - `FragmentStoreStorageLayoutTest` (5 tests, in `:app` so CI runs it) pins the layout, the sweep and eviction paths, a `storageDir` written with dot segments, and a linked transfer directory. Directories an earlier build wrote under the raw id are not read back (the store never reloaded them) and are not removed.
+  - Gate: 29 / 7 / 782 / 782 = 1,600, 0 failures, 0 errors, 0 skipped.
 
 ## Next moves
 
