@@ -404,8 +404,9 @@ fun AtlasMapScreen(
                     val result = withContext(Dispatchers.IO) {
                         com.sovereignatlas.atlas.android.gis.AndroidGisImporter.importFromUri(context, uri)
                     }
-                    if (result.dataset != null) {
-                        services.gisRepository.addDataset(result.dataset)
+                    val dataset = result.dataset
+                    if (dataset != null) {
+                        services.gisRepository.addDataset(dataset)
                     }
                 } finally {
                     activityBannerLabel.value = null

@@ -149,12 +149,14 @@ private fun PatentFields(patent: LandPatent) {
 private fun BlueprintFields(blueprint: SanbornBlueprint) {
     DetailRow("Sheet", blueprint.sheet)
     DetailRow("Edition", blueprint.edition.toString())
+    val minZoom = blueprint.minZoom
+    val maxZoom = blueprint.maxZoom
     DetailRow(
         "Zoom range",
-        if (blueprint.minZoom == null || blueprint.maxZoom == null) {
+        if (minZoom == null || maxZoom == null) {
             NOT_RECORDED
         } else {
-            "z${formatZoom(blueprint.minZoom)} to z${formatZoom(blueprint.maxZoom)}"
+            "z${formatZoom(minZoom)} to z${formatZoom(maxZoom)}"
         },
     )
     DetailRow("Format", blueprint.format.orPlaceholder())

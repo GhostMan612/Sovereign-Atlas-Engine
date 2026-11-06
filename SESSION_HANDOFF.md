@@ -17,9 +17,11 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-10-24: 1,589 tests, 0 failures+errors across all modules:**
+- **Last measured 2026-11-06 (`DEC-024`): 1,590 tests, 0 failures+errors across all modules:**
   - `:atlas-sdk:test`: 29 tests
-  - `:sdk-consumer:test`: 6 tests
+  - `:sdk-consumer:test`: 7 tests. The 2026-10-24 record said 6, which does not match
+    the suite: it has had 7 `@Test` methods since `f8383a1`, before that record. No
+    test changed in `DEC-024`.
   - `:app:testPlayDebugUnitTest`: 777 tests
   - `:app:testEnterpriseDebugUnitTest`: 777 tests
   Counts recorded from JUnit XML across module build directories.
@@ -215,6 +217,12 @@
     5. Unit Testing & Verification Gate:
        - Added `CompassInteractionTest.kt` (7 tests).
        - Verified 100% green host gate: **1,589 passing unit tests** (+15 test executions: 29 :atlas-sdk, 6 :sdk-consumer, 777 Play, 777 Enterprise), 0 failures, 0 errors, 0 pure-boundary violations across 115 pure files.
+- **Sovereign Mantle blueprint P5a: GIS parsers into `:atlas-sdk` (2026-11-06, `DEC-024`):**
+  - `GeoJsonParser`, `KmlStreamingParser`, `ShapefileParser` (`geo.gis`) and `LandPatentGeoJsonParser` (`core`) moved from `:app` to `:atlas-sdk` with the four files they need (`GeoJsonGeometry`, `GisModels`, `RenderGeometry`, `HistoricalAsset`): `git mv`, byte-identical, same packages, no typealias.
+  - `:atlas-sdk` gains `implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'` (runtime library only, no serialization plugin; `:app` keeps its own 1.9.0); its runtime classpath keeps `kotlin-stdlib` 2.1.0. The published coordinate moves to `com.sovereignatlas:atlas-sdk:1.1.0`.
+  - `AtlasMap.kt` and `HistoricalRecordSheet.kt` each copy a moved property into a local `val` before a null check: Kotlin does not smart-cast another module's property.
+  - The parsers' tests stay in `:app`, where CI runs. 0 forbidden imports in the 41 `:atlas-sdk` sources. Host gate: three runs; the first failed to compile on those smart casts, the second passed with 1,590 tests, the third (after the 1.7.3 pin and the 1.1.0 bump, tests forced to re-execute) passed with 1,590.
+  - Next, outside this repo: Sovereign Mantle's P5b consumes `:atlas-sdk:1.1.0` as a Maven artifact (ADR-008's `maven-publish` block); none is published for this change yet.
 
 ## Next moves
 
