@@ -14,6 +14,7 @@ import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.tactical.dtn.FragmentStore
 import com.sovereignatlas.atlas.tactical.dtn.FragmentTier
 import com.sovereignatlas.atlas.tactical.dtn.RegisterOutcome
+import com.sovereignatlas.atlas.tactical.mesh.ChunkPacketCodec
 import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
 import com.sovereignatlas.atlas.tactical.mesh.MeshNodeInfo
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
@@ -83,8 +84,12 @@ class MeshTransportSupervisor(
                 delay(5_000L)
                 if (canTransmit() && radioClient.connectionState.value == RadioConnectionState.CONNECTED) {
                     val reports = fragmentStore.tick()
-                    if (reports.isNotEmpty()) {
-                        val encoded = FragmentAckCodec.encode(reports)
+                    // FRA1 can encode many reports, but the wire MTU cannot.
+                    // Send one bounded report per packet instead of an oversized batch.
+                    for (report in reports) {
+                        val encoded = runCatching { FragmentAckCodec.encode(listOf(report)) }.getOrNull()
+                            ?: continue
+                        if (encoded.size > LORA_MTU_BYTES) continue
                         val myNode = activeRadioInfo.value?.nodeNum ?: 0L
                         radioClient.transmitPacket(
                             MeshPacket(
@@ -146,26 +151,34 @@ class MeshTransportSupervisor(
             )
         }
 
-        val chunks = splitIntoChunks(protoBytes, LORA_CHUNK_PAYLOAD_SIZE)
-        val transferId = "cot-$markerUid"
+        // The generated UID ends with a UUID. Its unique suffix is enough
+        // for a short transfer identifier even if localUid is very long.
+        val transferId = "cot-${markerUid.takeLast(36)}"
+        val dataLimit = minOf(LORA_CHUNK_PAYLOAD_SIZE, ChunkPacketCodec.maxDataBytes(transferId))
+        if (dataLimit <= 0) return false
+        val chunks = splitIntoChunks(protoBytes, dataLimit)
+        if (chunks.size !in 1..ChunkPacketCodec.MAX_CHUNKS) return false
+        val wireFrames = chunks.mapIndexed { index, data ->
+            ChunkPacketCodec.encode(transferId, index, chunks.size, data) ?: return false
+        }
+        // Retain exactly what was transmitted, not unframed payloads.
         fragmentStore.registerOutbound(
             transferId = transferId,
-            totalChunks = chunks.size,
+            totalChunks = wireFrames.size,
             tier = FragmentTier.PUBLIC,
             counterpartyId = "broadcast",
             expiresAt = System.currentTimeMillis() + 600_000L,
-            frames = chunks,
+            frames = wireFrames,
         )
 
         var allSent = true
-        for (i in chunks.indices) {
-            val chunkPayload = buildChunkPacketPayload(transferId, i, chunks.size, chunks[i])
+        for (frame in wireFrames) {
             val sent = radioClient.transmitPacket(
                 MeshPacket(
                     from = myNode,
                     to = 0xFFFFFFFFL,
                     portNum = PortNum.PORTNUM_ATAK_PLUGIN,
-                    payload = chunkPayload,
+                    payload = frame,
                 )
             )
             if (!sent) allSent = false
@@ -197,7 +210,7 @@ class MeshTransportSupervisor(
 
     private suspend fun handleInboundPacket(packet: MeshPacket) {
         val payload = packet.payload
-        if (payload.isEmpty()) return
+        if (payload.isEmpty() || payload.size > LORA_MTU_BYTES) return
 
         when (packet.portNum) {
             PortNum.PORTNUM_ATAK_PLUGIN, PortNum.PORTNUM_PRIVATE_APP -> {
@@ -213,6 +226,9 @@ class MeshTransportSupervisor(
                         if (canTransmit()) {
                             val myNode = activeRadioInfo.value?.nodeNum ?: 0L
                             for (repairFrame in repairs) {
+                                if (repairFrame.size > LORA_MTU_BYTES ||
+                                    ChunkPacketCodec.decode(repairFrame) == null
+                                ) continue
                                 radioClient.transmitPacket(
                                     MeshPacket(
                                         from = myNode,
@@ -227,8 +243,8 @@ class MeshTransportSupervisor(
                     return
                 }
 
-                if (isChunkPacket(payload)) {
-                    val chunk = parseChunkPacket(payload) ?: return
+                if (ChunkPacketCodec.hasMagic(payload)) {
+                    val chunk = ChunkPacketCodec.decode(payload) ?: return
                     val outcome = fragmentStore.registerInbound(
                         transferId = chunk.transferId,
                         chunkIndex = chunk.chunkIndex,
@@ -266,54 +282,6 @@ class MeshTransportSupervisor(
             offset += len
         }
         return chunks
-    }
-
-    private fun isChunkPacket(bytes: ByteArray): Boolean {
-        return bytes.size >= 8 &&
-            bytes[0] == 'C'.code.toByte() &&
-            bytes[1] == 'H'.code.toByte() &&
-            bytes[2] == 'K'.code.toByte() &&
-            bytes[3] == '1'.code.toByte()
-    }
-
-    private fun buildChunkPacketPayload(
-        transferId: String,
-        chunkIndex: Int,
-        totalChunks: Int,
-        data: ByteArray,
-    ): ByteArray {
-        val idBytes = transferId.toByteArray(Charsets.UTF_8)
-        val idLen = minOf(idBytes.size, 0xFF)
-        val out = ByteArray(8 + idLen + data.size)
-        out[0] = 'C'.code.toByte()
-        out[1] = 'H'.code.toByte()
-        out[2] = 'K'.code.toByte()
-        out[3] = '1'.code.toByte()
-        out[4] = idLen.toByte()
-        out[5] = (chunkIndex and 0xFF).toByte()
-        out[6] = (totalChunks and 0xFF).toByte()
-        out[7] = 0.toByte()
-        System.arraycopy(idBytes, 0, out, 8, idLen)
-        System.arraycopy(data, 0, out, 8 + idLen, data.size)
-        return out
-    }
-
-    private data class ParsedChunk(
-        val transferId: String,
-        val chunkIndex: Int,
-        val totalChunks: Int,
-        val data: ByteArray,
-    )
-
-    private fun parseChunkPacket(bytes: ByteArray): ParsedChunk? {
-        if (!isChunkPacket(bytes)) return null
-        val idLen = bytes[4].toInt() and 0xFF
-        val chunkIndex = bytes[5].toInt() and 0xFF
-        val totalChunks = bytes[6].toInt() and 0xFF
-        if (bytes.size < 8 + idLen) return null
-        val transferId = String(bytes, 8, idLen, Charsets.UTF_8)
-        val data = bytes.copyOfRange(8 + idLen, bytes.size)
-        return ParsedChunk(transferId, chunkIndex, totalChunks, data)
     }
 
     companion object {
