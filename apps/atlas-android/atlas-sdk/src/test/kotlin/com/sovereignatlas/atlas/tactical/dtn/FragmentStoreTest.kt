@@ -176,18 +176,17 @@ class FragmentStoreTest {
                 safeStore.registerInbound("safe", 0, 2, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(1)),
             )
             val transfer = root.resolve("inbox").toFile().listFiles()!!.single().toPath()
-            Files.delete(transfer.resolve("chunk_0000.dat"))
             val sentinel = outside.resolve("sentinel")
             Files.write(sentinel, byteArrayOf(99))
-            Files.createSymbolicLink(transfer.resolve("chunk_0000.dat"), sentinel)
+            Files.createSymbolicLink(transfer.resolve("chunk_0001.dat"), sentinel)
             rejected = false
             try {
+                // New frame index, so the persistence boundary is actually reached.
                 safeStore.registerInbound("safe", 1, 2, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(2))
-                // The existing malicious link must not be followed on any write.
-                safeStore.registerInbound("safe", 0, 2, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(3))
             } catch (expected: IllegalArgumentException) {
                 rejected = true
             }
+            assertTrue(rejected)
             assertTrue(Files.readAllBytes(sentinel).contentEquals(byteArrayOf(99)))
         } finally {
             // Delete the symlink (if present) before recursive test-directory cleanup.
