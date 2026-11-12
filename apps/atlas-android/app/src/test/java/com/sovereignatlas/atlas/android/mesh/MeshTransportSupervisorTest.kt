@@ -11,12 +11,16 @@ import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.tactical.dtn.FragmentStore
+import com.sovereignatlas.atlas.tactical.mesh.ChunkPacketCodec
+import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
+import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MockMeshRadioClient
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -181,4 +185,65 @@ class MeshTransportSupervisorTest {
             harness.close()
         }
     }
+    @Test
+    fun missedMiddleChunkIsRepairedWithOriginalChk1WireFrame() = runTest {
+        val sender = TestHarness(scope = backgroundScope)
+        val receiver = TestHarness(scope = backgroundScope)
+        try {
+            testScheduler.runCurrent()
+            assertTrue(sender.supervisor.sendCotMarker("a-h-G", "LONG-".repeat(300), 37.77, -122.41))
+            val original = sender.mockRadio.transmittedPackets.toList()
+            assertTrue("marker should fragment", original.size > 2)
+            assertTrue(original.all { it.payload.size <= MeshTransportSupervisor.LORA_MTU_BYTES })
+            val decoded = original.map { ChunkPacketCodec.decode(it.payload)!! }
+            val id = decoded.first().transferId
+            assertTrue(decoded.all { it.transferId == id && it.totalChunks == original.size })
+            val missingIndex = original.size / 2
+            for (i in original.indices) {
+                if (i == missingIndex) continue
+                receiver.mockRadio.simulateInboundPacket(original[i])
+                testScheduler.runCurrent()
+            }
+            assertFalse(receiver.fragmentStore.isInboundComplete(id))
+            val nack = receiver.fragmentStore.generateAckReport(id, round = 1)!!
+            assertEquals(1, nack.missing.count { it })
+            val nackPayload = FragmentAckCodec.encode(listOf(nack))
+            assertTrue(nackPayload.size <= MeshTransportSupervisor.LORA_MTU_BYTES)
+            sender.mockRadio.simulateInboundPacket(
+                MeshPacket(
+                    from = 0xBEEFL,
+                    to = 0xFFFFFFFFL,
+                    portNum = PortNum.PORTNUM_ATAK_PLUGIN,
+                    payload = nackPayload,
+                )
+            )
+            testScheduler.runCurrent()
+            val repairs = sender.mockRadio.transmittedPackets.drop(original.size)
+            assertEquals(1, repairs.size)
+            assertEquals(0xBEEFL, repairs.single().to)
+            assertArrayEquals(original[missingIndex].payload, repairs.single().payload)
+            assertTrue(repairs.single().payload.size <= MeshTransportSupervisor.LORA_MTU_BYTES)
+            receiver.mockRadio.simulateInboundPacket(repairs.single())
+            testScheduler.runCurrent()
+            assertTrue(receiver.fragmentStore.isInboundComplete(id))
+            val expected = decoded.fold(ByteArray(0)) { bytes, part -> bytes + part.data }
+            assertArrayEquals(expected, receiver.fragmentStore.assembleInboundPayload(id))
+        } finally {
+            sender.close()
+            receiver.close()
+        }
+    }
+
+    @Test
+    fun excessiveChunkCountFailsBeforeAnyRadioPacket() = runTest {
+        val harness = TestHarness(scope = backgroundScope)
+        try {
+            assertFalse(harness.supervisor.sendCotMarker("a-h-G", "X".repeat(60_000), 37.77, -122.41))
+            assertTrue(harness.mockRadio.transmittedPackets.isEmpty())
+        } finally {
+            harness.close()
+        }
+    }
+
+
 }
