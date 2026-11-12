@@ -179,6 +179,7 @@ class MeshTransportSupervisor(
         }
         val myNode = activeRadioInfo.value?.nodeNum ?: 0L
         val bytes = text.toByteArray(Charsets.UTF_8)
+        if (bytes.size > LORA_MTU_BYTES) return false
         return radioClient.transmitPacket(
             MeshPacket(
                 from = myNode,

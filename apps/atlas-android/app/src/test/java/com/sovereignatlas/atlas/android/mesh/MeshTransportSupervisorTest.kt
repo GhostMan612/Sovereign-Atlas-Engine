@@ -121,6 +121,35 @@ class MeshTransportSupervisorTest {
     }
 
     @Test
+    fun textMessageAtPayloadLimitTransmits() = runTest {
+        val harness = TestHarness(scope = backgroundScope)
+        try {
+            val text = "A".repeat(MeshTransportSupervisor.LORA_MTU_BYTES)
+            assertTrue(harness.supervisor.sendTextMessage(text))
+            assertEquals(1, harness.mockRadio.transmittedPackets.size)
+            assertEquals(
+                MeshTransportSupervisor.LORA_MTU_BYTES,
+                harness.mockRadio.transmittedPackets.single().payload.size,
+            )
+            assertEquals(PortNum.PORTNUM_TEXT_MESSAGE_APP, harness.mockRadio.transmittedPackets.single().portNum)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun oversizedUtf8TextMessageIsRejectedWithoutRadioTransmission() = runTest {
+        val harness = TestHarness(scope = backgroundScope)
+        try {
+            assertFalse(harness.supervisor.sendTextMessage("A".repeat(MeshTransportSupervisor.LORA_MTU_BYTES + 1)))
+            assertFalse(harness.supervisor.sendTextMessage("é".repeat(120)))
+            assertTrue(harness.mockRadio.transmittedPackets.isEmpty())
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun inboundHostileXmlMarkerRoutesToMarkerStore() = runTest {
         val harness = TestHarness(scope = backgroundScope)
         try {
