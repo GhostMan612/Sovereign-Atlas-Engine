@@ -210,7 +210,7 @@ class MeshTransportSupervisor(
 
     private suspend fun handleInboundPacket(packet: MeshPacket) {
         val payload = packet.payload
-        if (payload.isEmpty() || payload.size > LORA_MTU_BYTES) return
+        if (payload.isEmpty()) return
 
         when (packet.portNum) {
             PortNum.PORTNUM_ATAK_PLUGIN, PortNum.PORTNUM_PRIVATE_APP -> {
@@ -220,6 +220,9 @@ class MeshTransportSupervisor(
                     payload[2] == 'A'.code.toByte() &&
                     payload[3] == '1'.code.toByte()
                 ) {
+                    // Bound control packets without breaking legacy raw CoT input:
+                    // raw XML and protobuf CoT can originate outside CHK1 transport.
+                    if (payload.size > LORA_MTU_BYTES) return
                     val reports = FragmentAckCodec.decode(payload) ?: return
                     for (report in reports) {
                         val repairs = fragmentStore.processAckReport(report)
