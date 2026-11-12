@@ -34,7 +34,9 @@ Host gate (no device, no build), **once per phase**:
 
 There is no `:app:testDebugUnitTest` — the two product flavors make that name
 ambiguous, and Gradle fails on it. The human builds in Android Studio; device runs
-are explicit-ask only. See `AGENTS.md` for the one-gate-per-phase rule.
+are explicit-ask only. GitHub Actions additionally runs `:atlas-sdk:test` and
+`:sdk-consumer:test` to protect public SDK and external-consumer behavior.
+See `AGENTS.md` for the one-gate-per-phase local rule.
 
 ## Lineage
 
@@ -42,4 +44,6 @@ are explicit-ask only. See `AGENTS.md` for the one-gate-per-phase rule.
 (engine packages, golden fixtures, slice closures, ADRs/DECs) as
 read-only context. The MGRS-001 golden stays schema-only by
 governance; terrain-aware LOS is reserved to a future DEM source
-(RADIO-002). Phase 13 (productization/release) was never executed.
+(RADIO-002). Phase 13's tactical mesh and SDK implementation is recorded as complete in
+`docs/atlas-production/evidence/RELEASE_MANIFEST_PHASE13.md`. Signed release
+packaging (G12) and live hardware validation remain pending.
