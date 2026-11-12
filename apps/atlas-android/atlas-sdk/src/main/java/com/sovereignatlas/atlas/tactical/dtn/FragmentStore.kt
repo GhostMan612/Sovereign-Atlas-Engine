@@ -269,6 +269,12 @@ class FragmentStore(
     @Synchronized
     fun processAckReport(report: FragmentAckReport): List<ByteArray> {
         val meta = outboundMeta[report.transferId] ?: return emptyList()
+        if (report.totalChunks != meta.totalChunks ||
+            report.round !in 1..MAX_NACK_ROUNDS ||
+            report.contiguousHigh !in 0..meta.totalChunks ||
+            report.windowBase != report.contiguousHigh ||
+            report.missing.size > meta.totalChunks - report.windowBase
+        ) return emptyList()
         val frames = outboundFrames[report.transferId] ?: return emptyList()
         val repairs = ArrayList<ByteArray>()
 
