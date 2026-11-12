@@ -9,6 +9,15 @@ import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
 import com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
+import java.security.MessageDigest
 
 enum class RegisterOutcome {
     STORED,
@@ -350,19 +359,68 @@ class FragmentStore(
         deleteTransferDir(oldestKey, isInbound = false)
     }
 
+    /**
+     * Logical transfer IDs come from untrusted radio packets. Persist them by a
+     * collision-resistant opaque name, never as a filesystem path component.
+     *
+     * Historical directories named after raw IDs are deliberately ignored: no
+     * migration or recursive cleanup may traverse attacker-controlled legacy paths.
+     */
+    private fun transferDirectory(transferId: String, isInbound: Boolean, create: Boolean): File? {
+        val root = storageDir?.canonicalFile ?: return null
+        val bucket = File(root, if (isInbound) "inbox" else "outbox")
+        // Reject a pre-existing symlink redirecting the storage bucket.
+        require(bucket.canonicalFile == bucket.absoluteFile) { "Fragment bucket escapes storage root" }
+        if (create && !bucket.isDirectory && !bucket.mkdirs()) {
+            throw IOException("Cannot create fragment bucket")
+        }
+
+        val hash = MessageDigest.getInstance("SHA-256")
+            .digest(transferId.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        val transferDir = File(bucket, "sha256-$hash")
+        // Includes existing symlink aliases to otherwise valid-looking directories.
+        require(transferDir.canonicalFile == transferDir.absoluteFile) {
+            "Fragment directory escapes storage bucket"
+        }
+        if (create && !transferDir.isDirectory && !transferDir.mkdirs()) {
+            throw IOException("Cannot create fragment directory")
+        }
+        return transferDir
+    }
+
     private fun persistFrame(transferId: String, chunkIndex: Int, frame: ByteArray, isInbound: Boolean) {
-        val dir = storageDir ?: return
-        val subDir = if (isInbound) File(dir, "inbox") else File(dir, "outbox")
-        val transferDir = File(subDir, transferId)
-        transferDir.mkdirs()
-        File(transferDir, "chunk_%04d.dat".format(chunkIndex)).writeBytes(frame)
+        val transferDir = transferDirectory(transferId, isInbound, create = true) ?: return
+        val chunkFile = File(transferDir, "chunk_%04d.dat".format(chunkIndex))
+        require(chunkFile.canonicalFile == chunkFile.absoluteFile) {
+            "Fragment frame resolves through a symbolic link"
+        }
+        Files.write(
+            chunkFile.toPath(),
+            frame,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS,
+        )
     }
 
     private fun deleteTransferDir(transferId: String, isInbound: Boolean) {
-        val dir = storageDir ?: return
-        val subDir = if (isInbound) File(dir, "inbox") else File(dir, "outbox")
-        val transferDir = File(subDir, transferId)
-        transferDir.deleteRecursively()
+        val transferDir = transferDirectory(transferId, isInbound, create = false) ?: return
+        if (!transferDir.exists()) return
+        // The visitor never follows links nested inside the opaque transfer folder.
+        Files.walkFileTree(transferDir.toPath(), object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun postVisitDirectory(dir: Path, error: IOException?): FileVisitResult {
+                if (error != null) throw error
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
     }
 
     companion object {

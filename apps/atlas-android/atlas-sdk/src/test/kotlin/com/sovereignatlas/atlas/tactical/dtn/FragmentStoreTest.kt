@@ -5,6 +5,8 @@
 
 package com.sovereignatlas.atlas.tactical.dtn
 
+import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -114,4 +116,85 @@ class FragmentStoreTest {
         assertEquals(listOf(1), store.getMissingChunkIndices("live-1"))
         assertTrue(store.getMissingChunkIndices("exp-1").isEmpty())
     }
+    @Test
+    fun hostileTransferIdsNeverEscapeStorageDuringWriteOrSweep() {
+        val root = Files.createTempDirectory("atlas-dtn-").toFile()
+        val sibling = File(root.parentFile, root.name + "-sentinel")
+        try {
+            assertTrue(sibling.mkdirs())
+            File(sibling, "KEEP").writeText("intact")
+            val store = FragmentStore(storageDir = root, clock = { 100L })
+            val ids = listOf(
+                "../../${sibling.name}",
+                "../escape",
+                "..\\\\escape",
+                "/tmp/absolute",
+                "nested/name",
+                "é",
+                "e\u0301",
+                "safe-id",
+            )
+            for (id in ids) {
+                assertEquals(
+                    RegisterOutcome.STORED,
+                    store.registerInbound(id, 0, 2, FragmentTier.PUBLIC, "peer", 110L, "x".toByteArray()),
+                )
+            }
+            val names = File(root, "inbox").listFiles()?.map { it.name } ?: emptyList()
+            assertEquals(ids.size, names.size)
+            assertTrue(names.all { it.matches(Regex("sha256-[0-9a-f]{64}")) })
+            assertTrue(File(sibling, "KEEP").isFile)
+            store.sweep(now = 120L)
+            assertTrue(File(sibling, "KEEP").isFile)
+            assertTrue(File(root, "inbox").listFiles()?.isEmpty() == true)
+        } finally {
+            root.deleteRecursively()
+            sibling.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun symlinkedStorageBucketAndFrameAreRejected() {
+        val root = Files.createTempDirectory("atlas-dtn-link-")
+        val outside = Files.createTempDirectory("atlas-dtn-outside-")
+        try {
+            Files.createSymbolicLink(root.resolve("inbox"), outside)
+            val store = FragmentStore(storageDir = root.toFile())
+            var rejected = false
+            try {
+                store.registerInbound("untrusted", 0, 1, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(1))
+            } catch (expected: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue(rejected)
+            assertTrue(outside.toFile().listFiles()?.isEmpty() == true)
+            Files.delete(root.resolve("inbox"))
+
+            val safeStore = FragmentStore(storageDir = root.toFile())
+            assertEquals(
+                RegisterOutcome.STORED,
+                safeStore.registerInbound("safe", 0, 2, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(1)),
+            )
+            val transfer = root.resolve("inbox").toFile().listFiles()!!.single().toPath()
+            val sentinel = outside.resolve("sentinel")
+            Files.write(sentinel, byteArrayOf(99))
+            Files.createSymbolicLink(transfer.resolve("chunk_0001.dat"), sentinel)
+            rejected = false
+            try {
+                // New frame index, so the persistence boundary is actually reached.
+                safeStore.registerInbound("safe", 1, 2, FragmentTier.PUBLIC, "peer", 0L, byteArrayOf(2))
+            } catch (expected: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue(rejected)
+            assertTrue(Files.readAllBytes(sentinel).contentEquals(byteArrayOf(99)))
+        } finally {
+            // Delete the symlink (if present) before recursive test-directory cleanup.
+            Files.deleteIfExists(root.resolve("inbox").takeIf { Files.isSymbolicLink(it) } ?: root.resolve("absent"))
+            root.toFile().deleteRecursively()
+            outside.toFile().deleteRecursively()
+        }
+    }
+
+
 }
