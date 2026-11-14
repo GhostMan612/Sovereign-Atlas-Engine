@@ -17,12 +17,12 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (`main` reconciled with `origin/main` `18f98a6`): 1,647 tests, 0 failures, 0 errors, 0 skipped (`--rerun` across all modules):**
+- **Last measured 2026-11-14 (Issue `#7` bounded KMZ/shapefile ZIP extraction): 1,679 tests, 0 failures, 0 errors, 0 skipped across all four modules:**
   - `:atlas-sdk:test`: 34 tests (8 XML suites)
   - `:sdk-consumer:test`: 7 tests (1 XML suite)
-  - `:app:testPlayDebugUnitTest`: 803 tests (101 XML suites)
-  - `:app:testEnterpriseDebugUnitTest`: 803 tests (101 XML suites)
-  Counts recorded from JUnit XML across module build directories. Note that GitHub Actions (`atlas.yaml`, PR `#2`) now runs all four tasks too.
+  - `:app:testPlayDebugUnitTest`: 819 tests (102 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 819 tests (102 XML suites)
+  Counts recorded from JUnit XML across module build directories (`gate.py`; `:app` test suites executed cleanly after final edit, `56` unchanged tasks up-to-date). Note that GitHub Actions (`atlas.yaml`, PR `#2`) now runs all four tasks too.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
 - Pure boundary scan passes: 124 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
@@ -231,6 +231,11 @@
   - Resolved `FragmentStore.kt` conflict by retaining `origin/main`'s symlink-hardened `sha256-<hash>` layout (`NOFOLLOW_LINKS`, `Files.walkFileTree`) and NACK metadata validation in `processAckReport`, and ordering `persistFrame` before in-memory `inboundMeta`/`inboundFrames`/`outboundMeta`/`outboundFrames` updates so failed symlink checks do not leave unpersisted state for `sweep()`.
   - Updated `FragmentStoreStorageLayoutTest.kt` in `:app` for `sha256-<hash>` naming and `IllegalArgumentException` rejection (plus subsequent clean `sweep()`).
   - Gate (`--rerun`): 34 / 7 / 803 / 803 = 1,647 tests, 0 failures, 0 errors, 0 skipped; 0 forbidden imports across 124 Kotlin files.
+- **2026-11-14 — Remote `fix/*` branch cleanup + Issue `#7` bounded GIS ZIP extraction (local commit ahead of `origin/main`):**
+  - Pruned all 7 merged remote `fix/*` branches on `origin` and ran `git fetch --prune origin` (`main` is now the sole remote head).
+  - Hardened `AndroidGisImporter.importKmz` and `importZippedShapefile` (`ArchiveLimits`, streaming KML via close-shielded `BoundedZipEntryInputStream` with remainder drain, declared-size/compressed/decompressed/ratio/entry-count/timeout bounds, path normalization + zip-slip & duplicate component checks, and single 8 KiB scratch drain for skipped companions).
+  - Added 16 unit/adversarial tests in `apps/atlas-android/app/src/test/java/com/sovereignatlas/atlas/android/gis/AndroidGisImporterTest.kt`.
+  - Gate (`gate.py`, 2m 43s, 5 executed / 56 up-to-date): 34 / 7 / 819 / 819 = 1,679 tests, 0 failures, 0 errors, 0 skipped; 0 forbidden imports across 124 Kotlin files (`80` app pure + `43` `atlas-sdk` + `1` `sdk-consumer`). Unpushed local commit; APK/device instrumentation unverified.
 
 ## Next moves
 
