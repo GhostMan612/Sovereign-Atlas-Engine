@@ -33,6 +33,10 @@ import java.net.URL
  */
 object AndroidHttpDownloader {
 
+    internal fun resolveUserAgent(headers: Map<String, String>): String =
+        headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
+            ?: "SovereignAtlasEngine/0.1.0"
+
     fun httpChunk(
         descriptor: OfflineProviderDescriptor,
         z: Int,
@@ -50,7 +54,7 @@ object AndroidHttpDownloader {
             connection.readTimeout = PER_TILE_TIMEOUT_MS
             connection.setRequestProperty(
                 "User-Agent",
-                descriptor.headers["User-Agent"] ?: "SovereignAtlasEngine/0.1.0",
+                resolveUserAgent(descriptor.headers),
             )
             for ((key, value) in descriptor.headers) {
                 if (!key.equals("User-Agent", ignoreCase = true)) {

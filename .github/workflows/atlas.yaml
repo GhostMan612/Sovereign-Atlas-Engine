@@ -5,6 +5,10 @@
 name: atlas
 'on':
   push:
+    branches:
+      - main
+    tags:
+      - '**'
   pull_request:
 jobs:
   verify:
@@ -57,7 +61,8 @@ jobs:
           chmod +x ./gradlew
           set +e
           set -o pipefail
-          ./gradlew :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest \
+          ./gradlew :atlas-sdk:test :sdk-consumer:test \
+            :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest \
             --console=plain \
             --continue \
             --stacktrace \
@@ -66,7 +71,6 @@ jobs:
             2>&1 | tee gradle-out.log
           EXIT=$?
           set -e
-          cat gradle-out.log
           exit $EXIT
       # Runs even when Unit tests fails, so a partial or hung run still ships
       # whatever XML and HTML Gradle managed to write before it was killed.
@@ -82,6 +86,10 @@ jobs:
           path: |
             apps/atlas-android/app/build/reports/tests/
             apps/atlas-android/app/build/test-results/
+            apps/atlas-android/atlas-sdk/build/reports/tests/
+            apps/atlas-android/atlas-sdk/build/test-results/
+            samples/sdk-consumer/build/reports/tests/
+            samples/sdk-consumer/build/test-results/
             apps/atlas-android/gradle-out.log
   release:
     runs-on: ubuntu-latest

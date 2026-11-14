@@ -10,6 +10,13 @@ import com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
 enum class RegisterOutcome {
@@ -102,19 +109,20 @@ class FragmentStore(
             if (framesMap.containsKey(chunkIndex)) {
                 return RegisterOutcome.DUPLICATE
             }
+            persistFrame(transferId, chunkIndex, frame, isInbound = true)
             framesMap[chunkIndex] = frame.copyOf()
             inboundMeta[transferId] = existingMeta.copy(
                 lastChunkAt = now,
                 round = 0,
                 nextNackDueAt = 0L,
             )
-            persistFrame(transferId, chunkIndex, frame, isInbound = true)
             return RegisterOutcome.STORED
         }
 
         if (chunkIndex !in 0 until totalChunks) {
             return RegisterOutcome.INVALID_INDEX
         }
+        persistFrame(transferId, chunkIndex, frame, isInbound = true)
         val meta = InboundTransferMeta(
             transferId = transferId,
             totalChunks = totalChunks,
@@ -128,7 +136,6 @@ class FragmentStore(
         val framesMap = LinkedHashMap<Int, ByteArray>()
         framesMap[chunkIndex] = frame.copyOf()
         inboundFrames[transferId] = framesMap
-        persistFrame(transferId, chunkIndex, frame, isInbound = true)
 
         while (inboundMeta.size > maxInboundTransfers) {
             evictOldestInbound()
@@ -250,11 +257,13 @@ class FragmentStore(
             expiresAt = expiresAt,
             createdAt = now,
         )
+        for (i in frames.indices) {
+            persistFrame(transferId, i, frames[i], isInbound = false)
+        }
         outboundMeta[transferId] = meta
         val map = LinkedHashMap<Int, ByteArray>()
         for (i in frames.indices) {
             map[i] = frames[i].copyOf()
-            persistFrame(transferId, i, frames[i], isInbound = false)
         }
         outboundFrames[transferId] = map
 
@@ -271,6 +280,12 @@ class FragmentStore(
     @Synchronized
     fun processAckReport(report: FragmentAckReport): List<ByteArray> {
         val meta = outboundMeta[report.transferId] ?: return emptyList()
+        if (report.totalChunks != meta.totalChunks ||
+            report.round !in 1..MAX_NACK_ROUNDS ||
+            report.contiguousHigh !in 0..meta.totalChunks ||
+            report.windowBase != report.contiguousHigh ||
+            report.missing.size > meta.totalChunks - report.windowBase
+        ) return emptyList()
         val frames = outboundFrames[report.transferId] ?: return emptyList()
         val repairs = ArrayList<ByteArray>()
 
@@ -352,31 +367,68 @@ class FragmentStore(
         deleteTransferDir(oldestKey, isInbound = false)
     }
 
+    /**
+     * Logical transfer IDs come from untrusted radio packets. Persist them by a
+     * collision-resistant opaque name, never as a filesystem path component.
+     *
+     * Historical directories named after raw IDs are deliberately ignored: no
+     * migration or recursive cleanup may traverse attacker-controlled legacy paths.
+     */
+    private fun transferDirectory(transferId: String, isInbound: Boolean, create: Boolean): File? {
+        val root = storageDir?.canonicalFile ?: return null
+        val bucket = File(root, if (isInbound) "inbox" else "outbox")
+        // Reject a pre-existing symlink redirecting the storage bucket.
+        require(bucket.canonicalFile == bucket.absoluteFile) { "Fragment bucket escapes storage root" }
+        if (create && !bucket.isDirectory && !bucket.mkdirs()) {
+            throw IOException("Cannot create fragment bucket")
+        }
+
+        val hash = MessageDigest.getInstance("SHA-256")
+            .digest(transferId.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        val transferDir = File(bucket, "sha256-$hash")
+        // Includes existing symlink aliases to otherwise valid-looking directories.
+        require(transferDir.canonicalFile == transferDir.absoluteFile) {
+            "Fragment directory escapes storage bucket"
+        }
+        if (create && !transferDir.isDirectory && !transferDir.mkdirs()) {
+            throw IOException("Cannot create fragment directory")
+        }
+        return transferDir
+    }
+
     private fun persistFrame(transferId: String, chunkIndex: Int, frame: ByteArray, isInbound: Boolean) {
-        val transferDir = transferDirectory(transferId, isInbound) ?: return
-        transferDir.mkdirs()
-        File(transferDir, "chunk_%04d.dat".format(chunkIndex)).writeBytes(frame)
+        val transferDir = transferDirectory(transferId, isInbound, create = true) ?: return
+        val chunkFile = File(transferDir, "chunk_%04d.dat".format(chunkIndex))
+        require(chunkFile.canonicalFile == chunkFile.absoluteFile) {
+            "Fragment frame resolves through a symbolic link"
+        }
+        Files.write(
+            chunkFile.toPath(),
+            frame,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS,
+        )
     }
 
     private fun deleteTransferDir(transferId: String, isInbound: Boolean) {
-        val transferDir = transferDirectory(transferId, isInbound) ?: return
-        transferDir.deleteRecursively()
-    }
+        val transferDir = transferDirectory(transferId, isInbound, create = false) ?: return
+        if (!transferDir.exists()) return
+        // The visitor never follows links nested inside the opaque transfer folder.
+        Files.walkFileTree(transferDir.toPath(), object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
 
-    private fun transferDirectory(transferId: String, isInbound: Boolean): File? {
-        val dir = storageDir ?: return null
-        val subDir = File(dir, if (isInbound) "inbox" else "outbox")
-        val candidate = File(subDir, directoryName(transferId))
-        return try {
-            if (candidate.canonicalFile.parentFile == subDir.canonicalFile) candidate else null
-        } catch (e: IOException) {
-            null
-        }
-    }
-
-    private fun directoryName(transferId: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(transferId.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+            override fun postVisitDirectory(dir: Path, error: IOException?): FileVisitResult {
+                if (error != null) throw error
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
     }
 
     companion object {

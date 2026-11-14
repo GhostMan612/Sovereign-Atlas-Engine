@@ -17,18 +17,16 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-06: 1,600 tests, 0 failures+errors, 0 skipped across all modules:**
-  - `:atlas-sdk:test`: 29 tests
-  - `:sdk-consumer:test`: 7 tests. The 2026-10-24 record said 6, which does not match
-    the suite: it has had 7 `@Test` methods since `f8383a1`, before that record. No
-    test changed in `DEC-024`.
-  - `:app:testPlayDebugUnitTest`: 782 tests (777 at `DEC-024`, plus the 5 of `FragmentStoreStorageLayoutTest`)
-  - `:app:testEnterpriseDebugUnitTest`: 782 tests
-  Counts recorded from JUnit XML across module build directories.
+- **Last measured 2026-11-14 (`main` reconciled with `origin/main` `18f98a6`): 1,647 tests, 0 failures, 0 errors, 0 skipped (`--rerun` across all modules):**
+  - `:atlas-sdk:test`: 34 tests (8 XML suites)
+  - `:sdk-consumer:test`: 7 tests (1 XML suite)
+  - `:app:testPlayDebugUnitTest`: 803 tests (101 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 803 tests (101 XML suites)
+  Counts recorded from JUnit XML across module build directories. Note that GitHub Actions (`atlas.yaml`, PR `#2`) now runs all four tasks too.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
-- Pure boundary scan passes: 115 Kotlin files across pure packages, `:atlas-sdk`, and
-  `samples/sdk-consumer` have 0 forbidden imports (100% clean).
+- Pure boundary scan passes: 124 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
+  main+test (43), and `samples/sdk-consumer` (1) have 0 forbidden imports (100% clean).
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
 
@@ -227,6 +225,12 @@
   - Each transfer directory under `inbox/` and `outbox/` is named by the SHA-256 of its transfer id (64 lowercase hex characters), and its canonical path must be a direct child of that folder before the store writes to or deletes it.
   - `FragmentStoreStorageLayoutTest` (5 tests, in `:app` so CI runs it) pins the layout, the sweep and eviction paths, a `storageDir` written with dot segments, and a linked transfer directory. Directories an earlier build wrote under the raw id are not read back (the store never reloaded them) and are not removed.
   - Gate: 29 / 7 / 782 / 782 = 1,600, 0 failures, 0 errors, 0 skipped.
+- **Reconciled local `main` with `origin/main` (`18f98a6`, 2026-11-14):**
+  - Merged `origin/main` PRs (`#1`, `#2`, `#3`, `#4`, `#13`, `#14`, `#15`) cleanly onto local `main` (`07e4118` -> merge commit, not pushed).
+  - PR `#1`'s streaming/`MultiGeometry` `KmlStreamingParser.kt` rewrite auto-merged cleanly into `:atlas-sdk` (no duplicate copy restored in `:app`); `KmlStreamingParserTest.kt` remains in `:app` (`DEC-024`).
+  - Resolved `FragmentStore.kt` conflict by retaining `origin/main`'s symlink-hardened `sha256-<hash>` layout (`NOFOLLOW_LINKS`, `Files.walkFileTree`) and NACK metadata validation in `processAckReport`, and ordering `persistFrame` before in-memory `inboundMeta`/`inboundFrames`/`outboundMeta`/`outboundFrames` updates so failed symlink checks do not leave unpersisted state for `sweep()`.
+  - Updated `FragmentStoreStorageLayoutTest.kt` in `:app` for `sha256-<hash>` naming and `IllegalArgumentException` rejection (plus subsequent clean `sweep()`).
+  - Gate (`--rerun`): 34 / 7 / 803 / 803 = 1,647 tests, 0 failures, 0 errors, 0 skipped; 0 forbidden imports across 124 Kotlin files.
 
 ## Next moves
 

@@ -138,7 +138,13 @@ class FragmentStoreStorageLayoutTest {
         assumeTrue("symbolic links are not permitted here", created)
         val store = FragmentStore(storageDir = storeDir)
 
-        store.registerInbound("linked", 0, 2, FragmentTier.PUBLIC, "peer", 100L, byteArrayOf(9), now = 10L)
+        var rejected = false
+        try {
+            store.registerInbound("linked", 0, 2, FragmentTier.PUBLIC, "peer", 100L, byteArrayOf(9), now = 10L)
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue(rejected)
         store.sweep(now = 200L)
 
         assertEquals(listOf("victim.keep"), outside.list()!!.toList())
@@ -158,6 +164,7 @@ class FragmentStoreStorageLayoutTest {
 
     private fun directoryName(transferId: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(transferId.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        val hex = digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        return "sha256-$hex"
     }
 }

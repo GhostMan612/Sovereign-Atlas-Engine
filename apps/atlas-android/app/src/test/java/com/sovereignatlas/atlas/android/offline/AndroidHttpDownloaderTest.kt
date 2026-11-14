@@ -8,6 +8,7 @@ package com.sovereignatlas.atlas.android.offline
 import com.sovereignatlas.atlas.offline.OfflineBuiltinProviders
 import com.sovereignatlas.atlas.offline.resolveTileUrl
 import com.sovereignatlas.atlas.offline.withApiKey
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -26,6 +27,22 @@ import org.junit.Test
  * with a detail instead of attempting `URL(null)`.
  */
 final class AndroidHttpDownloaderTest {
+
+    @Test
+    fun userAgentHeaderLookupIsCaseInsensitiveAndDefaultsSafely() {
+        assertEquals(
+            "CustomAtlas/1.0",
+            AndroidHttpDownloader.resolveUserAgent(mapOf("user-agent" to "CustomAtlas/1.0")),
+        )
+        assertEquals(
+            "OtherAtlas/2.0",
+            AndroidHttpDownloader.resolveUserAgent(mapOf("USER-AGENT" to "OtherAtlas/2.0")),
+        )
+        assertEquals(
+            "SovereignAtlasEngine/0.1.0",
+            AndroidHttpDownloader.resolveUserAgent(mapOf("Accept" to "image/png")),
+        )
+    }
 
     @Test
     fun aProviderWithNoUrlTemplateYieldsNoChunkAndOpensNoConnection() {
