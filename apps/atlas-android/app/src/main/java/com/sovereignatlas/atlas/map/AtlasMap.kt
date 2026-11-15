@@ -1667,6 +1667,9 @@ fun AtlasMapScreen(
         val meshNodes by (services.meshSupervisor?.discoveredNodes
             ?: MutableStateFlow(emptyList()))
             .collectAsStateWithLifecycle()
+        val meshRadioInfo by (services.meshSupervisor?.activeRadioInfo
+            ?: MutableStateFlow(null))
+            .collectAsStateWithLifecycle()
         AtlasTelemetryHud(
             tacticalWorkspaceEnabled = tacticalWorkspaceEnabled,
             mgrsText = mgrsText,
@@ -1686,6 +1689,7 @@ fun AtlasMapScreen(
             },
             meshState = meshConnectionState,
             meshNodeCount = meshNodes.size,
+            meshFrequencyBand = meshRadioInfo?.frequencyBand,
             onOpenMeshRoster = { showMeshRoster.value = true },
             modifier = Modifier.align(Alignment.TopStart),
         )

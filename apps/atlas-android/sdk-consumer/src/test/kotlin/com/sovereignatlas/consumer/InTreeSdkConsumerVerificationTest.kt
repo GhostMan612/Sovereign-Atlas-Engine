@@ -181,4 +181,40 @@ class InTreeSdkConsumerVerificationTest {
         )
         assertEquals(com.sovereignatlas.atlas.tactical.dtn.RegisterOutcome.STORED, outcome)
     }
+
+    @Test
+    fun inTreeConsumerCanEncodeAndTrackOfficialMeshtasticProtobufs() {
+        val session = com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession()
+        val adapter = com.sovereignatlas.atlas.tactical.mesh.MeshtasticWireAdapter()
+        assertEquals(72, com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ATAK_PLUGIN)
+        assertEquals(5, com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ROUTING_APP)
+
+        session.beginConnecting()
+        val wantBytes = session.beginHandshake(isUsb = true, configNonce = 123L)
+        assertEquals(123, org.meshtastic.proto.ToRadio.ADAPTER.decode(wantBytes).want_config_id)
+        session.onFromRadioBytes(
+            org.meshtastic.proto.FromRadio.ADAPTER.encode(
+                org.meshtastic.proto.FromRadio(
+                    id = 1,
+                    my_info = org.meshtastic.proto.MyNodeInfo(my_node_num = 0xCAFEBABEL.toInt()),
+                )
+            )
+        )
+        session.onFromRadioBytes(
+            org.meshtastic.proto.FromRadio.ADAPTER.encode(
+                org.meshtastic.proto.FromRadio(id = 2, config_complete_id = 123)
+            )
+        )
+        assertTrue(session.isReady.value)
+        val encoded = adapter.encodePacket(
+            com.sovereignatlas.atlas.tactical.mesh.MeshPacket(
+                from = 0xCAFEBABEL,
+                to = 0xFFFFFFFFL,
+                portNum = com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ATAK_PLUGIN,
+                payload = byteArrayOf(1, 2, 3),
+                id = 7L,
+            )
+        )
+        assertTrue(org.meshtastic.proto.ToRadio.ADAPTER.decode(encoded).packet != null)
+    }
 }

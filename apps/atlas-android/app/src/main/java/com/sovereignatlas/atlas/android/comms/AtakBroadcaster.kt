@@ -66,9 +66,7 @@ class AtakBroadcaster(
         val supervisor = meshSupervisor
         if (supervisor != null && supervisor.canTransmit()) {
             val radio = supervisor.radioClient
-            if (radio.connectionState.value == RadioConnectionState.CONNECTED ||
-                radio.connectionState.value == RadioConnectionState.STREAMING
-            ) {
+            if (radio.isReady.value) {
                 val myNode = supervisor.activeRadioInfo.value?.nodeNum ?: 0L
                 radio.transmitPacket(
                     MeshPacket(

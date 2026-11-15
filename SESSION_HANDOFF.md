@@ -17,21 +17,22 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (Issue `#11` test-gate governance reconciliation): 1,719 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
-  - `:atlas-sdk:test`: 34 tests (8 XML suites)
-  - `:sdk-consumer:test`: 7 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
-  - `:app:testPlayDebugUnitTest`: 839 tests (104 XML suites)
-  - `:app:testEnterpriseDebugUnitTest`: 839 tests (104 XML suites)
-  Counts recorded from JUnit XML across module build directories (`gate.py`; `4` executed, `57` up-to-date). Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
+- **Last measured 2026-11-14 (Issue `#9` genuine Meshtastic BLE/USB protocol): 1,742 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
+  - `:atlas-sdk:test`: 44 tests (11 XML suites)
+  - `:sdk-consumer:test`: 8 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
+  - `:app:testPlayDebugUnitTest`: 845 tests (106 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 845 tests (106 XML suites)
+  Counts recorded from JUnit XML across module build directories (`--rerun-tasks`). Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Point-in-time Phase 4
   cadence history is archived in `docs/atlas-production/evidence/GATE_MATRIX.md`.
-- Pure boundary scan passes: 125 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
-  main+test (43), in-tree `apps/atlas-android/sdk-consumer` (1), and standalone
+- Pure boundary scan passes: 131 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
+  main+test (49), in-tree `apps/atlas-android/sdk-consumer` (1), and standalone
   `samples/sdk-consumer` (1) have 0 forbidden imports (100% clean).
-- Standalone Maven binary consumer verified in an isolated temp directory outside the
-  repo against temporary publication of `com.sovereignatlas:atlas-sdk:1.1.0` (`10` tests,
-  `0` failures, `0` errors, `0` skipped, `ANDROID_HOME` unset), plus `4` clean resolution
-  failure checks (`no-repo`, `empty-repo`, `missing-jar`, `missing-metadata`).
+- Standalone Maven binary consumer verified in `samples/sdk-consumer` against temporary
+  local publication of `com.sovereignatlas:atlas-sdk:1.1.0` (`11` tests, `0` failures,
+  `0` errors, `0` skipped, `ANDROID_HOME`/`ANDROID_SDK_ROOT` unset); GitHub Actions
+  `sdk-consumer-maven` also enforces `4` negative clean resolution checks (`no-repo`,
+  `empty-repo`, `missing-jar`, `missing-metadata`), not re-run locally in Issue `#9`.
 - A non-zero failure count is a real failure. Fix the code, or say why the test
   is wrong. Never re-run to manufacture a green.
 
@@ -265,10 +266,16 @@
   - Upgraded `atlas_gates` in `.opencode/plugin/atlas-tools.ts` (`HOST_GATE_SUITES`, `--continue`, JUnit XML parsing across `:atlas-sdk`, `:sdk-consumer`, `:app` Play/Enterprise, `skipped` counts, failing testcase extraction `FAILED TESTS:`, missing-XML detection, and `STALE/ABORTED SUITE WARNING:` guard on failed module builds before XML writes).
   - Added `TestGateGovernanceContractTest.kt` (`3` tests locking doc/command/agent/workflow/tool task consistency and cleanup invariants).
   - Verification (`task-5510`): `.opencode/plugin/atlas-tools.ts` ESM syntax check (`node --input-type=module --check` exit `0`), `0` purity violations across `125` Kotlin files, host gate (`gate.py`, 1m 35s, `4` executed / `57` up-to-date) `34 / 7 / 839 / 839 = 1,719` tests (`0` failures, `0` errors, `0` skipped). Unpushed local commit; APK build / device instrumentation unverified.
+- **2026-11-14 — Issue `#9` genuine Meshtastic `ToRadio`/`FromRadio` protobuf protocol & BLE/USB transport hardening (`ADR-011`, unpushed local commit):**
+  - Pinned official `meshtastic/protobufs` tag `v2.8.2` (`ffd5ad428da6db4a7ddfe62e06548718cc2603e0`) into `apps/atlas-android/atlas-sdk/src/main/proto/meshtastic/` (10 transitive `.proto` files + `LICENSE-GPL-3.0.txt` + SHA-256 `UPSTREAM_PIN.json`) compiled via Square Wire `6.4.7` (`com.squareup.wire:wire-runtime:6.4.7`, `api` in `:atlas-sdk` along with `kotlinx-coroutines-core:1.10.1`); documented in `docs/architecture/ADR-011_MESHTASTIC_PROTOCOL_AND_TRANSPORT.md`, `docs/atlas-production/evidence/DATA_LICENSE_SECURITY_SBOM.md`, and `blueprints/03_MESHTASTIC_LORA_TACTICAL_TRANSPORT.md`.
+  - Replaced bare payload forwarding and guessed `PortNum` values in pure `:atlas-sdk` (`com.sovereignatlas.atlas.tactical.mesh`) with `MeshtasticSerialFramer.kt`, `MeshtasticWireAdapter.kt`, `MeshtasticProtocolSession.kt`, updated `MeshtasticWireModels.kt` (`PortNum`, `RadioConnectionState.HANDSHAKING`, `PacketDeliveryStage`, `PacketDeliveryUpdate`, nullable `RadioHardwareInfo` & `MeshNodeInfo`), `MeshRadioClient.kt`, and `MockMeshRadioClient.kt`: full `want_config_id` handshake readiness gating (`isReady`), EMCON fail-closed behavior, `QUEUED` -> `RADIO_ACCEPTED` -> `PEER_DELIVERED`/`FAILED` tracking, live node/telemetry/position/config enrichment, reboot/error handling, and honest `null`/`"Unknown"` hardware reporting instead of fabricated radio/node metadata.
+  - Refactored Android adapters onto thin I/O abstractions (`BleGattTransport.kt`, `UsbSerialTransport.kt`) shared with `AndroidBleRadioClient.kt` and `AndroidUsbSerialRadioClient.kt`: official `FromNum` notifications + CCCD descriptor write + iterative `FromRadio` drain + GATT single-flight serialization + MTU negotiation + API 30-35 permission manifest updates (`AndroidManifest.xml`) and multi-VID/PID CDC/bridge USB detection; wired `isReady`, delivery tracking, and honest UI state into `MeshTransportSupervisor.kt`, `AtakBroadcaster.kt`, `AtlasMap.kt`, `AtlasMapOverlays.kt`, `AtlasMapDialogsHost.kt`, and `MeshNodeRosterSheet.kt`.
+  - Added protocol/framer/session/transport tests (`MeshtasticWireAdapterTest`, `MeshtasticProtocolSessionTest`, `MeshtasticSerialFramerTest`, `AndroidBleRadioClientTest`, `AndroidUsbSerialRadioClientTest`, `MeshTransportSupervisorTest`, `InTreeSdkConsumerVerificationTest`, `ExternalConsumerVerificationTest`) and re-verified host gate (`1,742 / 1,742` across all 4 host suites), `131` pure Kotlin files (`0` violations), and `samples/sdk-consumer` binary consumer (`11 / 11`). Physical Meshtastic BLE/USB hardware validation remains pending hardware availability before closing Issue `#9`.
 
 ## Next moves
 
 - **Implementation Roadmap from Corrected Blueprints:**
   - All Phase 11-13 blueprints (`BP-01`, `BP-02`, `BP-03`, `BP-04`) are 100% COMPLETE & INTEGRATED.
-- **Remaining Release Action (`G12`):**
-  1. **`G12` (Signed Release Packaging):** Configure GitHub Actions secrets (`RELEASE_KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_BASE64`) to run live `workflow_dispatch` / semver tag releases (or provide local gitignored `keystore.properties` / `-PKEYSTORE_*` for manual local Android Studio builds).
+- **Remaining Open Issues (`#9`, `#10`):**
+  1. **`#9` Hardware Validation (Physical Meshtastic BLE & USB Radio):** Exercise genuine `ToRadio`/`FromRadio` handshake, `FromNum` drain, node discovery, and CoT/ATAK TX/RX against real Meshtastic firmware hardware before closing Issue `#9`.
+  2. **`#10` / `G12` (Signed Release Packaging):** Configure GitHub Actions secrets (`RELEASE_KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_BASE64`) to run live `workflow_dispatch` / semver tag releases (or provide local gitignored `keystore.properties` / `-PKEYSTORE_*` for manual local Android Studio builds).

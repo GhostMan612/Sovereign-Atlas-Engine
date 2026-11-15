@@ -3,7 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'app.cash.sqldelight' version '2.1.0'
-    id 'com.squareup.wire' version '6.4.7'
+    id 'com.squareup.wire'
 }
 
 wire {

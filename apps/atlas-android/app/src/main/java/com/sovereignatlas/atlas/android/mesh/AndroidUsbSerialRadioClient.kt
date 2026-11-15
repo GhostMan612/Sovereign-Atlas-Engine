@@ -6,237 +6,219 @@
 package com.sovereignatlas.atlas.android.mesh
 
 import android.content.Context
-import android.hardware.usb.UsbConstants
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbDeviceConnection
-import android.hardware.usb.UsbEndpoint
-import android.hardware.usb.UsbInterface
-import android.hardware.usb.UsbManager
-import android.util.Log
-import com.sovereignatlas.atlas.tactical.mesh.FrameDecodeResult
 import com.sovereignatlas.atlas.tactical.mesh.MeshNodeInfo
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
-import com.sovereignatlas.atlas.tactical.mesh.MeshtasticFrameCodec
-import com.sovereignatlas.atlas.tactical.mesh.PortNum
+import com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession
+import com.sovereignatlas.atlas.tactical.mesh.MeshtasticSerialFramer
+import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import com.sovereignatlas.atlas.tactical.mesh.RadioHardwareInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicLong
 
-class AndroidUsbSerialRadioClient(
-    private val context: Context,
+class AndroidUsbSerialRadioClient internal constructor(
+    private val context: Context?,
     private val scope: CoroutineScope,
+    private val transportFactory: () -> UsbSerialTransport,
+    private val clockMs: () -> Long = { System.currentTimeMillis() },
+    private val handshakeTimeoutMs: Long = 10_000L,
 ) : MeshRadioClient {
 
-    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    constructor(
+        context: Context,
+        scope: CoroutineScope,
+    ) : this(
+        context = context,
+        scope = scope,
+        transportFactory = { AndroidUsbSerialTransport(context) },
+    )
 
-    private val _connectionState = MutableStateFlow(RadioConnectionState.DISCONNECTED)
-    override val connectionState: StateFlow<RadioConnectionState> = _connectionState.asStateFlow()
+    private val session = MeshtasticProtocolSession(clockMs = clockMs)
+    private val connectMutex = Mutex()
+    private val writeMutex = Mutex()
+    private val connectionGeneration = AtomicLong(0L)
 
-    private val _discoveredNodes = MutableStateFlow<List<MeshNodeInfo>>(emptyList())
-    override val discoveredNodes: StateFlow<List<MeshNodeInfo>> = _discoveredNodes.asStateFlow()
+    @Volatile
+    private var activeTransport: UsbSerialTransport? = null
 
-    private val _inboundPackets = MutableSharedFlow<MeshPacket>(extraBufferCapacity = 128)
-    override val inboundPackets: SharedFlow<MeshPacket> = _inboundPackets.asSharedFlow()
+    private var readLoopJob: Job? = null
+    private var rebootMonitorJob: Job? = null
 
-    private val _activeRadioInfo = MutableStateFlow<RadioHardwareInfo?>(null)
-    override val activeRadioInfo: StateFlow<RadioHardwareInfo?> = _activeRadioInfo.asStateFlow()
+    override val connectionState: StateFlow<RadioConnectionState> = session.connectionState
+    override val isReady: StateFlow<Boolean> = session.isReady
+    override val discoveredNodes: StateFlow<List<MeshNodeInfo>> = session.discoveredNodes
+    override val inboundPackets: SharedFlow<MeshPacket> = session.inboundPackets
+    override val activeRadioInfo: StateFlow<RadioHardwareInfo?> = session.activeRadioInfo
+    override val deliveryUpdates: SharedFlow<PacketDeliveryUpdate> = session.deliveryUpdates
+    override val deliveryStates: StateFlow<Map<Long, PacketDeliveryUpdate>> = session.deliveryStates
 
-    private var connection: UsbDeviceConnection? = null
-    private var usbInterface: UsbInterface? = null
-    private var inEndpoint: UsbEndpoint? = null
-    private var outEndpoint: UsbEndpoint? = null
-    private var readJob: Job? = null
+    val malformedFrameCount: StateFlow<Long> = session.malformedFrameCount
 
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
-        if (_connectionState.value == RadioConnectionState.CONNECTED ||
-            _connectionState.value == RadioConnectionState.STREAMING
-        ) {
-            return@withContext true
-        }
+        var setupGeneration = 0L
+        var setupTransport: UsbSerialTransport? = null
+        val initiated = connectMutex.withLock {
+            if (session.isReady.value && activeTransport != null) {
+                return@withContext true
+            }
+            cleanupTransportLocked(sendDisconnectEnvelope = false, isError = false, reason = null)
 
-        _connectionState.value = RadioConnectionState.CONNECTING
-        val deviceList = usbManager.deviceList
-        val targetDevice = findMeshtasticDevice(deviceList.values)
-        if (targetDevice == null) {
-            _connectionState.value = RadioConnectionState.DISCONNECTED
-            return@withContext false
-        }
+            setupGeneration = connectionGeneration.incrementAndGet()
+            session.beginConnecting()
+            val transport = transportFactory()
+            if (!transport.open()) {
+                session.onTransportDisconnected(isError = true, reason = "Failed to open USB serial radio")
+                return@withLock false
+            }
+            activeTransport = transport
+            setupTransport = transport
 
-        if (!usbManager.hasPermission(targetDevice)) {
-            _connectionState.value = RadioConnectionState.ERROR
-            return@withContext false
-        }
-
-        val conn = usbManager.openDevice(targetDevice)
-        if (conn == null) {
-            _connectionState.value = RadioConnectionState.ERROR
-            return@withContext false
-        }
-
-        var foundIn: UsbEndpoint? = null
-        var foundOut: UsbEndpoint? = null
-        var claimedInterface: UsbInterface? = null
-
-        for (i in 0 until targetDevice.interfaceCount) {
-            val iface = targetDevice.getInterface(i)
-            var inEp: UsbEndpoint? = null
-            var outEp: UsbEndpoint? = null
-            for (j in 0 until iface.endpointCount) {
-                val ep = iface.getEndpoint(j)
-                if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
-                    if (ep.direction == UsbConstants.USB_DIR_IN) {
-                        inEp = ep
-                    } else if (ep.direction == UsbConstants.USB_DIR_OUT) {
-                        outEp = ep
+            val framer = MeshtasticSerialFramer()
+            readLoopJob = scope.launch(Dispatchers.IO) {
+                try {
+                    while (isActive && activeTransport === transport) {
+                        when (val result = transport.read()) {
+                            is UsbReadResult.Data -> {
+                                val frames = framer.feed(result.bytes)
+                                for (frame in frames) {
+                                    session.onFromRadioBytes(frame)
+                                }
+                            }
+                            is UsbReadResult.Timeout -> Unit
+                            is UsbReadResult.Closed -> {
+                                if (activeTransport === transport) {
+                                    scope.launch(Dispatchers.IO) {
+                                        disconnectInternal(isError = result.isError, reason = result.reason)
+                                    }
+                                }
+                                break
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (isActive && activeTransport === transport) {
+                        scope.launch(Dispatchers.IO) {
+                            disconnectInternal(isError = true, reason = t.message ?: "USB read error")
+                        }
                     }
                 }
             }
-            if (inEp != null && outEp != null) {
-                if (conn.claimInterface(iface, true)) {
-                    claimedInterface = iface
-                    foundIn = inEp
-                    foundOut = outEp
-                    break
+
+            rebootMonitorJob = scope.launch(Dispatchers.IO) {
+                session.rebootEvents.collect {
+                    if (activeTransport === transport) {
+                        framer.reset()
+                        sendWantConfigFrame(transport)
+                    }
                 }
+            }
+
+            val sentWantConfig = sendWantConfigFrame(transport)
+            if (!sentWantConfig) {
+                cleanupTransportLocked(sendDisconnectEnvelope = false, isError = true, reason = "Failed to send USB want_config_id")
+                return@withLock false
+            }
+            true
+        }
+        if (!initiated) return@withContext false
+
+        withTimeoutOrNull(handshakeTimeoutMs) {
+            session.connectionState.first { state ->
+                state == RadioConnectionState.CONNECTED ||
+                    state == RadioConnectionState.STREAMING ||
+                    state == RadioConnectionState.ERROR ||
+                    state == RadioConnectionState.DISCONNECTED
             }
         }
 
-        if (claimedInterface == null || foundIn == null || foundOut == null) {
-            conn.close()
-            _connectionState.value = RadioConnectionState.ERROR
-            return@withContext false
+        connectMutex.withLock {
+            val readyNow = connectionGeneration.get() == setupGeneration &&
+                activeTransport === setupTransport &&
+                session.isReady.value
+            if (!readyNow && activeTransport === setupTransport && connectionGeneration.get() == setupGeneration) {
+                cleanupTransportLocked(
+                    sendDisconnectEnvelope = false,
+                    isError = true,
+                    reason = "Meshtastic USB want_config handshake timeout",
+                )
+            }
+            readyNow
         }
-
-        connection = conn
-        usbInterface = claimedInterface
-        inEndpoint = foundIn
-        outEndpoint = foundOut
-
-        val radioInfo = RadioHardwareInfo(
-            radioModel = targetDevice.productName ?: "Meshtastic USB Radio",
-            frequencyBand = "915 MHz US",
-            firmwareVersion = "2.3.x",
-            nodeNum = (targetDevice.deviceId.toLong() and 0xFFFFFFFFL),
-            isUsb = true,
-        )
-        _activeRadioInfo.value = radioInfo
-        _connectionState.value = RadioConnectionState.CONNECTED
-
-        startIoLoop()
-        true
     }
 
     override suspend fun disconnect(): Unit = withContext(Dispatchers.IO) {
-        readJob?.cancel()
-        readJob = null
-        try {
-            val iface = usbInterface
-            if (iface != null) {
-                connection?.releaseInterface(iface)
-            }
-            connection?.close()
-        } catch (e: Exception) {
-            Log.w("AndroidUsbSerialRadioClient", "Error during USB disconnect", e)
-        } finally {
-            connection = null
-            usbInterface = null
-            inEndpoint = null
-            outEndpoint = null
-            _activeRadioInfo.value = null
-            _connectionState.value = RadioConnectionState.DISCONNECTED
-        }
+        disconnectInternal(isError = false, reason = null)
     }
 
     override suspend fun transmitPacket(packet: MeshPacket): Boolean = withContext(Dispatchers.IO) {
-        val conn = connection ?: return@withContext false
-        val outEp = outEndpoint ?: return@withContext false
-
-        val framedBytes = MeshtasticFrameCodec.encodeFrame(packet.payload)
-        val written = conn.bulkTransfer(outEp, framedBytes, framedBytes.size, USB_TIMEOUT_MS)
-        return@withContext written == framedBytes.size
+        val transport = activeTransport ?: return@withContext false
+        val prepared = session.prepareOutgoingPacket(packet) ?: return@withContext false
+        val framed = MeshtasticSerialFramer.frame(prepared.toRadioBytes)
+        val wrote = writeMutex.withLock {
+            if (activeTransport !== transport) false else transport.write(framed)
+        }
+        if (!wrote) {
+            session.markTransportWriteFailed(prepared.packet.id, "USB serial write failed")
+            return@withContext false
+        }
+        true
     }
 
     override suspend fun pingNode(targetNodeNum: Long): Boolean {
-        val myNode = _activeRadioInfo.value?.nodeNum ?: 0L
-        val pingPacket = MeshPacket(
-            from = myNode,
-            to = targetNodeNum,
-            portNum = PortNum.PORTNUM_TELEMETRY_APP,
-            payload = "PING".toByteArray(Charsets.UTF_8),
-            wantAck = true,
-        )
-        return transmitPacket(pingPacket)
+        return transmitPacket(session.buildPingPacket(targetNodeNum))
     }
 
-    private fun startIoLoop() {
-        readJob?.cancel()
-        readJob = scope.launch(Dispatchers.IO) {
-            val conn = connection ?: return@launch
-            val inEp = inEndpoint ?: return@launch
-            val buffer = ByteArray(READ_BUFFER_SIZE)
-            var accumulated = ByteArray(0)
+    private suspend fun sendWantConfigFrame(transport: UsbSerialTransport): Boolean {
+        val wantConfigBytes = session.beginHandshake(isUsb = true)
+        val framed = MeshtasticSerialFramer.frame(wantConfigBytes)
+        val combined = ByteArray(MeshtasticSerialFramer.WAKE_PREAMBLE.size + framed.size)
+        System.arraycopy(MeshtasticSerialFramer.WAKE_PREAMBLE, 0, combined, 0, MeshtasticSerialFramer.WAKE_PREAMBLE.size)
+        System.arraycopy(framed, 0, combined, MeshtasticSerialFramer.WAKE_PREAMBLE.size, framed.size)
+        return writeMutex.withLock {
+            if (activeTransport !== transport) false else transport.write(combined)
+        }
+    }
 
-            _connectionState.value = RadioConnectionState.STREAMING
+    private suspend fun disconnectInternal(isError: Boolean, reason: String?) {
+        connectMutex.withLock {
+            cleanupTransportLocked(sendDisconnectEnvelope = !isError, isError = isError, reason = reason)
+        }
+    }
 
-            while (isActive) {
-                val bytesRead = conn.bulkTransfer(inEp, buffer, buffer.size, READ_POLL_TIMEOUT_MS)
-                if (bytesRead > 0) {
-                    val chunk = buffer.copyOf(bytesRead)
-                    val combined = accumulated + chunk
-                    val result: FrameDecodeResult = MeshtasticFrameCodec.decodeStream(combined)
-                    accumulated = result.remainingBytes
+    private suspend fun cleanupTransportLocked(
+        sendDisconnectEnvelope: Boolean,
+        isError: Boolean,
+        reason: String?,
+    ) {
+        rebootMonitorJob?.cancel()
+        rebootMonitorJob = null
+        readLoopJob?.cancel()
+        readLoopJob = null
 
-                    for (rawPayload in result.frames) {
-                        processReceivedPayload(rawPayload)
-                    }
+        val transport = activeTransport
+        activeTransport = null
+        if (transport != null) {
+            if (sendDisconnectEnvelope) {
+                try {
+                    val disconnectFrame = MeshtasticSerialFramer.frame(session.encodeDisconnectCommand())
+                    writeMutex.withLock { transport.write(disconnectFrame) }
+                } catch (_: Throwable) {
                 }
             }
+            transport.close()
         }
-    }
-
-    private fun processReceivedPayload(payload: ByteArray) {
-        if (payload.isEmpty()) return
-        val senderNodeNum = _activeRadioInfo.value?.nodeNum ?: 0x1A2B3C4DL
-        val packet = MeshPacket(
-            from = senderNodeNum,
-            to = 0xFFFFFFFFL,
-            portNum = PortNum.PORTNUM_ATAK_PLUGIN,
-            payload = payload,
-            rxTime = System.currentTimeMillis(),
-        )
-        _inboundPackets.tryEmit(packet)
-    }
-
-    private fun findMeshtasticDevice(devices: Collection<UsbDevice>): UsbDevice? {
-        return devices.firstOrNull { dev ->
-            val vid = dev.vendorId
-            vid == VID_CP210X || vid == VID_FTDI || vid == VID_CH340 ||
-                vid == VID_RASPBERRY_PI || vid == VID_ESPRESSIF ||
-                dev.productName?.contains("Meshtastic", ignoreCase = true) == true
-        }
-    }
-
-    companion object {
-        private const val USB_TIMEOUT_MS = 2500
-        private const val READ_POLL_TIMEOUT_MS = 500
-        private const val READ_BUFFER_SIZE = 1024
-
-        const val VID_FTDI = 0x0403
-        const val VID_CP210X = 0x10C4
-        const val VID_CH340 = 0x1A86
-        const val VID_RASPBERRY_PI = 0x2E8A
-        const val VID_ESPRESSIF = 0x303A
+        session.onTransportDisconnected(isError = isError, reason = reason)
     }
 }

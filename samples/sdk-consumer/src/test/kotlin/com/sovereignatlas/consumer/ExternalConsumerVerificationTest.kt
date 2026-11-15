@@ -280,4 +280,40 @@ class ExternalConsumerVerificationTest {
 
         assertTrue(LandPatentGeoJsonParser.parse("{malformed").isEmpty())
     }
+
+    @Test
+    fun externalConsumerCanEncodeAndTrackOfficialMeshtasticProtobufs() {
+        val session = com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession()
+        val adapter = com.sovereignatlas.atlas.tactical.mesh.MeshtasticWireAdapter()
+        assertEquals(72, com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ATAK_PLUGIN)
+        assertEquals(5, com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ROUTING_APP)
+
+        session.beginConnecting()
+        val wantBytes = session.beginHandshake(isUsb = false, configNonce = 456L)
+        assertEquals(456, org.meshtastic.proto.ToRadio.ADAPTER.decode(wantBytes).want_config_id)
+        session.onFromRadioBytes(
+            org.meshtastic.proto.FromRadio.ADAPTER.encode(
+                org.meshtastic.proto.FromRadio(
+                    id = 1,
+                    my_info = org.meshtastic.proto.MyNodeInfo(my_node_num = 0x01020304),
+                )
+            )
+        )
+        session.onFromRadioBytes(
+            org.meshtastic.proto.FromRadio.ADAPTER.encode(
+                org.meshtastic.proto.FromRadio(id = 2, config_complete_id = 456)
+            )
+        )
+        assertTrue(session.isReady.value)
+        val encoded = adapter.encodePacket(
+            com.sovereignatlas.atlas.tactical.mesh.MeshPacket(
+                from = 0x01020304L,
+                to = 0xFFFFFFFFL,
+                portNum = com.sovereignatlas.atlas.tactical.mesh.PortNum.PORTNUM_ATAK_PLUGIN,
+                payload = byteArrayOf(4, 5, 6),
+                id = 9L,
+            )
+        )
+        assertTrue(org.meshtastic.proto.ToRadio.ADAPTER.decode(encoded).packet != null)
+    }
 }

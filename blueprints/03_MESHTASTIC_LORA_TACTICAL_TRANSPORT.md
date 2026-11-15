@@ -57,10 +57,11 @@ The following core assets from `C:\sovereign_mantle\` inform Atlas mesh logic:
 ### 3.1 Meshtastic Wire Protocol
 External host devices (Android phones) do not emit raw RF LoRa chirps directly; they communicate with the connected Meshtastic radio firmware over serial or BLE using **Meshtastic Protobufs**:
 * **BLE Service:** `6ba1b218-15a8-461f-9fa8-5dcae273eafd`
-  - `toRadio` Characteristic (`f75de93c-4530-4ec4-b399-f442377b8359`): Host writes serialized `ToRadio` packets.
-  - `fromRadio` Characteristic (`2c55e69e-4993-11ea-b77f-2e728ce88125`): Radio notifies serialized `FromRadio` packets.
+  - `toRadio` Characteristic (`f75c76d2-129e-4dad-a1dd-7866124401e7`): Host writes serialized `ToRadio` packets (no `0x94 0xC3` header).
+  - `fromRadio` Characteristic (`2c55e69e-4993-11ed-b878-0242ac120002`): Host reads queued `FromRadio` packets iteratively until empty.
+  - `fromNum` Characteristic (`ed9da18c-a800-4f66-a670-aa7547e34453`, CCCD `00002902-0000-1000-8000-00805f9b34fb`): Radio notifies host when `FromRadio` packets await reading.
 * **USB-Serial Framing:** Standard Meshtastic 4-byte framing header (`0x94 0xC3` magic sync bytes, followed by 16-bit big-endian payload length) encapsulating `ToRadio`/`FromRadio` protobuf payloads.
-* **Port Numbers:** CoT markers and tactical telemetry are dispatched on `PortNum.PORTNUM_ATAK_PLUGIN` or `PortNum.PORTNUM_PRIVATE_APP`.
+* **Port Numbers:** CoT markers and tactical telemetry are dispatched on `PortNum.PORTNUM_ATAK_PLUGIN` (`72`) or `PortNum.PORTNUM_PRIVATE_APP` (`256`). (See `ADR-011` for pinned `v2.8.2` protocol compliance and `want_config_id` handshake readiness.)
 
 ### 3.2 LoRa Payload Compression
 A raw XML CoT marker can be 600–1200 bytes, exceeding the 237-byte LoRa physical MTU:
@@ -81,7 +82,7 @@ A raw XML CoT marker can be 600–1200 bytes, exceeding the 237-byte LoRa physic
 
 1. **Hardware Link Pill in HUD:**
    - When a LoRa radio is connected, top-left telemetry renders:  
-     `LORA: CONNECTED • 915 MHz • 4 NODES`
+     `LORA: CONNECTED • US 915 MHz • 4 NODES` (or omits unmeasured region)
    - Active radio icon pulses cyan on TX, amber on RX.
 2. **Node Directory in Sovereign Command Center:**
    - Tap "LoRa Mesh" row in Command Center to open the **Mesh Node Roster**:

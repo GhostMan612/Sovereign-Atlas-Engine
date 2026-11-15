@@ -1,0 +1,61 @@
+{
+  "repository": "https://github.com/meshtastic/protobufs",
+  "tag": "v2.8.2",
+  "commit": "ffd5ad428da6db4a7ddfe62e06548718cc2603e0",
+  "license": "GPL-3.0",
+  "licenseFile": "meshtastic/LICENSE-GPL-3.0.txt",
+  "licenseSha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+  "entrypoint": "meshtastic/mesh.proto",
+  "files": {
+    "meshtastic/atak.proto": {
+      "sha256": "affcba168f2b7ada8a0ae1637ab35091a381b895f0c3ce19ead222264f412aa1",
+      "bytes": 66006,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/atak.proto"
+    },
+    "meshtastic/channel.proto": {
+      "sha256": "3e0cc5f95a5852db30585302321e671318c453519945625dcebc1cac21b6187e",
+      "bytes": 6455,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/channel.proto"
+    },
+    "meshtastic/config.proto": {
+      "sha256": "e48152993fe6af099c3cdbbfbcbc3c59189101f71b890edbebf552a3bb3c2087",
+      "bytes": 60757,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/config.proto"
+    },
+    "meshtastic/device_ui.proto": {
+      "sha256": "d434360fecdd12ae3ea6a1199b5ae330153456f5cb5771e1d93d2b7ef391e138",
+      "bytes": 5708,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/device_ui.proto"
+    },
+    "meshtastic/field_metadata.proto": {
+      "sha256": "778a5b71af0781084f20bc4c145f99f8899e241f10eaf53721d464c92978e3bc",
+      "bytes": 10935,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/field_metadata.proto"
+    },
+    "meshtastic/mesh.proto": {
+      "sha256": "8c969ab972c8f88765147d886e3984741b2bbd88cb2ce4221580a33d47797539",
+      "bytes": 92500,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/mesh.proto"
+    },
+    "meshtastic/module_config.proto": {
+      "sha256": "309e87468a7088eeebe9a4943292b1f0f1049a5de59500e2f5ca8dcc3c5ec73d",
+      "bytes": 47785,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/module_config.proto"
+    },
+    "meshtastic/portnums.proto": {
+      "sha256": "0e765c6ae283ba866047c0579d3820e28b60b56187cc9f55c4d78bd15440440a",
+      "bytes": 9494,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/portnums.proto"
+    },
+    "meshtastic/telemetry.proto": {
+      "sha256": "981123786f03879daebaabe372d748919539ff1c7bd2fc7f92d27b6b94f06663",
+      "bytes": 22607,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/telemetry.proto"
+    },
+    "meshtastic/xmodem.proto": {
+      "sha256": "202012d9ae7642b1599cf269d03d41c6d18f28602f6e65976f0c6e954e3b9ea0",
+      "bytes": 499,
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/ffd5ad428da6db4a7ddfe62e06548718cc2603e0/meshtastic/xmodem.proto"
+    }
+  }
+}

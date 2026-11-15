@@ -245,5 +245,32 @@ class MeshTransportSupervisorTest {
         }
     }
 
+    @Test
+    fun handshakingBlocksTransmissionsAndStreamingMaintainsReadiness() = runTest {
+        val harness = TestHarness(scope = backgroundScope)
+        try {
+            harness.mockRadio.setConnectionState(RadioConnectionState.HANDSHAKING)
+            assertFalse(harness.supervisor.isReady.value)
+            assertFalse(harness.supervisor.sendCotMarker("a-f-G", "BRAVO", 37.77, -122.41))
+            assertFalse(harness.supervisor.sendTextMessage("HELLO"))
+            assertFalse(harness.supervisor.pingNode(0xBEEFL))
+            assertTrue(harness.mockRadio.transmittedPackets.isEmpty())
 
+            harness.mockRadio.setConnectionState(RadioConnectionState.STREAMING)
+            assertTrue(harness.supervisor.isReady.value)
+            assertTrue(harness.supervisor.sendCotMarker("a-f-G", "BRAVO", 37.77, -122.41))
+            assertEquals(1, harness.mockRadio.transmittedPackets.size)
+
+            harness.activeProfile = NetworkProfile.RADIO_SILENCE
+            var blocked = false
+            try {
+                harness.supervisor.sendCotMarker("a-f-G", "EMCON", 37.77, -122.41)
+            } catch (_: IllegalStateException) {
+                blocked = true
+            }
+            assertTrue(blocked)
+        } finally {
+            harness.close()
+        }
+    }
 }

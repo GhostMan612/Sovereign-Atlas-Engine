@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -514,10 +515,10 @@ fun AtlasMapDialogsHost(
 ) {
     if (showMeshRoster.value) {
         val meshSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val radioInfo = services.meshSupervisor?.activeRadioInfo?.value
-        val connectionState = services.meshSupervisor?.connectionState?.value ?: RadioConnectionState.DISCONNECTED
-        val networkProfile = services.settingsRepository.networkProfile.value
-        val nodes = services.meshSupervisor?.discoveredNodes?.value ?: emptyList()
+        val radioInfo by (services.meshSupervisor?.activeRadioInfo ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
+        val connectionState by (services.meshSupervisor?.connectionState ?: MutableStateFlow(RadioConnectionState.DISCONNECTED)).collectAsStateWithLifecycle()
+        val networkProfile by services.settingsRepository.networkProfile.collectAsStateWithLifecycle()
+        val nodes by (services.meshSupervisor?.discoveredNodes ?: MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
         MeshNodeRosterSheet(
             visible = showMeshRoster.value,

@@ -19,6 +19,7 @@ import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
 import com.sovereignatlas.atlas.tactical.mesh.MeshNodeInfo
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
+import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import com.sovereignatlas.atlas.tactical.mesh.RadioHardwareInfo
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -55,8 +57,11 @@ class MeshTransportSupervisor(
     )
 
     val connectionState: StateFlow<RadioConnectionState> = radioClient.connectionState
+    val isReady: StateFlow<Boolean> = radioClient.isReady
     val discoveredNodes: StateFlow<List<MeshNodeInfo>> = radioClient.discoveredNodes
     val activeRadioInfo: StateFlow<RadioHardwareInfo?> = radioClient.activeRadioInfo
+    val deliveryUpdates: SharedFlow<PacketDeliveryUpdate> = radioClient.deliveryUpdates
+    val deliveryStates: StateFlow<Map<Long, PacketDeliveryUpdate>> = radioClient.deliveryStates
 
     private var packetCollectorJob: Job? = null
     private var maintenanceJob: Job? = null
@@ -82,7 +87,7 @@ class MeshTransportSupervisor(
         maintenanceJob = scope.launch {
             while (isActive) {
                 delay(5_000L)
-                if (canTransmit() && radioClient.connectionState.value == RadioConnectionState.CONNECTED) {
+                if (canTransmit() && radioClient.isReady.value) {
                     val reports = fragmentStore.tick()
                     // FRA1 can encode many reports, but the wire MTU cannot.
                     // Send one bounded report per packet instead of an oversized batch.
@@ -122,9 +127,7 @@ class MeshTransportSupervisor(
         if (!canTransmit()) {
             throw IllegalStateException("Marker transmission blocked: EMCON / Cloud-Only profile active")
         }
-        if (radioClient.connectionState.value != RadioConnectionState.CONNECTED &&
-            radioClient.connectionState.value != RadioConnectionState.STREAMING
-        ) {
+        if (!radioClient.isReady.value) {
             return false
         }
 
@@ -190,6 +193,9 @@ class MeshTransportSupervisor(
         if (!canTransmit()) {
             throw IllegalStateException("Text message blocked: EMCON / Cloud-Only profile active")
         }
+        if (!radioClient.isReady.value) {
+            return false
+        }
         val myNode = activeRadioInfo.value?.nodeNum ?: 0L
         val bytes = text.toByteArray(Charsets.UTF_8)
         if (bytes.size > LORA_MTU_BYTES) return false
@@ -204,7 +210,7 @@ class MeshTransportSupervisor(
     }
 
     suspend fun pingNode(targetNodeNum: Long): Boolean {
-        if (!canTransmit()) return false
+        if (!canTransmit() || !radioClient.isReady.value) return false
         return radioClient.pingNode(targetNodeNum)
     }
 

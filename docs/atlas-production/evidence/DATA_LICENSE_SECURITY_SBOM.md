@@ -61,6 +61,8 @@ Per `specs/OFFLINE_DATA_LICENSE_SECURITY.md` and `OfflineProviders.kt`, every bu
 |---|---|---|---|---|
 | `:atlas-sdk` | `org.jetbrains.kotlin:kotlin-stdlib` | `2.1.0` | Apache-2.0 | Pure Kotlin standard library |
 | `:atlas-sdk` | `org.jetbrains.kotlinx:kotlinx-coroutines-core` | `1.10.1` | Apache-2.0 | Asynchronous flows & state management |
+| `:atlas-sdk` | `com.squareup.wire:wire-runtime` | `6.4.7` | Apache-2.0 | Official Meshtastic `ToRadio`/`FromRadio` Wire protobuf codec |
+| `:atlas-sdk` (schema) | `meshtastic/protobufs` (`v2.8.2`, `ffd5ad42`) | `v2.8.2` | GPL-3.0 | Pinned upstream Meshtastic `.proto` definitions (`atlas-sdk/src/main/proto/meshtastic/`) |
 | `:app` | `org.maplibre.gl:android-sdk` | `13.3.1` | BSD-2-Clause | Native OpenGL/Vulkan map rendering |
 | `:app` | `androidx.compose:compose-bom` | `2024.12.01` | Apache-2.0 | Jetpack Compose UI toolkit & Material 3 |
 | `:app` | `androidx.activity:activity-compose` | `1.9.3` | Apache-2.0 | Android Activity Compose integration |

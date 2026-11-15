@@ -10,9 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface MeshRadioClient {
     val connectionState: StateFlow<RadioConnectionState>
+    val isReady: StateFlow<Boolean>
     val discoveredNodes: StateFlow<List<MeshNodeInfo>>
     val inboundPackets: SharedFlow<MeshPacket>
     val activeRadioInfo: StateFlow<RadioHardwareInfo?>
+    val deliveryUpdates: SharedFlow<PacketDeliveryUpdate>
+    val deliveryStates: StateFlow<Map<Long, PacketDeliveryUpdate>>
 
     suspend fun connect(): Boolean
     suspend fun disconnect()

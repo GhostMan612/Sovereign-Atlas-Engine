@@ -136,6 +136,7 @@ fun AtlasTelemetryHud(
     onResetTilt: () -> Unit = {},
     meshState: RadioConnectionState = RadioConnectionState.DISCONNECTED,
     meshNodeCount: Int = 0,
+    meshFrequencyBand: String? = null,
     onOpenMeshRoster: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -146,9 +147,18 @@ fun AtlasTelemetryHud(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        if (meshState == RadioConnectionState.CONNECTED || meshState == RadioConnectionState.STREAMING) {
+        if (meshState == RadioConnectionState.HANDSHAKING ||
+            meshState == RadioConnectionState.CONNECTED ||
+            meshState == RadioConnectionState.STREAMING
+        ) {
+            val pillLabel = if (meshState == RadioConnectionState.HANDSHAKING) {
+                "LORA: HANDSHAKING"
+            } else {
+                val bandPart = meshFrequencyBand?.takeIf { it.isNotBlank() }?.let { " • $it" } ?: ""
+                "LORA: CONNECTED$bandPart • $meshNodeCount NODES"
+            }
             HudTelemetryPill(
-                text = "LORA: CONNECTED • 915 MHz • $meshNodeCount NODES",
+                text = pillLabel,
                 textColor = hudAccent,
                 borderColor = hudAccent,
                 iconRes = R.drawable.ic_hud_gps,
