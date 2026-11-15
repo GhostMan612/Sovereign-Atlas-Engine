@@ -5,12 +5,28 @@ pluginManagement {
     }
 }
 
+def rawRepo = settings.providers.gradleProperty("atlasSdkRepo").orNull
+if (rawRepo == null || rawRepo.trim().isEmpty()) {
+    rawRepo = settings.providers.environmentVariable("ATLAS_SDK_REPO").orNull
+}
+def useMavenLocal = settings.providers.gradleProperty("atlasUseMavenLocal").orNull == "true"
+
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        if (rawRepo != null && !rawRepo.trim().isEmpty()) {
+            def candidate = new File(rawRepo.trim())
+            def repoDir = candidate.isAbsolute() ? candidate : new File(settingsDir, rawRepo.trim())
+            maven {
+                name = "atlasVerification"
+                url = repoDir.toURI()
+            }
+        }
+        if (useMavenLocal) {
+            mavenLocal()
+        }
         mavenCentral()
     }
 }
 
 rootProject.name = "sdk-consumer"
-includeBuild("../../apps/atlas-android")

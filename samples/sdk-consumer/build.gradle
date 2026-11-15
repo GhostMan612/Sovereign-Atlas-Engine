@@ -1,7 +1,14 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
 }
+
+def atlasSdkVersion = providers.gradleProperty('atlasSdkVersion').getOrElse('1.1.0')
+def rawRepo = providers.gradleProperty('atlasSdkRepo').orNull ?: providers.environmentVariable('ATLAS_SDK_REPO').orNull
+def resolvedRepoPath = (rawRepo != null && !rawRepo.trim().isEmpty()) ? {
+    def candidate = new File(rawRepo.trim())
+    return (candidate.isAbsolute() ? candidate : new File(projectDir, rawRepo.trim())).canonicalPath
+}() : null
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -10,18 +17,22 @@ java {
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = '17'
     }
 }
 
 dependencies {
-    implementation project(':atlas-sdk')
+    implementation "com.sovereignatlas:atlas-sdk:${atlasSdkVersion}"
     testImplementation 'junit:junit:4.13.2'
 }
 
 tasks.withType(Test).configureEach {
+    systemProperty 'atlas.expectedSdkArtifactVersion', atlasSdkVersion
+    if (resolvedRepoPath != null) {
+        systemProperty 'atlas.expectedSdkRepoPath', resolvedRepoPath
+    }
     testLogging {
-        events "started", "passed", "skipped", "failed"
+        events 'started', 'passed', 'skipped', 'failed'
         showExceptions true
         showStackTraces true
     }

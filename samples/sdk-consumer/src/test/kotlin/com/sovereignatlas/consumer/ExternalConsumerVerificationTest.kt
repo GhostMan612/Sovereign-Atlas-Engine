@@ -6,21 +6,30 @@
 package com.sovereignatlas.consumer
 
 import com.sovereignatlas.atlas.core.AtlasBoundingBox
+import com.sovereignatlas.atlas.core.LandPatentGeoJsonParser
 import com.sovereignatlas.atlas.core.knowledge.ConfidenceScore
 import com.sovereignatlas.atlas.core.knowledge.EntityType
 import com.sovereignatlas.atlas.core.knowledge.HistoricalDossier
 import com.sovereignatlas.atlas.core.knowledge.SourceCitation
 import com.sovereignatlas.atlas.core.knowledge.TemporalInterval
 import com.sovereignatlas.atlas.geo.AtlasCoordinate
+import com.sovereignatlas.atlas.geo.gis.GeoJsonParser
+import com.sovereignatlas.atlas.geo.gis.GisFormat
+import com.sovereignatlas.atlas.geo.gis.KmlStreamingParser
 import com.sovereignatlas.atlas.geo.navigation.RoadClass
 import com.sovereignatlas.atlas.geo.navigation.RoadNetworkGraph
 import com.sovereignatlas.atlas.geo.navigation.RoadRouteRequest
 import com.sovereignatlas.atlas.geo.navigation.TravelProfile
+import com.sovereignatlas.atlas.geo.render.RenderGeometry
+import com.sovereignatlas.atlas.geo.render.RenderProperty
 import com.sovereignatlas.atlas.layers.compositor.LayerAttribution
 import com.sovereignatlas.atlas.layers.compositor.LayerType
 import com.sovereignatlas.sdk.AtlasSdk
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,6 +38,46 @@ class ExternalConsumerVerificationTest {
     @Test
     fun externalConsumerCanVerifySdkVersion() {
         assertEquals("1.0.0", AtlasSdk.VERSION)
+    }
+
+    @Test
+    fun externalConsumerLoadsPublishedBinaryJarArtifact() {
+        val expectedVersion = System.getProperty("atlas.expectedSdkArtifactVersion") ?: "1.1.0"
+        val classesToCheck = listOf(
+            AtlasSdk::class.java,
+            GeoJsonParser::class.java,
+            KmlStreamingParser::class.java,
+            LandPatentGeoJsonParser::class.java,
+        )
+        for (clazz in classesToCheck) {
+            val location = clazz.protectionDomain?.codeSource?.location
+            assertNotNull("Expected CodeSource location for ${clazz.name}", location)
+            val path = File(location!!.toURI()).invariantSeparatorsPath
+            assertTrue(
+                "Expected published atlas-sdk-$expectedVersion.jar for ${clazz.name}, got $path",
+                path.endsWith("/atlas-sdk-$expectedVersion.jar"),
+            )
+            assertFalse(
+                "Expected published JAR rather than in-tree build output for ${clazz.name}: $path",
+                path.contains("/apps/atlas-android/atlas-sdk/build/"),
+            )
+        }
+    }
+
+    @Test
+    fun externalConsumerExcludesAndroidComposeMapLibreAndFirebaseFromClasspath() {
+        val forbiddenClasses = listOf(
+            "android.content.Context",
+            "android.app.Activity",
+            "androidx.compose.runtime.Composer",
+            "org.maplibre.android.maps.MapLibreMap",
+            "com.google.firebase.FirebaseApp",
+        )
+        for (className in forbiddenClasses) {
+            assertThrows(ClassNotFoundException::class.java) {
+                Class.forName(className, false, ExternalConsumerVerificationTest::class.java.classLoader)
+            }
+        }
     }
 
     @Test
@@ -181,5 +230,54 @@ class ExternalConsumerVerificationTest {
         )
         assertEquals(com.sovereignatlas.atlas.tactical.dtn.RegisterOutcome.STORED, outcome)
     }
-}
 
+    @Test
+    fun externalConsumerCanParseGeoJsonKmlAndLandPatentsFailClosed() {
+        val geoJson = """
+            {
+              "type": "FeatureCollection",
+              "features": [
+                {
+                  "type": "Feature",
+                  "properties": { "name": "Trailhead" },
+                  "geometry": { "type": "Point", "coordinates": [-105.25, 40.125] }
+                }
+              ]
+            }
+        """.trimIndent()
+        val geoDataset = GeoJsonParser.parse(geoJson, datasetName = "Trailhead")
+        assertEquals(1, geoDataset.features.size)
+        val geoPt = geoDataset.features.first().geometry as RenderGeometry.Point
+        assertEquals(-105.25, geoPt.coordinates.longitude, 1e-4)
+        assertEquals(40.125, geoPt.coordinates.latitude, 1e-4)
+
+        val kml = """
+            <kml><Placemark><name>Lookout</name><Point><coordinates>-105.5,40.25</coordinates></Point></Placemark></kml>
+        """.trimIndent()
+        val kmlDataset = KmlStreamingParser.parseString(kml, datasetName = "Lookout")
+        assertEquals(GisFormat.KML, kmlDataset.format)
+        assertEquals(1, kmlDataset.features.size)
+        assertEquals(RenderProperty.Text("Lookout"), kmlDataset.features.first().properties["name"])
+
+        val patentJson = """
+            {
+              "type": "FeatureCollection",
+              "features": [
+                {
+                  "type": "Feature",
+                  "id": "pat-1",
+                  "properties": { "patent_number": "CO-1889", "issue_date": "1889-07-04" },
+                  "geometry": { "type": "Point", "coordinates": [-105.1, 40.2] }
+                }
+              ]
+            }
+        """.trimIndent()
+        val patents = LandPatentGeoJsonParser.parse(patentJson)
+        assertEquals(1, patents.size)
+        assertEquals("CO-1889", patents.first().patentNumber)
+        assertEquals(1889, patents.first().year)
+        assertEquals("BLM GLO", patents.first().attribution)
+
+        assertTrue(LandPatentGeoJsonParser.parse("{malformed").isEmpty())
+    }
+}

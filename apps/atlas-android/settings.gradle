@@ -19,5 +19,4 @@ rootProject.name = "atlas-android"
 include(":app")
 include(":atlas-sdk")
 include(":sdk-consumer")
-project(":sdk-consumer").projectDir = file("../../samples/sdk-consumer")
 
