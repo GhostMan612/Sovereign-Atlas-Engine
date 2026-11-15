@@ -2,6 +2,8 @@
 
 **Status: incomplete; distribution NO-GO.** This is a collection and review ledger, not an approval, notice bundle, SBOM, or signed attestation. No release candidate or final signed artifact is identified in this document. Do not copy historical hashes, counts, dispositions or archive contents into a candidate record without verifying the exact bytes.
 
+The owner's proposed direction is Apache-2.0 for the Atlas SDK core subject to ownership verification; preserving a closed-source distribution option for the Play app; independent licensing and distribution for the Enterprise app; and support for open-source and proprietary SDK consumers where legally permitted. Meshtastic obligations, TAK rights and Sovereign Mantle inbound rights remain unresolved. These are objectives for review, not a license grant or blanket permission to label existing material Apache-2.0.
+
 The [A1/A2 audit](MESHTASTIC_LICENSING_AUDIT.md) records observations at `ea9f03dcf96b3fd62b09b234927de269c82fc1a4`, not the current local checkpoint or a future distribution artifact. Its historical observations include an SDK JAR without embedded `META-INF/LICENSE*` or `META-INF/NOTICE*` entries, a POM without `<licenses>`, and dependency archives containing additional notices. These observations identify review work; they do not establish the contents of any later artifact or determine applicable legal obligations.
 
 ## Separate evidence records

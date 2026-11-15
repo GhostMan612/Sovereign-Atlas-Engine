@@ -1,6 +1,6 @@
 # Meshtastic schema permission inquiry — draft
 
-Status: **not sent; no permission received.** Identify an appropriate authorized contact and complete the proposed distribution details before sending. A reply from a project representative must identify the rights they can grant and the contributions covered; do not assume a single representative holds every contributor's rights.
+Status: **sent 2026-11-15** as [Meshtastic protobufs issue #1183](https://github.com/meshtastic/protobufs/issues/1183); **no permission received** as of submission. The public inquiry asks maintainers to identify the appropriate licensing authority and includes the owner's proposed distribution direction. A reply must identify the rights the respondent can grant and the contributions covered; do not assume a single representative holds every contributor's rights. The text below is the original preparatory draft; the linked issue is the authoritative sent text.
 
 ## Material and intended use
 
