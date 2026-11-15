@@ -131,6 +131,33 @@ function runGradle(tasks, cwd, timeoutMs) {
   })
 }
 
+const HOST_GATE_SUITES = [
+  {
+    task: ":atlas-sdk:test",
+    modulePrefix: ":atlas-sdk:",
+    label: "atlas-sdk:test",
+    xmlRelDir: "\\atlas-sdk\\build\\test-results\\test",
+  },
+  {
+    task: ":sdk-consumer:test",
+    modulePrefix: ":sdk-consumer:",
+    label: "sdk-consumer:test",
+    xmlRelDir: "\\sdk-consumer\\build\\test-results\\test",
+  },
+  {
+    task: ":app:testPlayDebugUnitTest",
+    modulePrefix: ":app:",
+    label: "app:testPlayDebugUnitTest",
+    xmlRelDir: "\\app\\build\\test-results\\testPlayDebugUnitTest",
+  },
+  {
+    task: ":app:testEnterpriseDebugUnitTest",
+    modulePrefix: ":app:",
+    label: "app:testEnterpriseDebugUnitTest",
+    xmlRelDir: "\\app\\build\\test-results\\testEnterpriseDebugUnitTest",
+  },
+]
+
 const tools = {
   atlas_purity_scan: tool({
     description:
@@ -222,15 +249,17 @@ const tools = {
 
   atlas_gates: tool({
     description:
-      "Run the Sovereign Atlas host verification gates and report a compact, filtered result. " +
-      "Runs both flavor unit-test tasks, counts tests from the JUnit XML, and reports failures " +
-      "with file:line. Use for the host gate after any change. Does not assemble APKs or touch " +
-      "a device unless include_assemble is set (RULES.md 1.6).",
+      "Run the canonical Sovereign Atlas host verification gate across all four suites " +
+      "(:atlas-sdk:test, :sdk-consumer:test, :app:testPlayDebugUnitTest, :app:testEnterpriseDebugUnitTest) " +
+      "with --continue, parse JUnit XML across every module, and report failures accurately. " +
+      "Does not assemble APKs or touch a device unless include_assemble is set (RULES.md 1.6).",
     args: {
       task: tool.schema
         .string()
         .optional()
-        .describe("Gradle task to run. Defaults to both flavor unit-test tasks."),
+        .describe(
+          "Space-separated Gradle task override. Defaults to all four canonical host gate suites."
+        ),
       include_assemble: tool.schema
         .boolean()
         .optional()
@@ -238,61 +267,137 @@ const tools = {
     },
     async execute(args, ctx) {
       const dir = androidDir(ctx.worktree)
-      const tasks = args.task
-        ? [args.task]
-        : [":app:testPlayDebugUnitTest", ":app:testEnterpriseDebugUnitTest"]
+      const requested = args.task
+        ? args.task.trim().split(/\s+/).filter(Boolean)
+        : HOST_GATE_SUITES.map((s) => s.task)
+      const tasks = requested.length ? requested : HOST_GATE_SUITES.map((s) => s.task)
+      const selectedSuites = HOST_GATE_SUITES.filter((s) => tasks.includes(s.task))
 
-      const result = await runGradle(tasks.concat(["--console=plain"]), dir)
+      const result = await runGradle(
+        tasks.concat(["--console=plain", "--continue"]),
+        dir
+      )
 
-      const lines = []
-      lines.push("exit=" + result.code + "  tasks=" + tasks.join(" "))
-      lines.push(/BUILD SUCCESSFUL/.test(result.out) ? "BUILD SUCCESSFUL" : "BUILD FAILED")
+      const allLines = (result.out + "\n" + result.err).split(/\r?\n/)
+      const compilerErrors = allLines.filter((l) => /^e:\s/.test(l)).slice(0, 25)
+      const failedTasks = allLines
+        .filter((l) => /Execution failed for task|^>\s*Task\s+.*FAILED/.test(l))
+        .slice(0, 25)
 
-      const resultDirs = ["testPlayDebugUnitTest", "testEnterpriseDebugUnitTest"]
       let grandTotal = 0
       let grandFailures = 0
+      let grandSkipped = 0
+      const suiteLines = []
       const noResults = []
-      for (const name of resultDirs) {
-        const xmlDir = dir + "\\app\\build\\test-results\\" + name
+      const failedCases = []
+      const staleOrAbortedSuites = []
+
+      for (const suite of selectedSuites) {
+        const xmlDir = dir + suite.xmlRelDir
         let files = []
         try {
           files = (await fs.readdir(xmlDir)).filter((f) => f.endsWith(".xml"))
         } catch {
-          noResults.push(name)
+          noResults.push(suite.label)
           continue
         }
-        if (!files.length) noResults.push(name)
+        if (!files.length) {
+          noResults.push(suite.label)
+          continue
+        }
         let tests = 0
         let bad = 0
+        let skipped = 0
         for (const file of files) {
           const xml = await fs.readFile(xmlDir + "\\" + file, "utf8")
-          const suite = (xml.match(/<testsuite\b[^>]*>/) || [""])[0]
-          const readNum = (attr) => {
-            const m = suite.match(new RegExp("\\b" + attr + '="(\\d+)"'))
-            return m ? Number(m[1]) : 0
+          const suiteTags = xml.match(/<testsuite\b[^>]*>/g) || []
+          for (const tag of suiteTags) {
+            const readNum = (attr) => {
+              const m = tag.match(new RegExp("\\b" + attr + '="(\\d+)"'))
+              return m ? Number(m[1]) : 0
+            }
+            tests += readNum("tests")
+            bad += readNum("failures") + readNum("errors")
+            skipped += readNum("skipped")
           }
-          tests += readNum("tests")
-          bad += readNum("failures") + readNum("errors")
+          if (failedCases.length < 25) {
+            const tcRegex = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g
+            let m
+            while ((m = tcRegex.exec(xml)) !== null) {
+              const attrs = m[1]
+              const body = m[2]
+              if (!/<(?:failure|error)\b/.test(body)) continue
+              const nameMatch = attrs.match(/\bname="([^"]*)"/)
+              const classMatch = attrs.match(/\bclassname="([^"]*)"/)
+              const name = nameMatch ? nameMatch[1] : "unknown"
+              const cls = classMatch ? classMatch[1] : ""
+              failedCases.push(suite.label + " > " + (cls ? cls + "." : "") + name)
+              if (failedCases.length >= 25) break
+            }
+          }
         }
         grandTotal += tests
         grandFailures += bad
-        lines.push(name + ": " + tests + " tests, " + bad + " failures+errors")
+        grandSkipped += skipped
+        suiteLines.push(
+          suite.label +
+            ": " +
+            tests +
+            " tests, " +
+            bad +
+            " failures+errors, " +
+            skipped +
+            " skipped (" +
+            files.length +
+            " XML)"
+        )
+        const moduleFailedInLog = failedTasks.some(
+          (l) => l.includes(suite.task) || l.includes(suite.modulePrefix)
+        )
+        if (moduleFailedInLog && bad === 0) {
+          staleOrAbortedSuites.push(suite.label)
+        }
       }
+
+      const green =
+        result.code === 0 &&
+        /BUILD SUCCESSFUL/.test(result.out) &&
+        grandFailures === 0 &&
+        noResults.length === 0 &&
+        staleOrAbortedSuites.length === 0
+
+      const lines = []
+      lines.push("exit=" + result.code + "  tasks=" + tasks.join(" "))
+      lines.push(green ? "BUILD SUCCESSFUL" : "BUILD FAILED")
+      lines.push.apply(lines, suiteLines)
       if (noResults.length) {
         lines.push(
           "NO JUnit XML for: " +
             noResults.join(", ") +
-            " - those tasks did not run. A missing result set is NOT a pass."
+            " - those suites did not emit results. Missing XML is NOT a pass."
         )
       }
-      lines.push("TOTAL: " + grandTotal + " tests, " + grandFailures + " failures+errors")
+      if (staleOrAbortedSuites.length) {
+        lines.push(
+          "STALE/ABORTED SUITE WARNING: " +
+            staleOrAbortedSuites.join(", ") +
+            " had failing Gradle tasks in output with 0 XML failures (compile/setup failure before test execution)."
+        )
+      }
+      lines.push(
+        "TOTAL: " +
+          grandTotal +
+          " tests, " +
+          grandFailures +
+          " failures+errors, " +
+          grandSkipped +
+          " skipped"
+      )
 
-      const allLines = result.out.split(/\r?\n/)
-      const compilerErrors = allLines.filter((l) => /^e:\s/.test(l)).slice(0, 25)
-      const failedTasks = allLines
-        .filter((l) => /FAILED|Execution failed for task/.test(l))
-        .slice(0, 25)
-
+      if (failedCases.length) {
+        lines.push("", "FAILED TESTS:")
+        lines.push.apply(lines, failedCases)
+      }
       if (compilerErrors.length) {
         lines.push("", "COMPILER ERRORS:")
         lines.push.apply(lines, compilerErrors)
@@ -322,11 +427,10 @@ const tools = {
 
       lines.push(
         "",
-        "Note: the unit tests are the host gate. Assembly is reported separately and is not a",
-        "correctness claim. A non-zero count here is a real failure - do not re-run to make it",
-        "green. The historical AndroidKeyProviderTest.keySurvivesNewInstance flake was a Linux",
-        "teardown race, fixed by joining the cancelled scope (CI run #72 root cause); treat any",
-        "reappearance as a regression, not a known flake."
+        "Note: the unit tests across all four host suites are the canonical host gate. Assembly is " +
+          "reported separately and is not a correctness claim. Any non-zero failure, error, skipped suite, " +
+          "or timeout is a real failure - do not re-run to make it green (the historical " +
+          "AndroidKeyProviderTest.keySurvivesNewInstance teardown race was fixed in CI run #72)."
       )
       return lines.join("\n")
     },

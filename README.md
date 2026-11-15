@@ -29,13 +29,13 @@ Host gate (no device, no build), **once per phase**:
 ```powershell
 # from apps/atlas-android with JAVA_HOME + ANDROID_HOME set
 # Prefer the atlas_gates tool: it sets both variables and reports real counts.
-.\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
+.\gradlew.bat :atlas-sdk:test :sdk-consumer:test :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
 There is no `:app:testDebugUnitTest` — the two product flavors make that name
 ambiguous, and Gradle fails on it. The human builds in Android Studio; device runs
-are explicit-ask only. GitHub Actions additionally runs `:atlas-sdk:test`, in-tree
-`:sdk-consumer:test`, and a standalone Maven binary-artifact job (`sdk-consumer-maven`)
+are explicit-ask only. This canonical host gate matches the GitHub Actions `verify` job;
+GitHub Actions also runs an isolated binary-artifact job (`sdk-consumer-maven`)
 that publishes `com.sovereignatlas:atlas-sdk:1.1.0` to a temporary repository and tests
 [`samples/sdk-consumer`](samples/sdk-consumer/README.md) from an isolated directory.
 See `AGENTS.md` for the one-gate-per-phase local rule.

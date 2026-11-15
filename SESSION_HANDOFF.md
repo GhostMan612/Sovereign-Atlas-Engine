@@ -17,14 +17,14 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (Issue `#10` release pipeline hardening): 1,713 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
+- **Last measured 2026-11-14 (Issue `#11` test-gate governance reconciliation): 1,719 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
   - `:atlas-sdk:test`: 34 tests (8 XML suites)
   - `:sdk-consumer:test`: 7 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
-  - `:app:testPlayDebugUnitTest`: 836 tests (103 XML suites)
-  - `:app:testEnterpriseDebugUnitTest`: 836 tests (103 XML suites)
-  Counts recorded from JUnit XML across module build directories (`gate.py`; `4` executed, `57` up-to-date). Note that GitHub Actions (`atlas.yaml`) runs all four tasks in `verify` plus `sdk-consumer-maven` for isolated Maven artifact consumption.
-- The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
-  is audited and recorded honestly in `GATE_MATRIX.md`.
+  - `:app:testPlayDebugUnitTest`: 839 tests (104 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 839 tests (104 XML suites)
+  Counts recorded from JUnit XML across module build directories (`gate.py`; `4` executed, `57` up-to-date). Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
+- The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Point-in-time Phase 4
+  cadence history is archived in `docs/atlas-production/evidence/GATE_MATRIX.md`.
 - Pure boundary scan passes: 125 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
   main+test (43), in-tree `apps/atlas-android/sdk-consumer` (1), and standalone
   `samples/sdk-consumer` (1) have 0 forbidden imports (100% clean).
@@ -254,11 +254,17 @@
   - Replaced unbounded `BufferedReader`/`File.readBytes()` with `DeadlineBufferedInputStream` + `readAsciiLine` (`400`/`405` with `Allow: GET`/`408`/`414`/`431`) and `readBoundedFileBytes` / `sendBoundedTile` (`413 Content Too Large`). Made `hasQuota` pre-check + atomic `tryReserveQuota` (committed only for valid, size-checked tiles; released via `releaseQuota` on write failure) linearizable across `basemapQuota`, `demQuota`, and `globalCap` without transient `404`/`413` starvation.
   - Added `8` HTTP/socket/timeout/overload/oversized/lifecycle tests in `PackTileServerTest.kt` and `3` concurrent quota-race tests in `TileBucketQuotaTest.kt` (+11 tests per variant).
   - Gate (`gate.py`, 1m 31s, `10` executed / `51` up-to-date): `34 / 7 / 830 / 830 = 1,701` tests, `0` failures, `0` errors, `0` skipped; `0` forbidden imports across `125` Kotlin files. Pushed (`f51ec30`), GitHub Actions run `#43661234420` green.
-- **2026-11-14 — Issue `#10` CI release pipeline, fail-closed signing & signed APK publishing (local commit ahead of `origin/main`):**
+- **2026-11-14 — Issue `#10` CI release pipeline, fail-closed signing & signed APK publishing:**
   - Updated `.github/workflows/atlas.yaml`: declared top-level `permissions: contents: read`, scoped `push.tags` to `'v*'`, added explicit `workflow_dispatch` (`release_version`, `dry_run`) gated on `github.ref == 'refs/heads/main'`, enforced `needs: [verify, sdk-consumer-maven]` on `release`, pinned semver version parsing/constraints + artifact naming, preserved `set +x`/`umask 077`/temp cleanup for ephemeral signing/Firebase secrets, rejected `*-unsigned.apk`, added `apksigner verify --verbose --print-certs` + matching certificate check + zip archive secret scan + `SHA256SUMS.txt` + `release-manifest.json`, uploaded `release-apks-*` artifacts (`if-no-files-found: error`, `retention-days: 90`), added tag-only `gh release create` publication, and added `dry_run=true` fail-closed preflight mode.
   - Hardened `apps/atlas-android/app/build.gradle`: enforced completeness (`hasValidKeystoreFile` non-empty file + all four non-empty credentials) alongside `"FAIL-CLOSED: Release signing credentials missing. Halting before packaging."` in `gradle.taskGraph.whenReady`, plus optional `-PATLAS_VERSION_NAME`/`-PATLAS_VERSION_CODE` overrides. Documented CI/local human-build release boundary in `README.md`.
   - Added `ReleasePipelineContractTest.kt` (`6` tests verifying workflow triggers/gates/permissions/input-env isolation/cleanup/signature checks, fail-closed `build.gradle` rules, `.gitignore` rules, and absence of committed keystores/secrets in `apps/atlas-android`).
-  - Gate (`gate.py`, 1m 24s, `4` executed / `57` up-to-date + `PyYAML` workflow parse `YAML: ok`): `34 / 7 / 836 / 836 = 1,713` tests, `0` failures, `0` errors, `0` skipped; `0` forbidden imports across `125` Kotlin files. Unpushed local commit; live signed release run requires repository secrets / `v*` tag or `workflow_dispatch`, and APK build / device instrumentation are unverified locally.
+  - Gate (`gate.py`, 1m 24s, `4` executed / `57` up-to-date + `PyYAML` workflow parse `YAML: ok`): `34 / 7 / 836 / 836 = 1,713` tests, `0` failures, `0` errors, `0` skipped; `0` forbidden imports across `125` Kotlin files. Pushed (`05d0f78`); GitHub Actions `push` run `#43662416639` (`verify` + `sdk-consumer-maven` green) and `workflow_dispatch` (`dry_run=true`) run `#43662971891` (`verify`, `sdk-consumer-maven`, and `release` all `success`). Live signed APK emission still awaits repository signing secrets / semver tag run; local APK build and device instrumentation remain unverified.
+- **2026-11-14 — Issue `#11` canonical 4-suite local test-gate governance reconciliation (local commit ahead of `origin/main`):**
+  - Per operator authorization, standardized the local per-phase host gate on all four suites (`:atlas-sdk:test :sdk-consumer:test :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest`) matching GitHub Actions `verify`, keeping local no-build/no-device rules (`RULES.md` §1.6) unchanged.
+  - Updated `RULES.md` (§1.6, §4.2, §4.5), `AGENTS.md`, `README.md`, `SESSION_HANDOFF.md` (including `docs/atlas-production/evidence/GATE_MATRIX.md` path), `.opencode/commands/gates.md`, `.opencode/commands/verify.md`, `.opencode/agent/atlas-gatekeeper.md`, and `.opencode/agent/atlas-law-keeper.md` (removing stale `352 tests`, unresolved `AndroidKeyProviderTest` flake notes fixed in CI run `#72`, and `:app:testDebugUnitTest` example drift).
+  - Upgraded `atlas_gates` in `.opencode/plugin/atlas-tools.ts` (`HOST_GATE_SUITES`, `--continue`, JUnit XML parsing across `:atlas-sdk`, `:sdk-consumer`, `:app` Play/Enterprise, `skipped` counts, failing testcase extraction `FAILED TESTS:`, missing-XML detection, and `STALE/ABORTED SUITE WARNING:` guard on failed module builds before XML writes).
+  - Added `TestGateGovernanceContractTest.kt` (`3` tests locking doc/command/agent/workflow/tool task consistency and cleanup invariants).
+  - Verification (`task-5510`): `.opencode/plugin/atlas-tools.ts` ESM syntax check (`node --input-type=module --check` exit `0`), `0` purity violations across `125` Kotlin files, host gate (`gate.py`, 1m 35s, `4` executed / `57` up-to-date) `34 / 7 / 839 / 839 = 1,719` tests (`0` failures, `0` errors, `0` skipped). Unpushed local commit; APK build / device instrumentation unverified.
 
 ## Next moves
 

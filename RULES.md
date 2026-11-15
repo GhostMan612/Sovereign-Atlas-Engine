@@ -54,7 +54,7 @@ No real person names, addresses, or personal data in committed code, tests, or f
 
 ### 1.6 BUILD BOUNDARY — HARD RULE
 - **NEVER run builds here unless explicitly asked.** No `assembleDebug`/`assembleRelease`, no emulator installs, no device runs. The human builds in Android Studio.
-- Permitted gates: `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`, host-side only, no device, run **once per phase** via the `atlas_gates` tool.
+- Permitted host gate: `:atlas-sdk:test` + `:sdk-consumer:test` + `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`, host-side only, no device, run **once per phase** via the `atlas_gates` tool.
 - **There is no `:app:testDebugUnitTest`.** The project declares two product flavors (`play`, `enterprise`), so the unflavored name is ambiguous and Gradle fails with `task 'testDebugUnitTest' is ambiguous in project ':app'` — verified 2026-09-30. Older revisions of this file and of `README.md` named it; those names are wrong and will look like a broken build rather than a wrong task name.
 - `androidTest/` connected tests exist for the human's manual/device runs — do NOT execute them here unless explicitly asked (they need a device).
 - Debug device failures from the human's pasted output — never by rebuilding locally.
@@ -117,7 +117,7 @@ Read it only when chasing a specific past decision, and treat every count and
 status in it as stale by construction.
 
 ### 4.2 Session end (every session)
-1. `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` green (host gate, one run)
+1. `:atlas-sdk:test` + `:sdk-consumer:test` + `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` green (host gate, one run)
 2. Update `SESSION_HANDOFF.md` (where we are + next actions)
 3. Tick affected checklists / track docs
 4. Commit by explicit path with a descriptive message. **No push unless told.**
@@ -131,6 +131,6 @@ status in it as stale by construction.
 Phases live in the blueprint first. Ship vertical slices; never let polish precede correctness gates. No engine rewrites to serve app convenience — change the adapter's placement, never weaken the contract.
 
 ### 4.5 Test posture law
-- **Always run here:** `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` (fast, no build, no device — it is the contract proof). One run per phase, never per edit.
+- **Always run here:** `:atlas-sdk:test` + `:sdk-consumer:test` + `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest` (fast, no build, no device — it is the contract proof). One run per phase, never per edit.
 - **Only on explicit ask:** `androidTest/` connected tests (need a device). Keep the files rigorous; the human runs them against his own builds.
 - **Never weaken** a test to satisfy implementation. Fix the code; if the test is wrong, fix the test and say so.

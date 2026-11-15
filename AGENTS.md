@@ -22,14 +22,15 @@ Dart/Flutter lineage — read-only context, never a build target.
   Gradle invocation fails against it. Set both before any Gradle call:
   `$env:JAVA_HOME = "C:\Users\612co\.jdks\jbr-21.0.11"; $env:ANDROID_HOME = "C:\android"`
 - **Prefer the `atlas_gates` tool over typing `gradlew` yourself.** It sets both
-  variables, runs both flavors, and reports real test counts. Hand-written
+  variables, runs all four host suites (`:atlas-sdk:test`, `:sdk-consumer:test`,
+  `:app:testPlayDebugUnitTest`, `:app:testEnterpriseDebugUnitTest`), and reports real test counts across all module XML reports. Hand-written
   `gradlew` is the fallback when the tool cannot express the task, not the default.
 
 ## Commands
 
 ```powershell
 # from apps/atlas-android; JAVA_HOME + ANDROID_HOME must be set (see handoff)
-.\gradlew.bat :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
+.\gradlew.bat :atlas-sdk:test :sdk-consumer:test :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest --console=plain
 ```
 
 Prefer the equivalent tool call first. See the tool law below.
@@ -130,7 +131,9 @@ Subagents: `atlas-boundary-auditor`, `atlas-gatekeeper`, `atlas-device-smoker`,
   source but nothing draws.
 - `getSourceAs<GeoJsonSource>(id)` returns null instead of throwing, so a style push is a
   silent no-op.
-- CI `verify` is the only workflow. It has been green since run #72 (2026-09-29);
+- CI `.github/workflows/atlas.yaml` runs `verify` (the four host suites matching local gate),
+  `sdk-consumer-maven` (isolated binary artifact consumer), and gated `release` (`v*` semver tags
+  or `workflow_dispatch` on `main`). `verify` has been green since run #72 (2026-09-29);
   judge a red run by per-step conclusions, not the job conclusion. Reads of CI
   output need a signed-in human: the step log is sign-in gated, the REST logs
   endpoint returns 403, and artifact download returns 401.

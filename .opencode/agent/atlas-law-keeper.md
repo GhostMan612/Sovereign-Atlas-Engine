@@ -18,7 +18,7 @@ Read in this order, and stop reading once the question is answered:
 3. The blueprint section or ADR in `docs/architecture/` for the task at hand.
 
 Then answer the specific question with the governing rule cited by number, for example
-"RULES 1.6: builds are not run here; the permitted gate is `:app:testDebugUnitTest`". If two
+"RULES 1.6: builds are not run here; the permitted host gate is `:atlas-sdk:test :sdk-consumer:test :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest` (there is no `:app:testDebugUnitTest`)". If two
 documents conflict, say so and that RULES.md wins.
 
 Common questions worth answering precisely:
