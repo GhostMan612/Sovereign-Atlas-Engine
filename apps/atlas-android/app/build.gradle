@@ -28,12 +28,17 @@ android {
     namespace = "com.sovereignatlas.atlas"
     compileSdk = 35
 
+    def versionNameOverride = (project.findProperty("ATLAS_VERSION_NAME") ?: System.getenv("ATLAS_VERSION_NAME"))?.toString()?.trim()
+    def versionCodeOverrideRaw = (project.findProperty("ATLAS_VERSION_CODE") ?: System.getenv("ATLAS_VERSION_CODE"))?.toString()?.trim()
+    def resolvedVersionName = (versionNameOverride != null && !versionNameOverride.isEmpty()) ? versionNameOverride : "1.0"
+    def resolvedVersionCode = (versionCodeOverrideRaw != null && !versionCodeOverrideRaw.isEmpty()) ? versionCodeOverrideRaw.toInteger() : 1
+
     defaultConfig {
         applicationId = "com.sovereignatlas.atlas"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = resolvedVersionCode
+        versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -46,17 +51,22 @@ android {
     if (keystoreFile.exists()) {
         keystoreFile.withInputStream { stream -> keystoreProps.load(stream) }
     }
-    def releaseStorePath = keystoreProps.getProperty("storeFile") ?: project.findProperty("KEYSTORE_PATH") ?: System.getenv("KEYSTORE_PATH")
-    def releaseStorePassword = keystoreProps.getProperty("storePassword") ?: project.findProperty("KEYSTORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
-    def releaseKeyAlias = keystoreProps.getProperty("keyAlias") ?: project.findProperty("KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
-    def releaseKeyPassword = keystoreProps.getProperty("keyPassword") ?: project.findProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
-    def hasReleaseSigning = releaseStorePath != null && releaseStorePassword != null &&
-        releaseKeyAlias != null && releaseKeyPassword != null
+    def releaseStorePath = (keystoreProps.getProperty("storeFile") ?: project.findProperty("KEYSTORE_PATH") ?: System.getenv("KEYSTORE_PATH"))?.toString()?.trim()
+    def releaseStorePassword = (keystoreProps.getProperty("storePassword") ?: project.findProperty("KEYSTORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD"))?.toString()
+    def releaseKeyAlias = (keystoreProps.getProperty("keyAlias") ?: project.findProperty("KEY_ALIAS") ?: System.getenv("KEY_ALIAS"))?.toString()?.trim()
+    def releaseKeyPassword = (keystoreProps.getProperty("keyPassword") ?: project.findProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD"))?.toString()
+    def resolvedKeystoreFile = (releaseStorePath != null && !releaseStorePath.isEmpty()) ? file(releaseStorePath) : null
+    def hasValidKeystoreFile = resolvedKeystoreFile != null && resolvedKeystoreFile.isFile() && resolvedKeystoreFile.length() > 0L
+    def hasReleaseSigning =
+        hasValidKeystoreFile &&
+        releaseStorePassword != null && !releaseStorePassword.isEmpty() &&
+        releaseKeyAlias != null && !releaseKeyAlias.isEmpty() &&
+        releaseKeyPassword != null && !releaseKeyPassword.isEmpty()
 
     signingConfigs {
         release {
             if (hasReleaseSigning) {
-                storeFile file(releaseStorePath)
+                storeFile resolvedKeystoreFile
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
@@ -86,17 +96,16 @@ android {
         }
     }
 
-    // Fail-closed: any release task in the execution graph without
-    // credentials fails before packaging can emit an unsigned artifact.
+    // Fail-closed: any release task in the execution graph without complete,
+    // non-empty credentials and a non-empty keystore file fails before packaging
+    // can emit an unsigned artifact.
     gradle.taskGraph.whenReady { taskGraph ->
         def isRelease = taskGraph.allTasks.any { it.name.toLowerCase().contains("release") }
 
-        def hasProps = project.file('apps/atlas-android/app/keystore.properties').exists() || project.file('keystore.properties').exists()
-        def hasExt = project.hasProperty('KEYSTORE_PATH')
-        def hasEnv = System.getenv('KEYSTORE_PATH') != null
-
-        if (isRelease && !hasProps && !hasExt && !hasEnv) {
-            throw new GradleException("FAIL-CLOSED: Release signing credentials missing. Halting before packaging.")
+        if (isRelease && !hasReleaseSigning) {
+            throw new GradleException(
+                "FAIL-CLOSED: Release signing credentials missing. Halting before packaging."
+            )
         }
     }
     compileOptions {
