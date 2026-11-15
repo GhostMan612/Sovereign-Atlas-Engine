@@ -5,6 +5,8 @@
 - **Scope:** Issue `#16` Option A Feasibility Audit — **Phases A1** (resolved release-runtime dependency & license inventory) and **A2** (Wire-generated protobuf expression & compatibility assessment).
 - **Governance Guardrail:** This document records **technical and license evidence only**. It makes **no** relicensing declaration, adds **no** root `LICENSE`/`NOTICE` file, and modifies **no** Maven POM metadata or source headers (pending Phase `A3` ownership & distribution sign-off).
 
+> **Historical assessment, not a current disposition.** The observations and counts below concern the stated `ea9f03d` baseline and its inspected build outputs. They do not identify or authorize a later release candidate. The legal compatibility and downstream-obligation statements in this historical audit are unreviewed assessments, not established conclusions; each proposed artifact, its dependencies, its delivery model and the applicable terms require qualified review. See [CANDIDATE_EVIDENCE_PACKAGE.md](CANDIDATE_EVIDENCE_PACKAGE.md) for the pending artifact-specific evidence.
+
 ## 1. Executive Summary
 
 1. **`:atlas-sdk` Runtime (`14` Maven artifacts) is `100% Apache-2.0`, but its compiled JAR embeds `573` Wire-generated `org/meshtastic/proto/*.class` types derived from `GPL-3.0` `.proto` inputs:**
