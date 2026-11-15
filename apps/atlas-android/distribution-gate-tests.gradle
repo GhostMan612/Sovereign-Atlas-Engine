@@ -1,0 +1,231 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.KeyPairGenerator
+import java.security.MessageDigest
+import java.security.Signature
+import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+tasks.register('atlasDistributionGateTest') {
+    doLast {
+        def root = new File(layout.buildDirectory.get().asFile, 'distribution-gate-test')
+        root.mkdirs()
+        def sha = { byte[] data -> MessageDigest.getInstance('SHA-256').digest(data).encodeHex().toString() }
+        def keyGenerator = KeyPairGenerator.getInstance('Ed25519')
+        def key = keyGenerator.generateKeyPair()
+        def otherKey = keyGenerator.generateKeyPair()
+        def index = 0
+        def fixture = {
+            def dir = new File(root, "case-${index++}")
+            dir.mkdirs()
+            def artifact = new File(dir, 'artifact.jar')
+            def notice = 'Synthetic notice\n'.getBytes('UTF-8')
+            artifact.withOutputStream { output ->
+                def zip = new ZipOutputStream(output)
+                zip.putNextEntry(new ZipEntry('META-INF/NOTICE'))
+                zip.write(notice)
+                zip.closeEntry()
+                zip.close()
+            }
+            def source = new File(dir, 'source.zip')
+            source.bytes = 'synthetic corresponding source'.getBytes('UTF-8')
+            def approval = new File(dir, 'approval.json')
+            def signature = new File(dir, 'approval.sig')
+            def expected = [revision: 'a' * 40, sourceTree: 'b' * 64, pin: 'c' * 64,
+                            flavor: 'sdk', inventories: [sdk: 'd' * 64, play: 'e' * 64, enterprise: 'f' * 64],
+                            components: ['atlas-sdk', 'third.party:library:1']]
+            def data = [schema: 'atlas-distribution-approval/v1', reviewer: 'reviewer-a',
+                        approvedAt: '2026-01-01T00:00:00Z', recordId: 'review-record-1',
+                        expiresAt: '2099-01-01T00:00:00Z', revision: expected.revision,
+                        sourceTree: expected.sourceTree, pin: expected.pin, flavor: expected.flavor,
+                        artifactSha256: sha(artifact.bytes), inventories: new LinkedHashMap(expected.inventories),
+                        rights: ['atlas-sdk': [license: 'reviewed', disposition: 'PERMISSION', evidence: 'record-1'],
+                                 'third.party:library:1': [license: 'license', disposition: 'PERMISSION', evidence: 'record-2']],
+                        noticeDisposition: 'COMPLETE', notices: [[path: 'META-INF/NOTICE', sha256: sha(notice)]],
+                        sourceDelivery: [sha256: sha(source.bytes), evidence: 'source-record', url: 'https://example.invalid/source.zip']]
+            [approval: approval, signature: signature, artifact: artifact, sourceArchive: source,
+             expected: expected, data: data, trustedReviewers: ['reviewer-a': key.public.encoded.encodeBase64().toString()]]
+        }
+        def sign = { f, signer ->
+            f.approval.bytes = JsonOutput.toJson(f.data).getBytes('UTF-8')
+            def s = Signature.getInstance('Ed25519')
+            s.initSign(signer.private)
+            s.update(f.approval.bytes)
+            f.signature.text = s.sign().encodeBase64().toString()
+        }
+        def validate = { f ->
+            project.ext.validateDistributionEvidence([approval: f.approval, signature: f.signature,
+                artifact: f.artifact, sourceArchive: f.sourceArchive, expected: f.expected,
+                trustedReviewers: f.trustedReviewers])
+        }
+        def checkRejected = { label, f ->
+            def blockers = validate(f)
+            if (blockers == null || blockers.isEmpty()) throw new GradleException("Accepted invalid evidence: ${label}")
+        }
+        def valid = fixture()
+        sign(valid, key)
+        def validBlockers = validate(valid)
+        if (validBlockers == null || !validBlockers.isEmpty()) throw new GradleException("Valid evidence rejected: ${validBlockers}")
+
+        def missing = fixture()
+        checkRejected('missing approval and signature', missing)
+        def malformed = fixture()
+        malformed.approval.text = '{'
+        malformed.signature.text = 'not base64'
+        checkRejected('malformed approval', malformed)
+        def badSchema = fixture()
+        badSchema.data.schema = 'unrecognized'
+        sign(badSchema, key)
+        checkRejected('unrecognized approval schema', badSchema)
+        def unauthorized = fixture()
+        sign(unauthorized, otherKey)
+        checkRejected('unauthorized signing key', unauthorized)
+        def unknownReviewer = fixture()
+        unknownReviewer.data.reviewer = 'not-authorized'
+        sign(unknownReviewer, key)
+        checkRejected('unauthorized reviewer', unknownReviewer)
+        def expired = fixture()
+        expired.data.expiresAt = '2000-01-01T00:00:00Z'
+        sign(expired, key)
+        checkRejected('expired approval', expired)
+        def malformedExpiry = fixture()
+        malformedExpiry.data.expiresAt = 'tomorrow'
+        sign(malformedExpiry, key)
+        checkRejected('malformed expiry', malformedExpiry)
+        def malformedApprovalTime = fixture()
+        malformedApprovalTime.data.approvedAt = 'yesterday'
+        sign(malformedApprovalTime, key)
+        checkRejected('malformed approval time', malformedApprovalTime)
+        def missingRecord = fixture()
+        missingRecord.data.recordId = ''
+        sign(missingRecord, key)
+        checkRejected('missing approval record', missingRecord)
+        ['revision', 'sourceTree', 'pin', 'flavor'].each { field ->
+            def f = fixture()
+            sign(f, key)
+            f.expected[field] = "changed-${field}"
+            checkRejected("mismatched ${field}", f)
+        }
+        ['sdk', 'play', 'enterprise'].each { flavor ->
+            def f = fixture()
+            sign(f, key)
+            f.expected.inventories[flavor] = '0' * 64
+            checkRejected("modified ${flavor} dependency graph", f)
+        }
+        def artifactChanged = fixture()
+        sign(artifactChanged, key)
+        artifactChanged.artifact.append('altered')
+        checkRejected('modified artifact', artifactChanged)
+        def sourceChanged = fixture()
+        sign(sourceChanged, key)
+        sourceChanged.sourceArchive.append('altered')
+        checkRejected('modified corresponding source', sourceChanged)
+        def missingRights = fixture()
+        missingRights.data.rights.remove('third.party:library:1')
+        sign(missingRights, key)
+        checkRejected('unreviewed component', missingRights)
+        def emptyRights = fixture()
+        emptyRights.data.rights['atlas-sdk'].evidence = ''
+        sign(emptyRights, key)
+        checkRejected('missing rights evidence', emptyRights)
+        def unapprovedRights = fixture()
+        unapprovedRights.data.rights['atlas-sdk'].disposition = 'UNKNOWN'
+        sign(unapprovedRights, key)
+        checkRejected('unknown rights disposition', unapprovedRights)
+        def newComponent = fixture()
+        sign(newComponent, key)
+        newComponent.expected.components.add('new:dependency:1')
+        checkRejected('new unreviewed component', newComponent)
+        def missingNotices = fixture()
+        missingNotices.data.notices = []
+        sign(missingNotices, key)
+        checkRejected('missing notices', missingNotices)
+        def missingNoticeDisposition = fixture()
+        missingNoticeDisposition.data.noticeDisposition = ''
+        sign(missingNoticeDisposition, key)
+        checkRejected('missing notice completeness disposition', missingNoticeDisposition)
+        def badNotice = fixture()
+        badNotice.data.notices[0].sha256 = '0' * 64
+        sign(badNotice, key)
+        checkRejected('mismatched bundled notice', badNotice)
+        def noSourceEvidence = fixture()
+        noSourceEvidence.data.sourceDelivery.evidence = ''
+        sign(noSourceEvidence, key)
+        checkRejected('missing source-delivery evidence', noSourceEvidence)
+        def noSourceUrl = fixture()
+        noSourceUrl.data.sourceDelivery.url = ''
+        sign(noSourceUrl, key)
+        checkRejected('missing source-delivery URL', noSourceUrl)
+        def tamperedApproval = fixture()
+        sign(tamperedApproval, key)
+        tamperedApproval.approval.append(' ')
+        checkRejected('changed signed approval', tamperedApproval)
+
+        def pinBase = Files.createTempDirectory(root.toPath(), 'pin-check-').toFile()
+        project.copy {
+            from new File(project.projectDir, 'atlas-sdk/src/main/proto')
+            into pinBase
+            include 'meshtastic/**'
+        }
+        def pinCheck = { project.ext.validateMeshtasticPin(pinBase) }
+        def baselinePin = pinCheck()
+        if (!baselinePin.isEmpty()) throw new GradleException("Pinned fixture rejected: ${baselinePin}")
+        def checkPinMutation = { name, expectedMessage ->
+            def target = new File(pinBase, name)
+            def original = target.bytes
+            try {
+                target.append(' ')
+                def failures = pinCheck()
+                if (!failures.any { it.contains(expectedMessage) }) throw new GradleException("Pin tampering accepted: ${name}: ${failures}")
+            } finally {
+                target.bytes = original
+            }
+        }
+        checkPinMutation('meshtastic/mesh.proto', 'pin mismatch')
+        checkPinMutation('meshtastic/UPSTREAM_PIN.json', 'pin manifest differs')
+        checkPinMutation('meshtastic/LICENSE-GPL-3.0.txt', 'license pin mismatch')
+        def extraSchema = new File(pinBase, 'meshtastic/unreviewed.proto')
+        extraSchema.text = 'unreviewed'
+        if (!pinCheck().any { it.contains('file set differs') }) throw new GradleException('Additional schema accepted')
+
+        def runtimeDir = Files.createTempDirectory(root.toPath(), 'runtime-inventory-').toFile()
+        def testRuntimeDir = Files.createTempDirectory(root.toPath(), 'changed-inventory-').toFile()
+        def sdkProject = project(':atlas-sdk')
+        project.ext.generateDistributionInventories([sdk: [sdkProject, 'runtimeClasspath']], runtimeDir)
+        project.ext.generateDistributionInventories([sdk: [sdkProject, 'testRuntimeClasspath']], testRuntimeDir)
+        def runtimeInventory = new File(runtimeDir, 'sdk.json')
+        def changedInventory = new File(testRuntimeDir, 'sdk.json')
+        def parser = new JsonSlurper()
+        if (parser.parse(runtimeInventory).dependencies == parser.parse(changedInventory).dependencies) {
+            throw new GradleException('Changed configuration did not alter the resolved dependency graph')
+        }
+        def graphApproval = fixture()
+        graphApproval.expected.inventories.sdk = sha(runtimeInventory.bytes)
+        graphApproval.data.inventories.sdk = graphApproval.expected.inventories.sdk
+        sign(graphApproval, key)
+        def graphBaseline = validate(graphApproval)
+        if (!graphBaseline.isEmpty()) throw new GradleException("Real runtime inventory rejected: ${graphBaseline}")
+        graphApproval.expected.inventories.sdk = sha(changedInventory.bytes)
+        checkRejected('changed resolved SDK dependency graph', graphApproval)
+
+        def pathRoot = Files.createTempDirectory(root.toPath(), 'path-check-').toFile()
+        def pathCheck = { candidate, allowed -> project.ext.validateVerificationPath(candidate, allowed) }
+        def privateRepo = new File(pathRoot, 'repository')
+        if (!pathCheck(privateRepo, pathRoot).isEmpty()) throw new GradleException('Private verification path rejected')
+        def checkPathRejected = { label, candidate, allowed ->
+            if (pathCheck(candidate, allowed).isEmpty()) throw new GradleException("Accepted unsafe verification path: ${label}")
+        }
+        checkPathRejected('traversal', new File(pathRoot, 'outside/../repository'), pathRoot)
+        checkPathRejected('public sibling', new File(pathRoot.parentFile, 'public/repository'), pathRoot)
+        checkPathRejected('network share', new File('\\\\server\\public\\repository'), pathRoot)
+        def link = new File(pathRoot, 'link')
+        try {
+            Files.createSymbolicLink(link.toPath(), pathRoot.toPath())
+            checkPathRejected('symlink ancestor', new File(link, 'repository'), pathRoot)
+            checkPathRejected('symlink root', new File(link, 'repository'), link)
+        } catch (UnsupportedOperationException | SecurityException | IOException failure) {
+            logger.warn("Symbolic-link verification test unavailable: ${failure.class.simpleName}")
+        }
+    }
+}

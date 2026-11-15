@@ -43,6 +43,7 @@ class SettingsRepository(context: Context) {
         }.getOrDefault(NetworkProfile.MESH_ONLY)
     )
     val networkProfile: StateFlow<NetworkProfile> = _networkProfile.asStateFlow()
+    val cloudPolicy = CloudPolicyCoordinator(_networkProfile.value)
 
     private val _activeMbtilesPacks = MutableStateFlow(
         prefs.getStringSet("activeMbtilesPacks", emptySet())?.toSet() ?: emptySet()
@@ -88,11 +89,13 @@ class SettingsRepository(context: Context) {
     }
 
     fun setNetworkProfile(profile: NetworkProfile) {
-        prefs.edit()
-            .putString("networkProfile", profile.name)
-            .remove("isMeshActive")
-            .apply()
-        _networkProfile.value = profile
+        cloudPolicy.transition(profile) {
+            prefs.edit()
+                .putString("networkProfile", profile.name)
+                .remove("isMeshActive")
+                .apply()
+            _networkProfile.value = profile
+        }
     }
 
     fun setActiveMbtilesPacks(packs: Set<String>) {

@@ -10,6 +10,14 @@
 > (byte-identical, moved with `git mv`). Read it only when chasing a specific
 > past decision. Do not read it on a normal cold start.
 
+## WO-16-A3 — implementation checkpoint, distribution HOLD
+
+- Proposed ADR-012 and `docs/atlas-production/evidence/ATLAS_CODE_PROVENANCE.md` record unresolved contributor and AI provenance, TAK origin, Meshtastic-derived output and the release hold. Issue #16 remains open; engineering checks do not establish legal rights.
+- Both flavors retain cloud capability. A synchronized policy coordinator captures a generation at send action and revalidates before starting Firebase authentication and writes. Already-submitted requests and Firebase-controlled background activity cannot be recalled or represented as unsent; see `FIREBASE_GOOGLE_FEATURE_MAP.md`.
+- Signed artifact-specific evidence is checked against source revision/tree, pin, resolved graphs, component dispositions, artifact hashes, bundled notices and source archive. Reviewer authorization and source delivery are external controls and attestations, not legal conclusions. `DISTRIBUTION_GATE.md` records the environment protection, delivery verification and trusted-workspace limitations. Remote SDK publishing remains blocked pending a protected publisher; private consumer publication uses a fixed restricted repository.
+- Local four-suite gate: 44 / 8 / 859 / 859 = 1,770 tests, 0 failures/errors/skipped; standalone Maven consumer 11/11. Fallback purity scan: 131 Kotlin files, 0 violations. Signed-evidence and path adversarial tests passed, including copied pin mutations and a regenerated changed dependency graph. Both real distribution tasks rejected missing evidence and produced HOLD reports. No APK or device test, new CI run, push or release occurred.
+- The actual GitHub protected environment, authorized reviewer keys, permissions, notice completeness and source-delivery availability remain unverified. Release disposition is **NO-GO** until rights and obligations are resolved and the external controls are confirmed.
+
 ## Verification posture
 
 - **The host gate is `:atlas-sdk:test` + `:sdk-consumer:test` + `:app:testPlayDebugUnitTest` + `:app:testEnterpriseDebugUnitTest`.**
@@ -17,12 +25,12 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (Issue `#9` genuine Meshtastic BLE/USB protocol): 1,742 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
+- **Last measured 2026-11-14 (WO-16-A3 checkpoint): 1,770 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
   - `:atlas-sdk:test`: 44 tests (11 XML suites)
   - `:sdk-consumer:test`: 8 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
-  - `:app:testPlayDebugUnitTest`: 845 tests (106 XML suites)
-  - `:app:testEnterpriseDebugUnitTest`: 845 tests (106 XML suites)
-  Counts recorded from JUnit XML across module build directories (`--rerun-tasks`). Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
+  - `:app:testPlayDebugUnitTest`: 859 tests (107 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 859 tests (107 XML suites)
+  Counts recorded from JUnit XML across module build directories; unchanged tasks may have been up-to-date. Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Point-in-time Phase 4
   cadence history is archived in `docs/atlas-production/evidence/GATE_MATRIX.md`.
 - Pure boundary scan passes: 131 Kotlin files across `:app` pure packages (80), `:atlas-sdk`

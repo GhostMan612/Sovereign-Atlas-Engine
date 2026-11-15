@@ -86,6 +86,9 @@ jobs:
           EXIT=$?
           set -e
           exit $EXIT
+      - name: Test distribution hold
+        working-directory: apps/atlas-android
+        run: ./gradlew atlasDistributionGateTest --console=plain
       # Runs even when Unit tests fails, so a partial or hung run still ships
       # whatever XML and HTML Gradle managed to write before it was killed.
       # if-no-files-found is an error on purpose: a silent zero-file upload
@@ -125,11 +128,8 @@ jobs:
         working-directory: apps/atlas-android
         run: |
           chmod +x ./gradlew
-          REPO_DIR="$RUNNER_TEMP/atlas-maven-repo"
-          rm -rf "$REPO_DIR"
-          mkdir -p "$REPO_DIR"
+          REPO_DIR="$GITHUB_WORKSPACE/apps/atlas-android/build/atlas-private-verification/repository"
           ./gradlew :atlas-sdk:publishMavenJavaPublicationToVerificationRepository \
-            -PatlasVerifyRepo="$REPO_DIR" \
             --console=plain \
             --no-build-cache \
             --no-daemon
@@ -212,6 +212,7 @@ jobs:
       - verify
       - sdk-consumer-maven
     runs-on: ubuntu-latest
+    environment: distribution-release
     timeout-minutes: 45
     permissions:
       contents: write
@@ -538,9 +539,55 @@ jobs:
           PY
 
           (cd "$STAGE_DIR" && sha256sum -c SHA256SUMS.txt)
+      - name: Validate signed artifact disposition
+        if: steps.meta.outputs.is_dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATLAS_REVIEWER_ID: ${{ vars.ATLAS_DISTRIBUTION_REVIEWER_ID }}
+          ATLAS_REVIEWER_PUBLIC_KEY: ${{ secrets.ATLAS_DISTRIBUTION_REVIEWER_PUBLIC_KEY }}
+          PLAY_APPROVAL: ${{ secrets.ATLAS_PLAY_APPROVAL_BASE64 }}
+          PLAY_SIGNATURE: ${{ secrets.ATLAS_PLAY_SIGNATURE_BASE64 }}
+          ENTERPRISE_APPROVAL: ${{ secrets.ATLAS_ENTERPRISE_APPROVAL_BASE64 }}
+          ENTERPRISE_SIGNATURE: ${{ secrets.ATLAS_ENTERPRISE_SIGNATURE_BASE64 }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/distribution-release" | jq -e '
+            (.protection_rules | any(.type == "required_reviewers" and .prevent_self_review == true and (.reviewers | length > 0))) and
+            (.deployment_branch_policy.protected_branches == true or .deployment_branch_policy.custom_branch_policies == true)
+          ' > /dev/null || { echo "Protected distribution environment cannot be verified"; exit 1; }
+          umask 077
+          evidence_dir=$(mktemp -d "$RUNNER_TEMP/atlas-evidence.XXXXXXXX")
+          trap 'rm -rf "$evidence_dir"' EXIT
+          for name in ATLAS_REVIEWER_ID ATLAS_REVIEWER_PUBLIC_KEY PLAY_APPROVAL PLAY_SIGNATURE ENTERPRISE_APPROVAL ENTERPRISE_SIGNATURE; do
+            if [ -z "${!name:-}" ]; then echo "Missing protected distribution evidence: $name"; exit 1; fi
+          done
+          printf '%s' "$PLAY_APPROVAL" | base64 --decode > "$evidence_dir/play.json"
+          printf '%s' "$PLAY_SIGNATURE" | base64 --decode > "$evidence_dir/play.sig"
+          printf '%s' "$ENTERPRISE_APPROVAL" | base64 --decode > "$evidence_dir/enterprise.json"
+          printf '%s' "$ENTERPRISE_SIGNATURE" | base64 --decode > "$evidence_dir/enterprise.sig"
+          git archive --format=zip HEAD > "$evidence_dir/source.zip"
+          play=("$GITHUB_WORKSPACE"/release-artifacts/sovereign-atlas-play-*.apk)
+          enterprise=("$GITHUB_WORKSPACE"/release-artifacts/sovereign-atlas-enterprise-*.apk)
+          [ ${#play[@]} -eq 1 ] && [ -f "${play[0]}" ]
+          [ ${#enterprise[@]} -eq 1 ] && [ -f "${enterprise[0]}" ]
+          export ATLAS_EVIDENCE_DIR="$evidence_dir" ATLAS_SOURCE_ARCHIVE="$evidence_dir/source.zip"
+          export ATLAS_PLAY_ARTIFACT="${play[0]}" ATLAS_ENTERPRISE_ARTIFACT="${enterprise[0]}"
+          cd apps/atlas-android
+          ./gradlew atlasDistributionGate --console=plain --no-daemon
+      - name: Upload distribution audit report
+        if: always() && steps.meta.outputs.is_dry_run != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: distribution-audit-${{ steps.meta.outputs.artifact_suffix }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: apps/atlas-android/build/reports/distribution/
       - name: Ensure ephemeral credentials removed
         if: always() && steps.meta.outputs.is_dry_run != 'true'
         run: rm -f apps/atlas-android/app/google-services.json
+      - name: Recheck approved release artifact hashes
+        if: steps.meta.outputs.is_dry_run != 'true'
+        run: (cd release-artifacts && sha256sum -c SHA256SUMS.txt)
       - name: Upload Signed Release APKs
         if: steps.meta.outputs.is_dry_run != 'true'
         uses: actions/upload-artifact@v4

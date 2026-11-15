@@ -478,14 +478,15 @@ class AppServices(private val context: Context) {
         router = cotRouter,
     )
 
-    val syncProvider: SyncProvider = FirestoreSyncProvider(
+    private val syncProvider: SyncProvider by lazy { FirestoreSyncProvider(
+        context = appContext,
         localDeviceUid = localDeviceUid,
         callsignProvider = {
             appContext.getSharedPreferences("atlas_prefs", Context.MODE_PRIVATE)
                 .getString("PREF_CALLSIGN", "User-${localDeviceUid.takeLast(6)}")
                 ?: "User-${localDeviceUid.takeLast(6)}"
         },
-    )
+    ) }
 
     val settingsRepository = SettingsRepository(appContext)
 
@@ -511,7 +512,7 @@ class AppServices(private val context: Context) {
         listener = multicastListener,
         localUid = localDeviceUid,
         settingsRepository = settingsRepository,
-        syncProvider = syncProvider,
+        syncProvider = { syncProvider },
         meshSupervisor = meshSupervisor,
     )
 
@@ -519,9 +520,6 @@ class AppServices(private val context: Context) {
         val savedCompositor = settingsRepository.compositorSnapshot.value
         if (savedCompositor.isNotBlank()) {
             compositor.restoreStateSnapshot(savedCompositor)
-        }
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            syncProvider.ensureAuthenticated()
         }
     }
 

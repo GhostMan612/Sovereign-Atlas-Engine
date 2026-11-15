@@ -9,8 +9,10 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sovereignatlas.atlas.AtlasServices
+import com.sovereignatlas.atlas.android.comms.CloudDeliveryStatus
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +31,7 @@ class GeoChatViewModel(private val services: AtlasServices) : ViewModel() {
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private var sending = false
 
     val hasGpsFix: StateFlow<Boolean> = services.locationEngine.currentLocation
         .map { it != null }
@@ -49,10 +52,13 @@ class GeoChatViewModel(private val services: AtlasServices) : ViewModel() {
     }
 
     fun sendMessage() {
-        val text = _inputText.value.trim()
+        if (sending) return
+        val input = _inputText.value
+        val text = input.trim()
         if (text.isEmpty()) return
 
-        if (networkProfile.value == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
+        val policySnapshot = services.settingsRepository.cloudPolicy.snapshot()
+        if (policySnapshot.profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
             _errorMessage.value = "Radio Silence is active. Transmission blocked."
             return
         }
@@ -63,21 +69,39 @@ class GeoChatViewModel(private val services: AtlasServices) : ViewModel() {
             return
         }
 
+        sending = true
         viewModelScope.launch {
             try {
                 val sentMsg = withContext(Dispatchers.IO) {
                     services.atakBroadcaster.sendChatMessage(
                         text = text,
                         currentGeoPoint = currentGps,
+                        snapshot = policySnapshot,
                         targetUid = null,
                     )
                 }
-                services.messages.addMessage(sentMsg)
-                _inputText.value = ""
-                _errorMessage.value = null
+                val delivered = sentMsg.multicastTransmitted || sentMsg.cloudResult?.isSuccess == true
+                if (delivered) {
+                    services.messages.addMessage(sentMsg.message)
+                    if (_inputText.value == input) _inputText.value = ""
+                }
+                val cloudNotice = when (sentMsg.cloudDelivery?.status) {
+                    CloudDeliveryStatus.BLOCKED -> "Cloud blocked by policy."
+                    CloudDeliveryStatus.CANCELLED_BEFORE_SEND -> "Chat write canceled before submission."
+                    CloudDeliveryStatus.SUBMITTED -> "Cloud submitted; delivery unconfirmed."
+                    CloudDeliveryStatus.FAILED -> "Cloud failed; delivery unconfirmed."
+                    CloudDeliveryStatus.CONFIRMED, null -> null
+                }
+                _errorMessage.value = if (cloudNotice != null && sentMsg.multicastTransmitted) {
+                    "Multicast sent; $cloudNotice"
+                } else cloudNotice ?: if (!delivered) "Multicast transmission unavailable." else null
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 Log.e("GeoChatViewModel", "Failed to send tactical message", error)
                 _errorMessage.value = (error.message ?: "Failed to transmit payload.").take(60)
+            } finally {
+                sending = false
             }
         }
     }

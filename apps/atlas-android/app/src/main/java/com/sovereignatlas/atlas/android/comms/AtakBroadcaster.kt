@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.android.comms
 
 import com.sovereignatlas.atlas.android.mesh.MeshTransportSupervisor
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
+import com.sovereignatlas.atlas.android.settings.CloudPolicySnapshot
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
@@ -14,21 +15,15 @@ import com.sovereignatlas.atlas.geo.cot.SyncProvider
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
     private val localUid: String,
     private val settingsRepository: SettingsRepository,
-    private val syncProvider: SyncProvider? = null,
+    private val syncProvider: () -> SyncProvider = { OfflineSyncProvider },
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
     private val meshSupervisor: MeshTransportSupervisor? = null,
 ) {
-    private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     suspend fun broadcastPli(
         lat: Double,
         lon: Double,
@@ -110,9 +105,10 @@ class AtakBroadcaster(
     suspend fun sendChatMessage(
         text: String,
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
+        snapshot: CloudPolicySnapshot,
         targetUid: String? = null,
-    ): ChatMessage {
-        val profile = settingsRepository.networkProfile.value
+    ): ChatSendResult {
+        val profile = snapshot.profile
         if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
             throw IllegalStateException("Radio Silence (EMCON) is Active")
         }
@@ -133,11 +129,6 @@ class AtakBroadcaster(
             targetUid = targetUid,
         )
 
-        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.MESH_ONLY ||
-            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
-            listener.sendMulticast(payload)
-        }
-
         val sent = ChatMessage(
             messageId = messageId,
             senderUid = localUid,
@@ -148,13 +139,7 @@ class AtakBroadcaster(
             timestampMillis = System.currentTimeMillis(),
             isSelf = true,
         )
-        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY ||
-            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
-            pushScope.launch {
-                syncProvider?.pushChatMessage(sent)
-            }
-        }
-        return sent
+        return deliverChat(profile, sent, settingsRepository.cloudPolicy, syncProvider, snapshot.authorization) { listener.sendMulticast(payload) }
     }
 }
 
