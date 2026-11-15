@@ -54,7 +54,7 @@ class TestGateGovernanceContractTest {
             ".opencode/commands/verify.md",
             ".opencode/agent/atlas-gatekeeper.md",
             ".opencode/agent/atlas-law-keeper.md",
-            ".github/workflows/atlas.yaml",
+            ".github/workflows/atlas-ci-safe.yml",
         )
         for (path in targets) {
             val content = readNormalized(path)

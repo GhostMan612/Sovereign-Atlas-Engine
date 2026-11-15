@@ -1,8 +1,4 @@
-# Sovereign Atlas CI.
-# NOTE: setup-android v3 failed 60/60 runs at that step and the Unit tests step
-# never executed. Upgraded to v4. First green run is still a tracked acceptance
-# item.
-name: atlas
+name: atlas-ci-safe
 'on':
   push:
     branches:
@@ -13,28 +9,19 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # Defense in depth behind the 30-minute Unit tests step timeout and the
-    # 15-minute Gradle task timeout: a job that somehow outlives both should
-    # fail rather than sit until the 6-hour Actions cap, which kills the runner
-    # without letting Gradle write its XML.
     timeout-minutes: 60
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: 21
-      # setup-android's unpinned defaults stopped resolving: 60/60 runs died in
-      # this step and never reached the tests. Pin the last known-good
-      # cmdline-tools build and ask for exactly what this module needs so the
-      # step cannot drift with whatever Google currently publishes.
-      # v3 failed 60/60 runs at this step. v4 moved the cmdline-tools default to
-      # 15859902 and re-bases on node24, which is what v3's bundled runtime could
-      # no longer resolve.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Report toolchain
@@ -47,16 +34,6 @@ jobs:
         id: unit-tests
         timeout-minutes: 30
         working-directory: apps/atlas-android
-        # gradlew was committed with mode 100644 on a Windows host, so ./gradlew
-        # was not executable and this step failed with a permission error. The
-        # index now records 100755, and chmod guards the case where a future
-        # checkout loses the bit.
-        #
-        # tee keeps gradle-out.log for the artifact upload below. A previous
-        # version also grepped that log into the run summary, which was removed
-        # once the artifact worked: the summary is a JavaScript widget that
-        # cannot be read unauthenticated, whereas ci-test-reports ships the real
-        # XML and HTML.
         run: |
           chmod +x ./gradlew
           set +e
@@ -72,16 +49,14 @@ jobs:
           EXIT=$?
           set -e
           exit $EXIT
+      - name: Test A4 candidate checks
+        run: python3 -B -m unittest discover -s tools/a4/tests -v
       - name: Test distribution hold
         working-directory: apps/atlas-android
         run: ./gradlew atlasDistributionGateTest --console=plain
-      # Runs even when Unit tests fails, so a partial or hung run still ships
-      # whatever XML and HTML Gradle managed to write before it was killed.
-      # if-no-files-found is an error on purpose: a silent zero-file upload
-      # reads as success and would hide the very evidence this exists to ship.
       - name: Upload Test Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-test-reports
           if-no-files-found: error
@@ -100,13 +75,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Android SDK for publishing host build
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Publish atlas-sdk to temporary Maven repository
@@ -177,6 +154,7 @@ jobs:
           ! grep -qiE "com\.android\.|androidx\.|org\.maplibre|com\.google\.firebase" runtime-deps.txt
 
           set +e
+          set -o pipefail
           ./gradlew test --no-daemon --no-build-cache --rerun-tasks --console=plain -PatlasSdkRepo="$REPO_DIR" 2>&1 | tee gradle-out.log
           EXIT=$?
           set -e
@@ -187,7 +165,7 @@ jobs:
           exit "$EXIT"
       - name: Upload Standalone Consumer Test Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-sdk-consumer-maven-reports
           if-no-files-found: error

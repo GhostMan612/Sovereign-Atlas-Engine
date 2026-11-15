@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 BASELINE = {
-    "atlas.yaml": "ae306c43d74409deed49dd903ea2f3e63622fb7d69843cd1c2f11b1e2c0f6265",
+    "atlas-ci-safe.yml": "01b86d0de4b38db0410efb3554b100c515cadc893d2703932aab8c93ef30f8da",
 }
 MAX_WORKFLOW_BYTES = 1024 * 1024
 REPARSE_POINT = 0x400

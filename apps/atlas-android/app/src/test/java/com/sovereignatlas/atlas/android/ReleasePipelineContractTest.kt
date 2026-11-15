@@ -6,6 +6,7 @@
 package com.sovereignatlas.atlas.android
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -15,15 +16,15 @@ class ReleasePipelineContractTest {
     private fun findRepoRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".").canonicalFile
         val root = generateSequence(start) { it.parentFile }.firstOrNull { dir ->
-            File(dir, ".github/workflows/atlas.yaml").isFile &&
+            File(dir, ".github/workflows/atlas-ci-safe.yml").isFile &&
                 File(dir, "apps/atlas-android/app/build.gradle").isFile
         }
-        assertNotNull("Expected repository root containing .github/workflows/atlas.yaml", root)
+        assertNotNull("Expected repository root containing .github/workflows/atlas-ci-safe.yml", root)
         return root!!
     }
 
     private fun readWorkflow(): String {
-        return File(findRepoRoot(), ".github/workflows/atlas.yaml")
+        return File(findRepoRoot(), ".github/workflows/atlas-ci-safe.yml")
             .readText(Charsets.UTF_8)
             .replace("\r\n", "\n")
     }
@@ -84,6 +85,30 @@ class ReleasePipelineContractTest {
         for (name in listOf("RELEASE_KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "GOOGLE_SERVICES_JSON_BASE64")) {
             assertFalse("Candidate workflow must not access $name", workflow.contains(name))
         }
+    }
+
+    @Test
+    fun safeCiDoesNotPersistCheckoutTokensOrUseMutableActionRefs() {
+        val workflow = readWorkflow()
+        val uses = Regex("(?m)^\\s*-?\\s*uses:\\s*([^\\s]+)").findAll(workflow).map { it.groupValues[1] }.toList()
+        assertTrue("Expected third-party actions in CI", uses.isNotEmpty())
+        for (ref in uses) {
+            assertTrue("Action must use an immutable commit SHA: $ref", Regex("^[^@]+@[0-9a-f]{40}$").matches(ref))
+        }
+        assertEquals(2, Regex("(?m)^\\s*persist-credentials:\\s*false\\s*$").findAll(workflow).count())
+        assertFalse(File(findRepoRoot(), ".github/workflows/atlas.yaml").exists())
+        assertTrue(workflow.contains("python3 -B -m unittest discover -s tools/a4/tests -v"))
+    }
+
+    @Test
+    fun standaloneConsumerPipelinePropagatesGradleFailure() {
+        val step = readWorkflow().substringAfter("- name: Verify standalone Maven consumer in isolated directory")
+            .substringBefore("- name: Upload Standalone Consumer Test Reports")
+        val pipeline = "./gradlew test --no-daemon --no-build-cache --rerun-tasks"
+        assertTrue("Expected standalone consumer test pipeline", step.contains(pipeline))
+        assertTrue("Pipe failures must affect the captured status", step.substringBefore(pipeline).contains("set -o pipefail"))
+        assertTrue("Expected captured pipeline status", step.substringAfter(pipeline).contains("EXIT=\$?"))
+        assertTrue("Expected captured pipeline status to determine step result", step.contains("exit \"\$EXIT\""))
     }
 
     @Test
