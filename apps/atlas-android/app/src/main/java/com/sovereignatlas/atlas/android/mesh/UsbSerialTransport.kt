@@ -5,6 +5,9 @@
 
 package com.sovereignatlas.atlas.android.mesh
 
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
+
 import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
@@ -23,8 +26,27 @@ sealed class UsbReadResult {
 interface UsbSerialTransport {
     fun open(): Boolean
     suspend fun write(bytes: ByteArray, timeoutMs: Int = 2_000): Boolean
+    suspend fun write(bytes: ByteArray, permit: TransmissionPermit, timeoutMs: Int = 2_000): Boolean = false
+    suspend fun writeOutcome(bytes: ByteArray, permit: TransmissionPermit?, timeoutMs: Int = 2_000): TransmissionOutcome =
+        if (if (permit == null) write(bytes, timeoutMs) else write(bytes, permit, timeoutMs)) TransmissionOutcome.SUBMITTED else TransmissionOutcome.UNCONFIRMED
     suspend fun read(maxBytes: Int = 512, timeoutMs: Int = 250): UsbReadResult
     fun close()
+}
+
+internal fun writeSerialFrame(bytes: ByteArray, permit: TransmissionPermit?, write: (ByteArray) -> Int): TransmissionOutcome {
+    var offset = 0
+    while (offset < bytes.size) {
+        val chunk = if (offset == 0) bytes else bytes.copyOfRange(offset, bytes.size)
+        val written = try {
+            if (permit == null) write(chunk) else permit.submit { write(chunk) }
+        } catch (_: SecurityException) {
+            return TransmissionOutcome.UNCONFIRMED
+        }
+        if (written == null) return if (offset == 0) TransmissionOutcome.NOT_SUBMITTED else TransmissionOutcome.UNCONFIRMED
+        if (written <= 0 || written > chunk.size) return TransmissionOutcome.UNCONFIRMED
+        offset += written
+    }
+    return TransmissionOutcome.SUBMITTED
 }
 
 class AndroidUsbSerialTransport(
@@ -66,23 +88,15 @@ class AndroidUsbSerialTransport(
         return true
     }
 
-    override suspend fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
-        val conn = connection ?: return false
-        val ep = outEndpoint ?: return false
-        if (closed) return false
-        var offset = 0
-        while (offset < bytes.size) {
-            val remaining = bytes.size - offset
-            val chunk = if (offset == 0 && remaining <= bytes.size) {
-                bytes
-            } else {
-                bytes.copyOfRange(offset, bytes.size)
-            }
-            val written = conn.bulkTransfer(ep, chunk, chunk.size, timeoutMs)
-            if (written <= 0) return false
-            offset += written
-        }
-        return true
+    override suspend fun write(bytes: ByteArray, timeoutMs: Int): Boolean = writeOutcome(bytes, null, timeoutMs) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun write(bytes: ByteArray, permit: TransmissionPermit, timeoutMs: Int): Boolean = writeOutcome(bytes, permit, timeoutMs) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun writeOutcome(bytes: ByteArray, permit: TransmissionPermit?, timeoutMs: Int): TransmissionOutcome {
+        val conn = connection ?: return TransmissionOutcome.NOT_SUBMITTED
+        val ep = outEndpoint ?: return TransmissionOutcome.NOT_SUBMITTED
+        if (closed) return TransmissionOutcome.NOT_SUBMITTED
+        return writeSerialFrame(bytes, permit) { chunk -> conn.bulkTransfer(ep, chunk, chunk.size, timeoutMs) }
     }
 
     override suspend fun read(maxBytes: Int, timeoutMs: Int): UsbReadResult {
@@ -166,21 +180,23 @@ class AndroidUsbSerialTransport(
     }
 
     private fun isSupportedMeshtasticUsb(dev: UsbDevice): Boolean {
-        if (dev.vendorId in SUPPORTED_USB_VIDS) return true
+        var hasCdc = false
         for (i in 0 until dev.interfaceCount) {
             val cls = dev.getInterface(i).interfaceClass
             if (cls == UsbConstants.USB_CLASS_COMM || cls == UsbConstants.USB_CLASS_CDC_DATA) {
-                return true
+                hasCdc = true
             }
         }
-        return false
+        return isSupportedUsbDevice(dev.vendorId, hasCdc)
     }
 
     companion object {
+        internal fun isSupportedUsbDevice(vendorId: Int, hasCdc: Boolean): Boolean =
+            vendorId != 0x0403 && (vendorId in SUPPORTED_USB_VIDS || hasCdc)
+
         private val SUPPORTED_USB_VIDS = setOf(
             0x10C4,
             0x1A86,
-            0x0403,
             0x303A,
             0x239A,
             0x2886,

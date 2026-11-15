@@ -1,6 +1,9 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
 
 apply from: 'distribution-evidence.gradle'
 apply from: 'distribution-gate-tests.gradle'
@@ -24,9 +27,19 @@ ext.validateMeshtasticPin = { File base ->
         failures << 'Meshtastic upstream identity differs from reviewed pin'
     }
     def expected = pin.files.keySet() as Set
-    def actual = fileTree(new File(base, 'meshtastic')).matching { include '**/*.proto' }.files.collect {
-        'meshtastic/' + it.name
+    def actual = fileTree(base).matching { include '**/*.proto' }.files.collect {
+        base.toPath().toAbsolutePath().normalize().relativize(it.toPath().toAbsolutePath().normalize()).toString().replace('\\', '/')
     } as Set
+    def basePath = base.toPath().toAbsolutePath().normalize()
+    def paths = Files.walk(basePath)
+    try {
+        paths.forEach { path ->
+            def attrs = Files.readAttributes(path, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+            if (attrs.isSymbolicLink() || attrs.isOther() || path.toRealPath(LinkOption.NOFOLLOW_LINKS) != path.toRealPath()) {
+                failures << "Schema tree contains link or reparse entry: ${path}"
+            }
+        }
+    } finally { paths.close() }
     if (actual != expected) failures << 'Meshtastic proto file set differs from pin'
     pin.files.each { name, info ->
         def candidate = new File(base, name)
@@ -39,6 +52,30 @@ ext.validateMeshtasticPin = { File base ->
     failures
 }
 
+ext.hashDistributionArtifact = { File artifact, String component ->
+    if (!artifact.isFile()) throw new GradleException("Missing resolved artifact: ${component}")
+    digest(artifact)
+}
+
+ext.validateDistributionInventory = { Map inventory ->
+    def failures = []
+    if (!(inventory.artifacts instanceof Collection) || inventory.artifacts.isEmpty()) failures << 'Resolved artifact inventory is empty'
+    else {
+      def identities = [] as Set
+      inventory.artifacts.each { artifact ->
+        def component = "${artifact.group}:${artifact.name}:${artifact.version}"
+        def identity = [artifact.group, artifact.name, artifact.version, artifact.classifier, artifact.extension]
+        if (!identities.add(identity)) failures << "Duplicate resolved artifact: ${component}"
+        if (!(artifact.sha256 instanceof String) || !(artifact.sha256 ==~ /[0-9a-f]{64}/)) failures << "Missing or invalid artifact SHA-256: ${component}"
+      }
+    }
+    if (!(inventory.dependencies instanceof Collection)) failures << 'Resolved dependency graph missing'
+    else inventory.dependencies.each { edge ->
+        if (!(edge.selected instanceof String) || edge.selected == 'UNRESOLVED' || edge.selected.trim().isEmpty()) failures << "Unresolved dependency: ${edge.from} -> ${edge.requested}"
+    }
+    failures
+}
+
 ext.generateDistributionInventories = { Map configs, File output ->
         output.mkdirs()
         configs.each { label, pair ->
@@ -46,15 +83,17 @@ ext.generateDistributionInventories = { Map configs, File output ->
             def artifacts = configuration.resolvedConfiguration.resolvedArtifacts.collect { artifact ->
                 [group: artifact.moduleVersion.id.group, name: artifact.name,
                  version: artifact.moduleVersion.id.version, classifier: artifact.classifier,
-                 extension: artifact.extension, sha256: artifact.file.isFile() ? digest(artifact.file) : null,
+                 extension: artifact.extension, sha256: project.ext.hashDistributionArtifact(artifact.file, "${artifact.moduleVersion.id.group}:${artifact.name}:${artifact.moduleVersion.id.version}"),
                  licenseMetadata: 'UNREVIEWED', provenance: 'UNREVIEWED']
             }.sort { a, b -> "${a.group}:${a.name}:${a.version}:${a.classifier}" <=> "${b.group}:${b.name}:${b.version}:${b.classifier}" }
             def graph = configuration.incoming.resolutionResult.allDependencies.collect { dep ->
                 [from: dep.from.id.displayName, requested: dep.requested.displayName,
                  selected: dep.hasProperty('selected') ? dep.selected.id.displayName : 'UNRESOLVED']
             }.sort { a, b -> "${a.from}:${a.requested}:${a.selected}" <=> "${b.from}:${b.requested}:${b.selected}" }
-            new File(output, "${label}.json").text = JsonOutput.prettyPrint(JsonOutput.toJson(
-                [schema: 'atlas-distribution-inventory/v1', configuration: pair[1], artifacts: artifacts, dependencies: graph])) + '\n'
+            def inventory = [schema: 'atlas-distribution-inventory/v1', configuration: pair[1], artifacts: artifacts, dependencies: graph]
+            def errors = project.ext.validateDistributionInventory(inventory)
+            if (!errors.isEmpty()) throw new GradleException("${label}: " + errors.join('; '))
+            new File(output, "${label}.json").text = JsonOutput.prettyPrint(JsonOutput.toJson(inventory)) + '\n'
         }
 }
 
@@ -70,7 +109,7 @@ tasks.register('atlasDistributionInventory') {
 }
 
 def runDistributionGate = { List variants ->
-        def blockers = []
+        def blockers = ['Candidate-controlled verifier cannot authorize distribution; independent trusted publisher required']
         def report = layout.buildDirectory.file('reports/distribution/gate.json').get().asFile
         report.parentFile.mkdirs()
         try {

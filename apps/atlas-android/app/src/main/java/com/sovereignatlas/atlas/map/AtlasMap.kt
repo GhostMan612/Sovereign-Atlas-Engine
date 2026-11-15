@@ -16,6 +16,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -1558,6 +1559,7 @@ fun AtlasMapScreen(
                 }
             },
             onSendMarker = { label, type, color ->
+                val snapshot = services.settingsRepository.cloudPolicy.snapshot()
                 mapScope.launch {
                     try {
                         val drop = targetDropPointState ?: return@launch
@@ -1567,7 +1569,13 @@ fun AtlasMapScreen(
                                 callsign = label,
                                 lat = drop.latitude,
                                 lon = drop.longitude,
+                                snapshot = snapshot,
                             )
+                        }
+                        if (result.meshOutcome == com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome.UNCONFIRMED) {
+                            Toast.makeText(context, "Marker saved; mesh submission unconfirmed", Toast.LENGTH_LONG).show()
+                        } else if (!result.transmitted) {
+                            Toast.makeText(context, "Marker saved; no transmission submitted", Toast.LENGTH_LONG).show()
                         }
                         services.markers.upsert(
                             CotMarker(

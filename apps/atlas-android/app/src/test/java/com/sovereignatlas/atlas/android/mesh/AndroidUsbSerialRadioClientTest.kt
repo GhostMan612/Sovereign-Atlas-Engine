@@ -10,6 +10,8 @@ import com.sovereignatlas.atlas.tactical.mesh.MeshtasticSerialFramer
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryStage
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +41,36 @@ import org.meshtastic.proto.QueueStatus
 import org.meshtastic.proto.ToRadio
 
 class AndroidUsbSerialRadioClientTest {
+
+    @Test
+    fun partialWriteFollowedByPolicyRevocationIsUnconfirmed() {
+        var submissions = 0
+        val permit = object : TransmissionPermit {
+            override fun <T : Any> submit(action: () -> T): T? = if (submissions++ == 0) action() else null
+        }
+        val chunks = mutableListOf<ByteArray>()
+        val result = writeSerialFrame(byteArrayOf(1, 2, 3, 4), permit) { bytes ->
+            chunks.add(bytes.copyOf())
+            2
+        }
+        assertEquals(TransmissionOutcome.UNCONFIRMED, result)
+        assertEquals(1, chunks.size)
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), chunks.single())
+        val denied = object : TransmissionPermit {
+            override fun <T : Any> submit(action: () -> T): T? = null
+        }
+        assertEquals(TransmissionOutcome.NOT_SUBMITTED, writeSerialFrame(byteArrayOf(1), denied) { error("must not write") })
+        assertEquals(TransmissionOutcome.UNCONFIRMED, writeSerialFrame(byteArrayOf(1), null) { -1 })
+    }
+
+    @Test
+    fun ftdiIsRefusedEvenWhenItAdvertisesCdc() {
+        assertFalse(AndroidUsbSerialTransport.isSupportedUsbDevice(0x0403, false))
+        assertFalse(AndroidUsbSerialTransport.isSupportedUsbDevice(0x0403, true))
+        assertTrue(AndroidUsbSerialTransport.isSupportedUsbDevice(0x303A, false))
+        assertTrue(AndroidUsbSerialTransport.isSupportedUsbDevice(0x7777, true))
+        assertFalse(AndroidUsbSerialTransport.isSupportedUsbDevice(0x7777, false))
+    }
 
     private class FakeUsbSerialTransport(
         private val openSucceeds: Boolean = true,

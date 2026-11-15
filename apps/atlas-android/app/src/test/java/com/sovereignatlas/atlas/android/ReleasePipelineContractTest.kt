@@ -28,39 +28,27 @@ class ReleasePipelineContractTest {
             .replace("\r\n", "\n")
     }
 
-    private fun releaseJobBlock(workflow: String): String {
-        val idx = workflow.indexOf("\n  release:\n")
-        assertTrue("Expected release job in .github/workflows/atlas.yaml", idx >= 0)
-        return workflow.substring(idx)
-    }
-
     @Test
-    fun workflowDeclaresDispatchAndConstrainedReleaseTriggers() {
+    fun workflowRunsOnlyDevelopmentVerification() {
         val workflow = readWorkflow()
         val header = workflow.substringBefore("\njobs:")
-        assertTrue(header.contains("workflow_dispatch:"))
-        assertTrue(header.contains("dry_run:"))
-        assertTrue(header.contains("release_version:"))
         assertTrue(header.contains("- main"))
-        assertTrue(header.contains("- 'v*'"))
-        assertFalse("Arbitrary wildcard tags must not trigger release", header.contains("- '**'"))
+        assertFalse(header.contains("tags:"))
+        assertFalse(header.contains("workflow_dispatch:"))
         assertTrue(header.contains("permissions:\n  contents: read"))
     }
 
     @Test
-    fun releaseJobRequiresPassingTestGatesAndScopedBranches() {
+    fun candidateWorkflowCannotSignOrPublishReleaseArtifacts() {
         val workflow = readWorkflow()
-        val release = releaseJobBlock(workflow)
-
-        assertTrue(release.contains("- verify"))
-        assertTrue(release.contains("- sdk-consumer-maven"))
-        assertTrue(release.contains("startsWith(github.ref, 'refs/tags/v')"))
-        assertTrue(release.contains("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'"))
-        assertTrue(release.contains("contents: write"))
-        assertTrue(release.contains("timeout-minutes:"))
-        assertTrue(release.contains("if-no-files-found: error"))
-        assertTrue(release.contains("retention-days: 90"))
-        assertTrue(release.contains("is_dry_run != 'true' && steps.meta.outputs.is_tag_release == 'true'"))
+        assertTrue(workflow.contains("\n  verify:\n"))
+        assertTrue(workflow.contains("\n  sdk-consumer-maven:\n"))
+        assertFalse(workflow.contains("\n  release:\n"))
+        assertFalse(workflow.contains("contents: write"))
+        assertFalse(workflow.contains("gh release create"))
+        assertFalse(workflow.contains(":app:assemblePlayRelease"))
+        assertFalse(workflow.contains(":app:assembleEnterpriseRelease"))
+        assertFalse(workflow.contains("secrets."))
     }
 
     @Test
@@ -91,27 +79,10 @@ class ReleasePipelineContractTest {
     }
 
     @Test
-    fun workflowEnforcesSecretRedactionCleanupAndApkSignatureVerification() {
-        val release = releaseJobBlock(readWorkflow())
-        val requiredFragments = listOf(
-            "set +x",
-            "umask 077",
-            "mktemp -d",
-            "trap cleanup EXIT",
-            "rm -f app/google-services.json",
-            "rm -f apps/atlas-android/app/google-services.json",
-            ":app:assemblePlayRelease :app:assembleEnterpriseRelease",
-            "*-unsigned.apk",
-            "apksigner",
-            "verify --verbose --print-certs",
-            "SHA256SUMS.txt",
-            "release-manifest.json",
-            "FAIL-CLOSED",
-            "dry-run-manifest.json",
-            "apks_published",
-        )
-        for (fragment in requiredFragments) {
-            assertTrue("Expected release pipeline guard '$fragment'", release.contains(fragment))
+    fun candidateWorkflowDoesNotAccessReleaseCredentials() {
+        val workflow = readWorkflow()
+        for (name in listOf("RELEASE_KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "GOOGLE_SERVICES_JSON_BASE64")) {
+            assertFalse("Candidate workflow must not access $name", workflow.contains(name))
         }
     }
 

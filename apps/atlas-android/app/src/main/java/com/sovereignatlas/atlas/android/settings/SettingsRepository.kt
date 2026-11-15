@@ -7,6 +7,7 @@ package com.sovereignatlas.atlas.android.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.sovereignatlas.atlas.android.comms.AndroidChatOutbox
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +45,7 @@ class SettingsRepository(context: Context) {
     )
     val networkProfile: StateFlow<NetworkProfile> = _networkProfile.asStateFlow()
     val cloudPolicy = CloudPolicyCoordinator(_networkProfile.value)
+    val chatOutbox = AndroidChatOutbox.get(context)
 
     private val _activeMbtilesPacks = MutableStateFlow(
         prefs.getStringSet("activeMbtilesPacks", emptySet())?.toSet() ?: emptySet()

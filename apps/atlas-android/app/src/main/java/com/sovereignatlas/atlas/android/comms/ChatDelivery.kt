@@ -19,7 +19,7 @@ object OfflineSyncProvider : SyncProvider {
     override fun beginChatMessage(message: ChatMessage): SyncOperation = { Result.failure(IllegalStateException("Cloud unavailable")) }
 }
 
-enum class CloudDeliveryStatus { BLOCKED, CANCELLED_BEFORE_SEND, SUBMITTED, CONFIRMED, FAILED }
+enum class CloudDeliveryStatus { BLOCKED, CANCELLED_BEFORE_SEND, SUBMITTED, UNCONFIRMED, CONFIRMED, FAILED }
 
 data class CloudDelivery(val status: CloudDeliveryStatus, val error: Throwable? = null)
 
@@ -40,6 +40,7 @@ internal suspend fun deliverChat(
     policy: CloudPolicyCoordinator,
     provider: () -> SyncProvider,
     authorization: Long? = policy.authorization(profile),
+    outbox: ChatOutbox,
     sendMesh: () -> Boolean,
 ): ChatSendResult {
     require(profile != NetworkProfile.RADIO_SILENCE) { "Radio Silence (EMCON) is Active" }
@@ -47,6 +48,7 @@ internal suspend fun deliverChat(
     val token = if (cloudRequested) authorization else null
     val meshSent = if (profile == NetworkProfile.MESH_ONLY || profile == NetworkProfile.HYBRID_BRIDGE) sendMesh() else false
     var submitted = false
+    var initiating = false
     val cloudResult = if (cloudRequested && token == null) CloudDelivery(CloudDeliveryStatus.BLOCKED)
     else if (cloudRequested && token != null) {
         try {
@@ -58,17 +60,18 @@ internal suspend fun deliverChat(
                 val auth = started.second()
                 if (auth.isFailure) return@withTimeoutOrNull CloudDelivery(CloudDeliveryStatus.FAILED, auth.exceptionOrNull())
                 val write = policy.submit(token) {
-                    submitted = true
-                    started.first.beginChatMessage(message)
+                    outbox.retain(message)
+                    initiating = true
+                    started.first.beginChatMessage(message).also { submitted = true }
                 } ?: return@withTimeoutOrNull CloudDelivery(CloudDeliveryStatus.CANCELLED_BEFORE_SEND)
                 val result = write()
                 if (result.isSuccess) CloudDelivery(CloudDeliveryStatus.CONFIRMED)
-                else CloudDelivery(CloudDeliveryStatus.FAILED, result.exceptionOrNull())
+                else CloudDelivery(CloudDeliveryStatus.SUBMITTED, result.exceptionOrNull())
             } ?: CloudDelivery(if (submitted) CloudDeliveryStatus.SUBMITTED else CloudDeliveryStatus.CANCELLED_BEFORE_SEND)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            CloudDelivery(if (submitted) CloudDeliveryStatus.SUBMITTED else CloudDeliveryStatus.FAILED, error)
+            CloudDelivery(if (submitted) CloudDeliveryStatus.SUBMITTED else if (initiating) CloudDeliveryStatus.UNCONFIRMED else CloudDeliveryStatus.FAILED, error)
         }
     } else null
     return ChatSendResult(message, meshSent, cloudResult)

@@ -9,6 +9,8 @@ import android.content.Context
 import com.sovereignatlas.atlas.tactical.mesh.MeshNodeInfo
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticSerialFramer
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
@@ -17,6 +19,7 @@ import com.sovereignatlas.atlas.tactical.mesh.RadioHardwareInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -55,6 +58,7 @@ class AndroidUsbSerialRadioClient internal constructor(
 
     private var readLoopJob: Job? = null
     private var rebootMonitorJob: Job? = null
+    private var deliveryTimeoutJob: Job? = null
 
     override val connectionState: StateFlow<RadioConnectionState> = session.connectionState
     override val isReady: StateFlow<Boolean> = session.isReady
@@ -84,6 +88,15 @@ class AndroidUsbSerialRadioClient internal constructor(
             }
             activeTransport = transport
             setupTransport = transport
+            val callbackGeneration = setupGeneration
+            deliveryTimeoutJob = scope.launch(Dispatchers.IO) {
+                while (isActive && activeTransport === transport && connectionGeneration.get() == callbackGeneration) {
+                    delay(1_000L)
+                    if (activeTransport === transport && connectionGeneration.get() == callbackGeneration) {
+                        session.expireDeliveryTimeouts()
+                    }
+                }
+            }
 
             val framer = MeshtasticSerialFramer()
             readLoopJob = scope.launch(Dispatchers.IO) {
@@ -100,7 +113,7 @@ class AndroidUsbSerialRadioClient internal constructor(
                             is UsbReadResult.Closed -> {
                                 if (activeTransport === transport) {
                                     scope.launch(Dispatchers.IO) {
-                                        disconnectInternal(isError = result.isError, reason = result.reason)
+                                        disconnectInternal(isError = result.isError, reason = result.reason, expectedTransport = transport, expectedGeneration = callbackGeneration)
                                     }
                                 }
                                 break
@@ -110,7 +123,7 @@ class AndroidUsbSerialRadioClient internal constructor(
                 } catch (t: Throwable) {
                     if (isActive && activeTransport === transport) {
                         scope.launch(Dispatchers.IO) {
-                            disconnectInternal(isError = true, reason = t.message ?: "USB read error")
+                            disconnectInternal(isError = true, reason = t.message ?: "USB read error", expectedTransport = transport, expectedGeneration = callbackGeneration)
                         }
                     }
                 }
@@ -162,23 +175,38 @@ class AndroidUsbSerialRadioClient internal constructor(
         disconnectInternal(isError = false, reason = null)
     }
 
-    override suspend fun transmitPacket(packet: MeshPacket): Boolean = withContext(Dispatchers.IO) {
-        val transport = activeTransport ?: return@withContext false
-        val prepared = session.prepareOutgoingPacket(packet) ?: return@withContext false
+    override suspend fun transmitPacket(packet: MeshPacket): Boolean = transmitPacketInternal(packet, null) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun transmitPacket(packet: MeshPacket, permit: TransmissionPermit): Boolean = transmitPacketInternal(packet, permit) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun transmitPacketOutcome(packet: MeshPacket, permit: TransmissionPermit): TransmissionOutcome = transmitPacketInternal(packet, permit)
+
+    private suspend fun transmitPacketInternal(packet: MeshPacket, permit: TransmissionPermit?): TransmissionOutcome = withContext(Dispatchers.IO) {
+        val transport = activeTransport ?: return@withContext TransmissionOutcome.NOT_SUBMITTED
+        val prepared = session.prepareOutgoingPacket(packet) ?: return@withContext TransmissionOutcome.NOT_SUBMITTED
         val framed = MeshtasticSerialFramer.frame(prepared.toRadioBytes)
         val wrote = writeMutex.withLock {
-            if (activeTransport !== transport) false else transport.write(framed)
+            if (activeTransport !== transport) TransmissionOutcome.NOT_SUBMITTED
+            else transport.writeOutcome(framed, permit)
         }
-        if (!wrote) {
-            session.markTransportWriteFailed(prepared.packet.id, "USB serial write failed")
-            return@withContext false
+        when (wrote) {
+            TransmissionOutcome.NOT_SUBMITTED -> session.markTransportWriteFailed(prepared.packet.id, "USB serial write not submitted")
+            TransmissionOutcome.UNCONFIRMED -> session.markTransportWriteUnconfirmed(prepared.packet.id, "USB serial write outcome unconfirmed")
+            TransmissionOutcome.SUBMITTED -> Unit
         }
-        true
+        wrote
     }
 
     override suspend fun pingNode(targetNodeNum: Long): Boolean {
         return transmitPacket(session.buildPingPacket(targetNodeNum))
     }
+
+    override suspend fun pingNode(targetNodeNum: Long, permit: TransmissionPermit): Boolean {
+        return transmitPacket(session.buildPingPacket(targetNodeNum), permit)
+    }
+
+    override suspend fun pingNodeOutcome(targetNodeNum: Long, permit: TransmissionPermit): TransmissionOutcome =
+        transmitPacketOutcome(session.buildPingPacket(targetNodeNum), permit)
 
     private suspend fun sendWantConfigFrame(transport: UsbSerialTransport): Boolean {
         val wantConfigBytes = session.beginHandshake(isUsb = true)
@@ -191,8 +219,10 @@ class AndroidUsbSerialRadioClient internal constructor(
         }
     }
 
-    private suspend fun disconnectInternal(isError: Boolean, reason: String?) {
+    private suspend fun disconnectInternal(isError: Boolean, reason: String?, expectedTransport: UsbSerialTransport? = null, expectedGeneration: Long? = null) {
         connectMutex.withLock {
+            if (expectedTransport != null &&
+                (activeTransport !== expectedTransport || connectionGeneration.get() != expectedGeneration)) return@withLock
             cleanupTransportLocked(sendDisconnectEnvelope = !isError, isError = isError, reason = reason)
         }
     }
@@ -204,6 +234,8 @@ class AndroidUsbSerialRadioClient internal constructor(
     ) {
         rebootMonitorJob?.cancel()
         rebootMonitorJob = null
+        deliveryTimeoutJob?.cancel()
+        deliveryTimeoutJob = null
         readLoopJob?.cancel()
         readLoopJob = null
 

@@ -216,7 +216,7 @@ class MeshtasticWireAdapter {
             val portNum = decodedData.portnum.value
             val routingError: Int? = if (decodedData.portnum == ProtoPortNum.ROUTING_APP) {
                 if (payloadBytes.isEmpty()) {
-                    ProtoRouting.Error.NONE.value
+                    null
                 } else {
                     val routing = try {
                         ProtoRouting.ADAPTER.decode(payloadBytes)
@@ -225,7 +225,6 @@ class MeshtasticWireAdapter {
                     }
                     when {
                         routing.error_reason != null -> routing.error_reason.value
-                        routing.route_request == null && routing.route_reply == null -> ProtoRouting.Error.NONE.value
                         else -> null
                     }
                 }

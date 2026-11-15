@@ -9,6 +9,8 @@ import android.content.Context
 import com.sovereignatlas.atlas.tactical.mesh.MeshNodeInfo
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticWireAdapter
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
@@ -17,6 +19,8 @@ import com.sovereignatlas.atlas.tactical.mesh.RadioHardwareInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -52,6 +56,7 @@ class AndroidBleRadioClient internal constructor(
     private val drainMutex = Mutex()
     private val drainRequested = AtomicBoolean(false)
     private val connectionGeneration = AtomicLong(0L)
+    private val sessionGuard = Any()
 
     @Volatile
     private var activeTransport: BleGattTransport? = null
@@ -60,6 +65,7 @@ class AndroidBleRadioClient internal constructor(
     private var negotiatedAttPayloadMax: Int = 20
 
     private var rebootMonitorJob: Job? = null
+    private var deliveryTimeoutJob: Job? = null
 
     override val connectionState: StateFlow<RadioConnectionState> = session.connectionState
     override val isReady: StateFlow<Boolean> = session.isReady
@@ -81,22 +87,36 @@ class AndroidBleRadioClient internal constructor(
             cleanupTransportLocked(sendDisconnectEnvelope = false, isError = false, reason = null)
 
             setupGeneration = connectionGeneration.incrementAndGet()
-            session.beginConnecting()
             val transport = transportFactory()
-            activeTransport = transport
+            synchronized(sessionGuard) {
+                session.beginConnecting()
+                activeTransport = transport
+            }
             setupTransport = transport
             negotiatedAttPayloadMax = 20
+            val callbackGeneration = setupGeneration
+            deliveryTimeoutJob = scope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    delay(1_000L)
+                    synchronized(sessionGuard) {
+                        if (activeTransport === transport && connectionGeneration.get() == callbackGeneration) {
+                            session.expireDeliveryTimeouts()
+                        }
+                    }
+                }
+            }
 
             val callbacks = object : BleGattCallbacks {
                 override fun onCharacteristicNotified(uuid: UUID, value: ByteArray) {
-                    if (uuid == MeshtasticBleUuids.FROM_NUM_UUID) {
-                        scheduleDrainFromRadio()
+                    if (uuid == MeshtasticBleUuids.FROM_NUM_UUID &&
+                        connectionGeneration.get() == callbackGeneration && activeTransport === transport) {
+                        scheduleDrainFromRadio(transport, callbackGeneration)
                     }
                 }
 
                 override fun onDisconnected(isError: Boolean, reason: String) {
                     scope.launch(Dispatchers.IO) {
-                        disconnectInternal(isError = isError, reason = reason)
+                        disconnectInternal(isError = isError, reason = reason, expectedTransport = transport, expectedGeneration = callbackGeneration)
                     }
                 }
             }
@@ -124,13 +144,13 @@ class AndroidBleRadioClient internal constructor(
 
             rebootMonitorJob = scope.launch(Dispatchers.IO) {
                 session.rebootEvents.collect {
-                    if (activeTransport === transport) {
-                        initiateWantConfigAndDrain(transport)
+                    if (activeTransport === transport && connectionGeneration.get() == callbackGeneration) {
+                        initiateWantConfigAndDrain(transport, callbackGeneration)
                     }
                 }
             }
 
-            val handshakeSent = initiateWantConfigAndDrain(transport)
+            val handshakeSent = initiateWantConfigAndDrain(transport, callbackGeneration)
             if (!handshakeSent) {
                 cleanupTransportLocked(sendDisconnectEnvelope = false, isError = true, reason = "Failed to send want_config_id")
                 return@withLock false
@@ -167,63 +187,90 @@ class AndroidBleRadioClient internal constructor(
         disconnectInternal(isError = false, reason = null)
     }
 
-    override suspend fun transmitPacket(packet: MeshPacket): Boolean = withContext(Dispatchers.IO) {
-        val transport = activeTransport ?: return@withContext false
+    override suspend fun transmitPacket(packet: MeshPacket): Boolean = transmitPacketInternal(packet, null) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun transmitPacket(packet: MeshPacket, permit: TransmissionPermit): Boolean = transmitPacketInternal(packet, permit) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun transmitPacketOutcome(packet: MeshPacket, permit: TransmissionPermit): TransmissionOutcome = transmitPacketInternal(packet, permit)
+
+    private suspend fun transmitPacketInternal(packet: MeshPacket, permit: TransmissionPermit?): TransmissionOutcome = withContext(Dispatchers.IO) {
+        val transport = activeTransport ?: return@withContext TransmissionOutcome.NOT_SUBMITTED
         val prepared = session.prepareOutgoingPacket(packet, maxEnvelopeBytes = negotiatedAttPayloadMax)
-            ?: return@withContext false
+            ?: return@withContext TransmissionOutcome.NOT_SUBMITTED
         val wrote = gattMutex.withLock {
             if (activeTransport !== transport) {
-                false
+                TransmissionOutcome.NOT_SUBMITTED
             } else {
-                transport.writeToRadio(prepared.toRadioBytes)
+                transport.writeToRadioOutcome(prepared.toRadioBytes, permit)
             }
         }
-        if (!wrote) {
-            session.markTransportWriteFailed(prepared.packet.id, "BLE ToRadio GATT write failed")
-            return@withContext false
+        when (wrote) {
+            TransmissionOutcome.NOT_SUBMITTED -> session.markTransportWriteFailed(prepared.packet.id, "BLE ToRadio GATT write not submitted")
+            TransmissionOutcome.UNCONFIRMED -> session.markTransportWriteUnconfirmed(prepared.packet.id, "BLE ToRadio GATT write outcome unconfirmed")
+            TransmissionOutcome.SUBMITTED -> Unit
         }
-        true
+        wrote
     }
 
     override suspend fun pingNode(targetNodeNum: Long): Boolean {
         return transmitPacket(session.buildPingPacket(targetNodeNum))
     }
 
-    private suspend fun initiateWantConfigAndDrain(transport: BleGattTransport): Boolean {
-        val wantConfigBytes = session.beginHandshake(isUsb = false)
+    override suspend fun pingNode(targetNodeNum: Long, permit: TransmissionPermit): Boolean {
+        return transmitPacket(session.buildPingPacket(targetNodeNum), permit)
+    }
+
+    override suspend fun pingNodeOutcome(targetNodeNum: Long, permit: TransmissionPermit): TransmissionOutcome =
+        transmitPacketOutcome(session.buildPingPacket(targetNodeNum), permit)
+
+    private suspend fun initiateWantConfigAndDrain(transport: BleGattTransport, generation: Long): Boolean {
+        val wantConfigBytes = synchronized(sessionGuard) {
+            if (activeTransport !== transport || connectionGeneration.get() != generation) return false
+            session.beginHandshake(isUsb = false)
+        }
         val wrote = gattMutex.withLock {
-            if (activeTransport !== transport) false else transport.writeToRadio(wantConfigBytes)
+            if (activeTransport !== transport || connectionGeneration.get() != generation) false else transport.writeToRadio(wantConfigBytes)
         }
         if (!wrote) return false
-        drainFromRadioLoop(transport)
+        drainFromRadioLoop(transport, generation)
         return true
     }
 
-    private fun scheduleDrainFromRadio() {
+    private fun scheduleDrainFromRadio(transport: BleGattTransport, generation: Long) {
+        if (activeTransport !== transport || connectionGeneration.get() != generation) return
         drainRequested.set(true)
         scope.launch(Dispatchers.IO) {
-            val transport = activeTransport ?: return@launch
-            drainFromRadioLoop(transport)
+            if (activeTransport !== transport || connectionGeneration.get() != generation) return@launch
+            drainFromRadioLoop(transport, generation)
         }
     }
 
-    private suspend fun drainFromRadioLoop(transport: BleGattTransport) {
+    private suspend fun drainFromRadioLoop(transport: BleGattTransport, generation: Long) {
         drainMutex.withLock {
             do {
                 drainRequested.set(false)
-                while (activeTransport === transport) {
+                while (activeTransport === transport && connectionGeneration.get() == generation) {
                     val bytes = gattMutex.withLock {
-                        if (activeTransport !== transport) null else transport.readFromRadio()
+                        if (activeTransport !== transport || connectionGeneration.get() != generation) null else transport.readFromRadio()
                     } ?: break
                     if (bytes.isEmpty()) break
-                    session.onFromRadioBytes(bytes)
+                    synchronized(sessionGuard) {
+                        if (activeTransport === transport && connectionGeneration.get() == generation) session.onFromRadioBytes(bytes)
+                    }
                 }
-            } while (drainRequested.get() && activeTransport === transport)
+            } while (drainRequested.get() && activeTransport === transport && connectionGeneration.get() == generation)
         }
     }
 
-    private suspend fun disconnectInternal(isError: Boolean, reason: String?) {
+    private suspend fun disconnectInternal(
+        isError: Boolean,
+        reason: String?,
+        expectedTransport: BleGattTransport? = null,
+        expectedGeneration: Long? = null,
+    ) {
         connectMutex.withLock {
+            if (expectedTransport != null &&
+                (activeTransport !== expectedTransport || connectionGeneration.get() != expectedGeneration)) return@withLock
             cleanupTransportLocked(sendDisconnectEnvelope = !isError, isError = isError, reason = reason)
         }
     }
@@ -235,8 +282,14 @@ class AndroidBleRadioClient internal constructor(
     ) {
         rebootMonitorJob?.cancel()
         rebootMonitorJob = null
-        val transport = activeTransport
-        activeTransport = null
+        deliveryTimeoutJob?.cancel()
+        deliveryTimeoutJob = null
+        val transport = synchronized(sessionGuard) {
+            val current = activeTransport
+            activeTransport = null
+            session.onTransportDisconnected(isError = isError, reason = reason)
+            current
+        }
         negotiatedAttPayloadMax = 20
         if (transport != null) {
             if (sendDisconnectEnvelope) {
@@ -248,6 +301,5 @@ class AndroidBleRadioClient internal constructor(
             }
             transport.close()
         }
-        session.onTransportDisconnected(isError = isError, reason = reason)
     }
 }

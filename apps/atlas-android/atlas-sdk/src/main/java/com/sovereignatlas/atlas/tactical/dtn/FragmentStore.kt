@@ -144,6 +144,22 @@ class FragmentStore(
     }
 
     @Synchronized
+    fun registerInboundWithCreation(
+        transferId: String,
+        chunkIndex: Int,
+        totalChunks: Int,
+        tier: FragmentTier,
+        counterpartyId: String,
+        expiresAt: Long,
+        frame: ByteArray,
+        now: Long = clock(),
+    ): Pair<RegisterOutcome, Boolean> {
+        val existed = inboundMeta.containsKey(transferId)
+        val outcome = registerInbound(transferId, chunkIndex, totalChunks, tier, counterpartyId, expiresAt, frame, now)
+        return outcome to (outcome == RegisterOutcome.STORED && !existed)
+    }
+
+    @Synchronized
     fun isInboundComplete(transferId: String): Boolean {
         val meta = inboundMeta[transferId] ?: return false
         if (meta.rejected) return false

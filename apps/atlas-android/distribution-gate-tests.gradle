@@ -149,6 +149,10 @@ tasks.register('atlasDistributionGateTest') {
         badNotice.data.notices[0].sha256 = '0' * 64
         sign(badNotice, key)
         checkRejected('mismatched bundled notice', badNotice)
+        def duplicateNotice = fixture()
+        duplicateNotice.data.notices.add(new LinkedHashMap(duplicateNotice.data.notices[0]))
+        sign(duplicateNotice, key)
+        checkRejected('duplicate notice record', duplicateNotice)
         def noSourceEvidence = fixture()
         noSourceEvidence.data.sourceDelivery.evidence = ''
         sign(noSourceEvidence, key)
@@ -188,6 +192,41 @@ tasks.register('atlasDistributionGateTest') {
         def extraSchema = new File(pinBase, 'meshtastic/unreviewed.proto')
         extraSchema.text = 'unreviewed'
         if (!pinCheck().any { it.contains('file set differs') }) throw new GradleException('Additional schema accepted')
+        extraSchema.delete()
+        def nestedSchema = new File(pinBase, 'meshtastic/nested/mesh.proto')
+        nestedSchema.parentFile.mkdirs()
+        nestedSchema.text = 'duplicate basename'
+        if (!pinCheck().any { it.contains('file set differs') }) throw new GradleException('Nested duplicate schema accepted')
+        nestedSchema.delete()
+        def externalSchema = new File(pinBase, 'unreviewed.proto')
+        externalSchema.text = 'unreviewed'
+        if (!pinCheck().any { it.contains('file set differs') }) throw new GradleException('Extra schema outside Meshtastic directory accepted')
+        externalSchema.delete()
+
+        def inventoryCheck = { value -> project.ext.validateDistributionInventory(value) }
+        def malformedInventory = [artifacts: [[group: 'test', name: 'lib', version: '1', sha256: null]], dependencies: []]
+        if (inventoryCheck(malformedInventory).isEmpty()) throw new GradleException('Missing artifact hash accepted')
+        malformedInventory.artifacts[0].sha256 = 'a' * 64
+        malformedInventory.dependencies.add([from: 'root', requested: 'broken:lib:1', selected: 'UNRESOLVED'])
+        if (inventoryCheck(malformedInventory).isEmpty()) throw new GradleException('Unresolved graph edge accepted')
+        def duplicateInventory = [artifacts: [[group: 'test', name: 'lib', version: '1', extension: 'jar', sha256: 'a' * 64],
+                                             [group: 'test', name: 'lib', version: '1', extension: 'jar', sha256: 'a' * 64]], dependencies: []]
+        if (!inventoryCheck(duplicateInventory).any { it.contains('Duplicate resolved artifact') }) throw new GradleException('Duplicate artifact accepted')
+        def dependency = new File(root, 'dependency-fixture.jar')
+        dependency.text = 'initial dependency bytes'
+        def dependencyApproval = fixture()
+        dependencyApproval.expected.inventories.sdk = project.ext.hashDistributionArtifact(dependency, 'synthetic:dependency:1')
+        dependencyApproval.data.inventories.sdk = dependencyApproval.expected.inventories.sdk
+        sign(dependencyApproval, key)
+        dependency.append('tampered')
+        dependencyApproval.expected.inventories.sdk = project.ext.hashDistributionArtifact(dependency, 'synthetic:dependency:1')
+        checkRejected('changed dependency artifact bytes', dependencyApproval)
+        try {
+            project.ext.hashDistributionArtifact(new File(root, 'missing-fixture.jar'), 'synthetic:missing:1')
+            throw new GradleException('Missing dependency artifact accepted')
+        } catch (GradleException expected) {
+            if (!expected.message.contains('Missing resolved artifact')) throw expected
+        }
 
         def runtimeDir = Files.createTempDirectory(root.toPath(), 'runtime-inventory-').toFile()
         def testRuntimeDir = Files.createTempDirectory(root.toPath(), 'changed-inventory-').toFile()
@@ -224,6 +263,11 @@ tasks.register('atlasDistributionGateTest') {
             Files.createSymbolicLink(link.toPath(), pathRoot.toPath())
             checkPathRejected('symlink ancestor', new File(link, 'repository'), pathRoot)
             checkPathRejected('symlink root', new File(link, 'repository'), link)
+            privateRepo.mkdirs()
+            def destination = new File(pathRoot, 'public-target')
+            destination.mkdirs()
+            Files.createSymbolicLink(new File(privateRepo, 'com').toPath(), destination.toPath())
+            checkPathRejected('symlink below repository', privateRepo, pathRoot)
         } catch (UnsupportedOperationException | SecurityException | IOException failure) {
             logger.warn("Symbolic-link verification test unavailable: ${failure.class.simpleName}")
         }

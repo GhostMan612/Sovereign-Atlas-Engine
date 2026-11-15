@@ -9,8 +9,11 @@ import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryStage
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -39,12 +42,47 @@ import org.meshtastic.proto.ToRadio
 import org.meshtastic.proto.User
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 
 class AndroidBleRadioClientTest {
+
+    @Test
+    fun timedOutGattWriteQuarantinesFutureWrites() {
+        val fence = GattWriteFence()
+        assertTrue(fence.canWrite())
+        fence.quarantine()
+        assertFalse(fence.canWrite())
+        fence.quarantine()
+        assertFalse(fence.canWrite())
+    }
+
+    @Test
+    fun silentPeerDeliveryExpiresWithoutFurtherRadioTraffic() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val now = AtomicLong(1_000L)
+            val transport = FakeBleGattTransport(onWantConfigWritten = { fake, nonce ->
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(my_info = MyNodeInfo(my_node_num = 10))))
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(config_complete_id = nonce)))
+            })
+            val client = AndroidBleRadioClient(null, scope, { transport }, clockMs = { now.get() }, handshakeTimeoutMs = 3_000L)
+            assertTrue(client.connect())
+            assertTrue(client.transmitPacket(MeshPacket(from = 10, to = 20, portNum = PortNum.PORTNUM_TEXT_MESSAGE_APP, payload = byteArrayOf(1), id = 77, wantAck = true)))
+            now.addAndGet(120_000L)
+            withTimeout(3_000L) {
+                client.deliveryStates.first { it[77L]?.stage == PacketDeliveryStage.UNCONFIRMED }
+            }
+            assertEquals("Delivery acknowledgment timed out", client.deliveryStates.value[77L]?.errorMessage)
+            client.disconnect()
+        } finally {
+            scope.cancel()
+        }
+    }
 
     private class FakeBleGattTransport(
         private val negotiatedMtu: Int = 512,
         private val onWantConfigWritten: (FakeBleGattTransport, Int) -> Unit = { _, _ -> },
+        private val packetOutcome: TransmissionOutcome? = null,
     ) : BleGattTransport {
         val events = mutableListOf<String>()
         val writtenToRadio = mutableListOf<ByteArray>()
@@ -84,6 +122,9 @@ class AndroidBleRadioClientTest {
             return true
         }
 
+        override suspend fun writeToRadioOutcome(bytes: ByteArray, permit: TransmissionPermit?): TransmissionOutcome =
+            packetOutcome ?: if (writeToRadio(bytes)) TransmissionOutcome.SUBMITTED else TransmissionOutcome.UNCONFIRMED
+
         override suspend fun readFromRadio(): ByteArray {
             events += "readFromRadio"
             val item = readQueue.poll() ?: ByteArray(0)
@@ -99,6 +140,54 @@ class AndroidBleRadioClientTest {
         fun notifyFromNum(count: Int = 1) {
             val b = byteArrayOf(count.toByte(), 0, 0, 0)
             callbacks?.onCharacteristicNotified(MeshtasticBleUuids.FROM_NUM_UUID, b)
+        }
+    }
+
+    @Test
+    fun submittedWriteWithMissingCompletionRemainsUnconfirmed() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val transport = FakeBleGattTransport(packetOutcome = TransmissionOutcome.UNCONFIRMED, onWantConfigWritten = { fake, nonce ->
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(my_info = MyNodeInfo(my_node_num = 10))))
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(config_complete_id = nonce)))
+            })
+            val client = AndroidBleRadioClient(null, scope, { transport }, handshakeTimeoutMs = 3_000L)
+            assertTrue(client.connect())
+            val permit = object : TransmissionPermit {
+                override fun <T : Any> submit(action: () -> T): T? = action()
+            }
+            val packet = MeshPacket(from = 10, to = 20, portNum = PortNum.PORTNUM_TEXT_MESSAGE_APP, payload = byteArrayOf(1), id = 78, wantAck = true)
+            assertEquals(TransmissionOutcome.UNCONFIRMED, client.transmitPacketOutcome(packet, permit))
+            assertEquals(PacketDeliveryStage.UNCONFIRMED, client.deliveryStates.value[78L]?.stage)
+            client.disconnect()
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun staleDisconnectCannotCloseReplacementConnection() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun transport() = FakeBleGattTransport(onWantConfigWritten = { fake, nonce ->
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(id = 1, my_info = MyNodeInfo(my_node_num = 10))))
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(id = 2, config_complete_id = nonce)))
+            })
+            val first = transport()
+            val second = transport()
+            val transports = ArrayDeque(listOf(first, second))
+            val client = AndroidBleRadioClient(null, scope, { transports.removeFirst() }, handshakeTimeoutMs = 3_000L)
+            assertTrue(client.connect())
+            client.disconnect()
+            assertTrue(client.connect())
+            val existing = scope.coroutineContext[Job]!!.children.toSet()
+            first.callbacks!!.onDisconnected(true, "late")
+            scope.coroutineContext[Job]!!.children.filter { it !in existing }.toList().forEach { it.join() }
+            assertTrue(client.isReady.value)
+            assertFalse(second.closed)
+            client.disconnect()
+        } finally {
+            scope.cancel()
         }
     }
 

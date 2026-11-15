@@ -23,6 +23,21 @@ import java.util.concurrent.TimeUnit
 class ChatDeliveryTest {
     private val message = ChatMessage("id", "uid", "sender", "room", "room", "hello", 1L, true)
 
+    private suspend fun deliverChat(
+        profile: NetworkProfile,
+        message: ChatMessage,
+        policy: CloudPolicyCoordinator,
+        provider: () -> SyncProvider,
+        authorization: Long? = policy.authorization(profile),
+        sendMesh: () -> Boolean,
+    ): ChatSendResult {
+        val outbox = ChatOutbox(object : ChatOutboxStorage {
+            override fun read(): String? = null
+            override fun write(value: String) = true
+        })
+        return com.sovereignatlas.atlas.android.comms.deliverChat(profile, message, policy, provider, authorization, outbox, sendMesh)
+    }
+
     private class FakeCloud : SyncProvider {
         val auth = CompletableDeferred<Result<Unit>>()
         val write = CompletableDeferred<Result<Unit>>()
@@ -172,6 +187,44 @@ class ChatDeliveryTest {
         assertEquals(CloudDeliveryStatus.BLOCKED, result.cloudDelivery!!.status)
     }
 
+    @Test fun staleMeshPermitCannotSendAfterSilenceAndReenable() {
+        val policy = CloudPolicyCoordinator(NetworkProfile.HYBRID_BRIDGE)
+        val permit = policy.meshPermit(policy.snapshot())
+        policy.transition(NetworkProfile.RADIO_SILENCE)
+        policy.transition(NetworkProfile.HYBRID_BRIDGE)
+        var calls = 0
+        assertNull(permit.submit { calls++; true })
+        assertEquals(0, calls)
+    }
+
+    @Test fun writeInitiationExceptionIsUnconfirmed() = runTest {
+        val policy = CloudPolicyCoordinator(NetworkProfile.CLOUD_ONLY)
+        val cloud = object : SyncProvider {
+            override val isReady = true
+            override fun beginAuthentication(): SyncOperation = { Result.success(Unit) }
+            override fun beginChatMessage(message: ChatMessage): SyncOperation = error("before write")
+        }
+        val result = deliverChat(NetworkProfile.CLOUD_ONLY, message, policy, { cloud }) { false }
+        assertEquals(CloudDeliveryStatus.UNCONFIRMED, result.cloudDelivery!!.status)
+    }
+
+    @Test fun retryUsesTheSameMessageIdentity() = runTest {
+        val policy = CloudPolicyCoordinator(NetworkProfile.CLOUD_ONLY)
+        val writes = mutableListOf<ChatMessage>()
+        val cloud = object : SyncProvider {
+            override val isReady = true
+            override fun beginAuthentication(): SyncOperation = { Result.success(Unit) }
+            override fun beginChatMessage(message: ChatMessage): SyncOperation {
+                writes.add(message)
+                return { Result.failure(IllegalStateException("unconfirmed")) }
+            }
+        }
+        val first = deliverChat(NetworkProfile.CLOUD_ONLY, message, policy, { cloud }) { false }
+        assertEquals(CloudDeliveryStatus.SUBMITTED, first.cloudDelivery!!.status)
+        deliverChat(NetworkProfile.CLOUD_ONLY, first.message, policy, { cloud }) { false }
+        assertEquals(listOf(message, message), writes)
+    }
+
     @Test fun alreadySubmittedWriteRemainsSubmittedOnTimeout() = runTest {
         val policy = CloudPolicyCoordinator(NetworkProfile.CLOUD_ONLY)
         val cloud = FakeCloud()
@@ -203,7 +256,7 @@ class ChatDeliveryTest {
         policy.transition(NetworkProfile.RADIO_SILENCE)
         cloud.write.complete(Result.failure(IllegalStateException("write failed")))
         val result = send.await().cloudDelivery!!
-        assertEquals(CloudDeliveryStatus.FAILED, result.status)
+        assertEquals(CloudDeliveryStatus.SUBMITTED, result.status)
         assertEquals("write failed", result.error!!.message)
     }
 }

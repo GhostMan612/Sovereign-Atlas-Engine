@@ -22,9 +22,14 @@ class MockMeshRadioClient(
         nodeNum = 0x11223344L,
         isUsb = true,
     ),
+    private val clockMs: () -> Long = { System.currentTimeMillis() },
+    private val acknowledgementTimeoutMs: Long = 120_000L,
 ) : MeshRadioClient {
 
     private val nextPacketId = AtomicLong(1L)
+    private val lock = Any()
+    private data class PendingDelivery(val packet: MeshPacket, val queuedAt: Long)
+    private val pending = LinkedHashMap<Long, PendingDelivery>()
 
     private val _connectionState = MutableStateFlow(initialState)
     override val connectionState: StateFlow<RadioConnectionState> = _connectionState.asStateFlow()
@@ -59,23 +64,40 @@ class MockMeshRadioClient(
     }
 
     override suspend fun disconnect() {
+        synchronized(lock) { finishPending("Transport disconnected") }
         _isReady.value = false
         _activeRadioInfo.value = null
         _connectionState.value = RadioConnectionState.DISCONNECTED
     }
 
-    override suspend fun transmitPacket(packet: MeshPacket): Boolean {
-        if (!_isReady.value) return false
+    override suspend fun transmitPacket(packet: MeshPacket): Boolean = transmitNow(packet)
+
+    override suspend fun transmitPacket(packet: MeshPacket, permit: TransmissionPermit): Boolean =
+        permit.submit { transmitNow(packet) } ?: false
+
+    override suspend fun transmitPacketOutcome(packet: MeshPacket, permit: TransmissionPermit): TransmissionOutcome =
+        if (transmitPacket(packet, permit)) TransmissionOutcome.SUBMITTED else TransmissionOutcome.NOT_SUBMITTED
+
+    override suspend fun pingNodeOutcome(targetNodeNum: Long, permit: TransmissionPermit): TransmissionOutcome =
+        if (pingNode(targetNodeNum, permit)) TransmissionOutcome.SUBMITTED else TransmissionOutcome.NOT_SUBMITTED
+
+    private fun transmitNow(packet: MeshPacket): Boolean = synchronized(lock) {
+        if (!_isReady.value) return@synchronized false
         val state = _connectionState.value
         if (state != RadioConnectionState.CONNECTED && state != RadioConnectionState.STREAMING) {
-            return false
+            return@synchronized false
         }
-        val packetId = if (packet.id != 0L) packet.id else nextPacketId.getAndIncrement()
-        val resolved = packet.copy(id = packetId)
+        val packetId = (if (packet.id != 0L) packet.id else nextPacketId.getAndIncrement()) and 0xFFFFFFFFL
+        if (packetId == 0L || _deliveryStates.value.containsKey(packetId)) return@synchronized false
+        val local = if (packet.from != 0L) packet.from and 0xFFFFFFFFL else _activeRadioInfo.value?.nodeNum ?: 0L
+        val resolved = packet.copy(id = packetId, from = local, to = packet.to and 0xFFFFFFFFL)
         transmittedPackets.add(resolved)
         emitDeliveryUpdate(PacketDeliveryUpdate(packetId, PacketDeliveryStage.QUEUED))
         emitDeliveryUpdate(PacketDeliveryUpdate(packetId, PacketDeliveryStage.RADIO_ACCEPTED))
-        return true
+        if (resolved.wantAck && resolved.to != 0L && resolved.to != 0xFFFFFFFFL) {
+            pending[packetId] = PendingDelivery(resolved, clockMs())
+        }
+        true
     }
 
     override suspend fun pingNode(targetNodeNum: Long): Boolean {
@@ -91,20 +113,62 @@ class MockMeshRadioClient(
         )
     }
 
+    override suspend fun pingNode(targetNodeNum: Long, permit: TransmissionPermit): Boolean = transmitPacket(
+        MeshPacket(
+            from = _activeRadioInfo.value?.nodeNum ?: 0L,
+            to = targetNodeNum,
+            portNum = PortNum.PORTNUM_TEXT_MESSAGE_APP,
+            payload = "PING".encodeToByteArray(),
+            id = nextPacketId.getAndIncrement(),
+            wantAck = true,
+        ), permit,
+    )
+
     fun simulateInboundPacket(packet: MeshPacket) {
-        if (packet.portNum == PortNum.PORTNUM_ROUTING_APP && packet.requestId != 0L) {
+        synchronized(lock) {
+            expireDeliveryTimeoutsLocked()
+            val expected = pending[packet.requestId]?.packet
             val error = packet.routingError
-            if (error == null || error == 0) {
-                emitDeliveryUpdate(PacketDeliveryUpdate(packet.requestId, PacketDeliveryStage.PEER_DELIVERED))
-            } else {
-                emitDeliveryUpdate(PacketDeliveryUpdate(packet.requestId, PacketDeliveryStage.FAILED, errorCode = error))
+            if (packet.portNum == PortNum.PORTNUM_ROUTING_APP && packet.requestId != 0L && expected != null &&
+                packet.from == expected.to && packet.to == expected.from && packet.channel == expected.channel && error != null
+            ) {
+                pending.remove(packet.requestId)
+                val stage = if (error == 0) PacketDeliveryStage.PEER_DELIVERED else PacketDeliveryStage.FAILED
+                emitDeliveryUpdate(PacketDeliveryUpdate(packet.requestId, stage, errorCode = error, timestampMs = clockMs()))
             }
         }
         _inboundPackets.tryEmit(packet)
     }
 
+    fun expireDeliveryTimeouts() {
+        synchronized(lock) { expireDeliveryTimeoutsLocked() }
+    }
+
+    private fun expireDeliveryTimeoutsLocked() {
+        val now = clockMs()
+        val iterator = pending.iterator()
+        while (iterator.hasNext()) {
+            val (id, delivery) = iterator.next()
+            if (now < delivery.queuedAt || now - delivery.queuedAt >= acknowledgementTimeoutMs) {
+                iterator.remove()
+                emitDeliveryUpdate(PacketDeliveryUpdate(id, PacketDeliveryStage.UNCONFIRMED, errorMessage = "Delivery acknowledgment timed out", timestampMs = now))
+            }
+        }
+    }
+
+    private fun finishPending(reason: String) {
+        val now = clockMs()
+        for (id in pending.keys) {
+            emitDeliveryUpdate(PacketDeliveryUpdate(id, PacketDeliveryStage.UNCONFIRMED, errorMessage = reason, timestampMs = now))
+        }
+        pending.clear()
+    }
+
     fun simulateDeliveryUpdate(update: PacketDeliveryUpdate) {
-        emitDeliveryUpdate(update)
+        synchronized(lock) {
+            if (update.stage == PacketDeliveryStage.PEER_DELIVERED || update.stage == PacketDeliveryStage.FAILED) pending.remove(update.packetId)
+            emitDeliveryUpdate(update)
+        }
     }
 
     fun setNodes(nodes: List<MeshNodeInfo>) {
@@ -116,6 +180,9 @@ class MockMeshRadioClient(
     }
 
     fun setConnectionState(state: RadioConnectionState) {
+        if (state == RadioConnectionState.DISCONNECTED || state == RadioConnectionState.ERROR) {
+            synchronized(lock) { finishPending("Transport disconnected") }
+        }
         _connectionState.value = state
         _isReady.value = isStateReady(state)
         if (!_isReady.value) {

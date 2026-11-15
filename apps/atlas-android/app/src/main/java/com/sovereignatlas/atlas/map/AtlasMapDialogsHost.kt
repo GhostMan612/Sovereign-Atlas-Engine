@@ -529,8 +529,9 @@ fun AtlasMapDialogsHost(
             networkProfile = networkProfile,
             nodes = nodes,
             onPingNode = { nodeNum ->
+                val snapshot = services.settingsRepository.cloudPolicy.snapshot()
                 scope.launch {
-                    services.meshSupervisor?.pingNode(nodeNum)
+                    services.meshSupervisor?.pingNode(nodeNum, snapshot)
                 }
             },
             onDirectTargetDrop = { node ->

@@ -1,5 +1,7 @@
 import groovy.json.JsonSlurper
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.Signature
@@ -20,7 +22,23 @@ ext.validateVerificationPath = { File candidate, File root ->
         def current = raw.root
         raw.each { part ->
             current = current.resolve(part)
-            if (Files.isSymbolicLink(current)) failures << "Verification path contains symlink: ${current}"
+            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                def attrs = Files.readAttributes(current, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+                if (attrs.isSymbolicLink() || attrs.isOther() || current.toRealPath(LinkOption.NOFOLLOW_LINKS) != current.toRealPath()) {
+                    failures << "Verification path contains link or reparse entry: ${current}"
+                }
+            }
+        }
+        if (Files.exists(raw, LinkOption.NOFOLLOW_LINKS)) {
+            def stream = Files.walk(raw)
+            try {
+                stream.forEach { path ->
+                    def attrs = Files.readAttributes(path, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+                    if (attrs.isSymbolicLink() || attrs.isOther() || path.toRealPath(LinkOption.NOFOLLOW_LINKS) != path.toRealPath()) {
+                        failures << "Verification repository contains link or reparse entry: ${path}"
+                    }
+                }
+            } finally { stream.close() }
         }
     } catch (Exception ex) {
         failures << "Invalid verification path: ${ex.message}"
@@ -75,9 +93,12 @@ ext.validateDistributionEvidence = { Map request ->
             try {
                 def zip = new ZipFile(artifact)
                 try {
+                    def noticePaths = [] as Set
                     doc.notices.each { notice ->
                         if (!(notice instanceof Map) || !nonblank(notice.path) || notice.path.startsWith('/') || notice.path.tokenize('/').contains('..')) {
                             failures << 'Malformed notice path'
+                        } else if (!noticePaths.add(notice.path)) {
+                            failures << "Duplicate notice path: ${notice.path}"
                         } else {
                             def entries = zip.entries().findAll { it.name == notice.path }
                             if (entries.size() != 1 || entries[0].directory) failures << "Bundled notice missing or ambiguous: ${notice.path}"
