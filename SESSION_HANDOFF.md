@@ -17,12 +17,12 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (Issue `#8` standalone Maven SDK consumer): 1,679 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
+- **Last measured 2026-11-14 (Issue `#12` tile-server hardening): 1,701 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
   - `:atlas-sdk:test`: 34 tests (8 XML suites)
   - `:sdk-consumer:test`: 7 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
-  - `:app:testPlayDebugUnitTest`: 819 tests (102 XML suites)
-  - `:app:testEnterpriseDebugUnitTest`: 819 tests (102 XML suites)
-  Counts recorded from JUnit XML across module build directories (`gate.py`; `4` executed, `57` up-to-date). Note that GitHub Actions (`atlas.yaml`) runs all four tasks in `verify` plus `sdk-consumer-maven` for isolated Maven artifact consumption.
+  - `:app:testPlayDebugUnitTest`: 830 tests (102 XML suites)
+  - `:app:testEnterpriseDebugUnitTest`: 830 tests (102 XML suites)
+  Counts recorded from JUnit XML across module build directories (`gate.py`; `10` executed, `51` up-to-date). Note that GitHub Actions (`atlas.yaml`) runs all four tasks in `verify` plus `sdk-consumer-maven` for isolated Maven artifact consumption.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Cadence history
   is audited and recorded honestly in `GATE_MATRIX.md`.
 - Pure boundary scan passes: 125 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
@@ -244,11 +244,16 @@
   - Hardened `AndroidGisImporter.importKmz` and `importZippedShapefile` (`ArchiveLimits`, streaming KML via close-shielded `BoundedZipEntryInputStream` with remainder drain, declared-size/compressed/decompressed/ratio/entry-count/timeout bounds, path normalization + zip-slip & duplicate component checks, and single 8 KiB scratch drain for skipped companions).
   - Added 16 unit/adversarial tests in `apps/atlas-android/app/src/test/java/com/sovereignatlas/atlas/android/gis/AndroidGisImporterTest.kt`.
   - Gate (`gate.py`, 2m 43s, 5 executed / 56 up-to-date): 34 / 7 / 819 / 819 = 1,679 tests, 0 failures, 0 errors, 0 skipped; 0 forbidden imports across 124 Kotlin files (`80` app pure + `43` `atlas-sdk` + `1` `sdk-consumer`). Pushed (`bd07b23`), GitHub Actions run `#43600158385` green, Issue `#7` closed.
-- **2026-11-14 — Issue `#8` standalone Maven SDK consumer (`samples/sdk-consumer`) + in-tree `:sdk-consumer` separation (local commit ahead of `origin/main`):**
+- **2026-11-14 — Issue `#8` standalone Maven SDK consumer (`samples/sdk-consumer`) + in-tree `:sdk-consumer` separation:**
   - Preserved in-tree `:sdk-consumer:test` (`7` tests) at `apps/atlas-android/sdk-consumer/` (`apps/atlas-android/settings.gradle` `include(":sdk-consumer")`; updated CI upload path in `.github/workflows/atlas.yaml`).
   - Converted `samples/sdk-consumer/` into a standalone Kotlin `2.1.0` / JVM `17` Gradle `8.13` consumer (own wrapper, `.gitignore`, `README.md`, zero `includeBuild`, zero `project(':atlas-sdk')`, explicit `-PatlasSdkRepo` / `ATLAS_SDK_REPO` / opt-in `-PatlasUseMavenLocal=true`) resolving `com.sovereignatlas:atlas-sdk:1.1.0`.
   - Added `verification` Maven repository to `apps/atlas-android/atlas-sdk/build.gradle`, expanded `ExternalConsumerVerificationTest.kt` (`10` tests covering `1.1.0` GIS/land-patent parsers, binary JAR code-source proof, and missing Android/MapLibre/Compose/Firebase classpath checks), and added dedicated CI job `sdk-consumer-maven` in `.github/workflows/atlas.yaml` with `4` negative missing-publication/artifact/metadata checks + isolated consumer test execution.
-  - Gate (`verify_issue8.py`): purity `0` violations across `125` Kotlin files; host gate `34 / 7 / 819 / 819 = 1,679` tests (`0` failures/errors/skipped; `4` executed, `57` up-to-date); standalone isolated Maven consumer `10` tests (`0` failures/errors/skipped) + `4` clean negative checks (`no-repo`, `empty-repo`, `missing-jar`, `missing-metadata`). Unpushed local commit; APK/device instrumentation unverified.
+  - Gate (`verify_issue8.py`): purity `0` violations across `125` Kotlin files; host gate `34 / 7 / 819 / 819 = 1,679` tests (`0` failures/errors/skipped; `4` executed, `57` up-to-date); standalone isolated Maven consumer `10` tests (`0` failures/errors/skipped) + `4` clean negative checks (`no-repo`, `empty-repo`, `missing-jar`, `missing-metadata`). Pushed (`857c1b5`), GitHub Actions run `#43658961240` green, Issue `#8` closed.
+- **2026-11-14 — Issue `#12` loopback tile-server hardening & atomic quota enforcement (local commit ahead of `origin/main`):**
+  - Hardened `PackTileServer.kt` (`PackTileServerLimits`: `maxWorkers = 8`, `maxQueuedRequests = 16`, `socketReadTimeoutMs = 5_000`, `requestTotalTimeoutMs = 10_000L`, `maxRequestLineBytes = 1024`, `maxHeaderCount = 32`, `maxTotalHeaderBytes = 8192`, `maxTileBytes = 4 MiB`, `acceptBacklog = 32`), preserving strict loopback binding (`127.0.0.1`), bounded worker pool + queue with `503 Service Unavailable` saturation rejection, active client tracking with `stop()` interrupting/closing stalled sockets and joining accept/worker threads cleanly for restart.
+  - Replaced unbounded `BufferedReader`/`File.readBytes()` with `DeadlineBufferedInputStream` + `readAsciiLine` (`400`/`405` with `Allow: GET`/`408`/`414`/`431`) and `readBoundedFileBytes` / `sendBoundedTile` (`413 Content Too Large`). Made `hasQuota` pre-check + atomic `tryReserveQuota` (committed only for valid, size-checked tiles; released via `releaseQuota` on write failure) linearizable across `basemapQuota`, `demQuota`, and `globalCap` without transient `404`/`413` starvation.
+  - Added `8` HTTP/socket/timeout/overload/oversized/lifecycle tests in `PackTileServerTest.kt` and `3` concurrent quota-race tests in `TileBucketQuotaTest.kt` (+11 tests per variant).
+  - Gate (`gate.py`, 1m 31s, `10` executed / `51` up-to-date): `34 / 7 / 830 / 830 = 1,701` tests, `0` failures, `0` errors, `0` skipped; `0` forbidden imports across `125` Kotlin files. Unpushed local commit; APK/device instrumentation unverified.
 
 ## Next moves
 
