@@ -21,3 +21,9 @@ The SDK currently includes generated Meshtastic protocol classes from GPL-3.0 sc
 ## Consequences and release hold
 
 No root license declaration, broad relicensing, public Maven publication or release APK delivery follows from this ADR. The provenance ledger tracks unknowns and supporting evidence; the distribution gate must fail closed when reviewed dispositions, notices or applicable source-delivery evidence are absent. Each proposed artifact and its exact dependency combination needs a documented rights-holder and distribution review. Issue #16 remains open until actual rights and obligations are resolved.
+
+### A4 candidate tooling boundary
+
+The candidate checkout may contain a data packer and workflow-baseline regression diagnostic under `tools/a4/`. Neither is a release authority: candidate source and build claims, the diagnostic baseline, input contents and produced hashes require independent verification. The packer currently supports descriptor-relative Linux operation only and denies on Windows; this is not a Windows acceptance. Preserve the existing local CI workflow and unconditional A3 distribution hold.
+
+The supplied A4 verifier is a prototype, not an independently deployed publisher. A review-only adaptation in an ignored build directory denies every release. No approval can be enabled until independently controlled verifier code and policy, authenticated source and artifact provenance, complete reviewed rights evidence, distinct authorized reviewers and immutable promotion are established. No signing or publishing authority is granted by this decision.
