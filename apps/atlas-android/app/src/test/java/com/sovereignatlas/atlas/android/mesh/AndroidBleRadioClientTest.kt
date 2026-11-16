@@ -47,6 +47,25 @@ import java.util.concurrent.atomic.AtomicLong
 class AndroidBleRadioClientTest {
 
     @Test
+    fun injectedCodecHandlesBleHandshakeAndIncomingMessages() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val codec = RecordingLegacyCodec()
+            val transport = FakeBleGattTransport(onWantConfigWritten = { fake, nonce ->
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(my_info = MyNodeInfo(my_node_num = 10))))
+                fake.readQueue.add(FromRadio.ADAPTER.encode(FromRadio(config_complete_id = nonce)))
+            })
+            val client = AndroidBleRadioClient(null, scope, { transport }, handshakeTimeoutMs = 3_000L, codec = codec)
+            assertTrue(client.connect())
+            assertEquals(1, codec.handshakeCalls.get())
+            assertTrue(codec.decodeCalls.get() >= 2)
+            client.disconnect()
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun timedOutGattWriteQuarantinesFutureWrites() {
         val fence = GattWriteFence()
         assertTrue(fence.canWrite())

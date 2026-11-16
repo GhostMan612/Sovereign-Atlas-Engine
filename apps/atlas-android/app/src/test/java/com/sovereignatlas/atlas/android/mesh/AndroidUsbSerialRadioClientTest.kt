@@ -43,6 +43,26 @@ import org.meshtastic.proto.ToRadio
 class AndroidUsbSerialRadioClientTest {
 
     @Test
+    fun injectedCodecHandlesUsbHandshakeAndIncomingMessages() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val codec = RecordingLegacyCodec()
+            val transport = FakeUsbSerialTransport(onWantConfigWritten = { fake, nonce ->
+                val info = MeshtasticSerialFramer.frame(FromRadio.ADAPTER.encode(FromRadio(my_info = MyNodeInfo(my_node_num = 10))))
+                val complete = MeshtasticSerialFramer.frame(FromRadio.ADAPTER.encode(FromRadio(config_complete_id = nonce)))
+                fake.reads.trySend(UsbReadResult.Data(info + complete))
+            })
+            val client = AndroidUsbSerialRadioClient(null, scope, { transport }, handshakeTimeoutMs = 3_000L, codec = codec)
+            assertTrue(client.connect())
+            assertEquals(1, codec.handshakeCalls.get())
+            assertTrue(codec.decodeCalls.get() >= 2)
+            client.disconnect()
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun partialWriteFollowedByPolicyRevocationIsUnconfirmed() {
         var submissions = 0
         val permit = object : TransmissionPermit {

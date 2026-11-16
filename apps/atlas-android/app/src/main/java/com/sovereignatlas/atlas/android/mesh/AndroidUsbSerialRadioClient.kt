@@ -12,6 +12,7 @@ import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
 import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
 import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession
+import com.sovereignatlas.atlas.tactical.mesh.MeshtasticCodec
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticSerialFramer
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
@@ -37,7 +38,16 @@ class AndroidUsbSerialRadioClient internal constructor(
     private val transportFactory: () -> UsbSerialTransport,
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     private val handshakeTimeoutMs: Long = 10_000L,
+    codec: MeshtasticCodec?,
 ) : MeshRadioClient {
+
+    internal constructor(
+        context: Context?,
+        scope: CoroutineScope,
+        transportFactory: () -> UsbSerialTransport,
+        clockMs: () -> Long = { System.currentTimeMillis() },
+        handshakeTimeoutMs: Long = 10_000L,
+    ) : this(context, scope, transportFactory, clockMs, handshakeTimeoutMs, null)
 
     constructor(
         context: Context,
@@ -48,7 +58,15 @@ class AndroidUsbSerialRadioClient internal constructor(
         transportFactory = { AndroidUsbSerialTransport(context) },
     )
 
-    private val session = MeshtasticProtocolSession(clockMs = clockMs)
+    constructor(context: Context, scope: CoroutineScope, codec: MeshtasticCodec) : this(
+        context = context,
+        scope = scope,
+        transportFactory = { AndroidUsbSerialTransport(context) },
+        codec = codec,
+    )
+
+    private val session = if (codec == null) MeshtasticProtocolSession(clockMs = clockMs)
+        else MeshtasticProtocolSession(wireAdapter = codec, clockMs = clockMs)
     private val connectMutex = Mutex()
     private val writeMutex = Mutex()
     private val connectionGeneration = AtomicLong(0L)

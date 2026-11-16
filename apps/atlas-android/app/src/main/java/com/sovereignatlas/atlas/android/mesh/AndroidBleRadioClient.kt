@@ -12,7 +12,7 @@ import com.sovereignatlas.atlas.tactical.mesh.MeshRadioClient
 import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
 import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import com.sovereignatlas.atlas.tactical.mesh.MeshtasticProtocolSession
-import com.sovereignatlas.atlas.tactical.mesh.MeshtasticWireAdapter
+import com.sovereignatlas.atlas.tactical.mesh.MeshtasticCodec
 import com.sovereignatlas.atlas.tactical.mesh.PacketDeliveryUpdate
 import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
 import com.sovereignatlas.atlas.tactical.mesh.RadioHardwareInfo
@@ -39,7 +39,16 @@ class AndroidBleRadioClient internal constructor(
     private val transportFactory: () -> BleGattTransport,
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     private val handshakeTimeoutMs: Long = 10_000L,
+    codec: MeshtasticCodec?,
 ) : MeshRadioClient {
+
+    internal constructor(
+        context: Context?,
+        scope: CoroutineScope,
+        transportFactory: () -> BleGattTransport,
+        clockMs: () -> Long = { System.currentTimeMillis() },
+        handshakeTimeoutMs: Long = 10_000L,
+    ) : this(context, scope, transportFactory, clockMs, handshakeTimeoutMs, null)
 
     constructor(
         context: Context,
@@ -50,7 +59,15 @@ class AndroidBleRadioClient internal constructor(
         transportFactory = { AndroidBleGattTransport(context) },
     )
 
-    private val session = MeshtasticProtocolSession(clockMs = clockMs)
+    constructor(context: Context, scope: CoroutineScope, codec: MeshtasticCodec) : this(
+        context = context,
+        scope = scope,
+        transportFactory = { AndroidBleGattTransport(context) },
+        codec = codec,
+    )
+
+    private val session = if (codec == null) MeshtasticProtocolSession(clockMs = clockMs)
+        else MeshtasticProtocolSession(wireAdapter = codec, clockMs = clockMs)
     private val connectMutex = Mutex()
     private val gattMutex = Mutex()
     private val drainMutex = Mutex()
@@ -128,7 +145,7 @@ class AndroidBleRadioClient internal constructor(
             }
 
             val mtu = gattMutex.withLock { transport.requestMtu(MeshtasticBleUuids.PREFERRED_MTU) }
-            negotiatedAttPayloadMax = (mtu - 3).coerceIn(20, MeshtasticWireAdapter.MAX_TO_FROM_RADIO_SIZE)
+            negotiatedAttPayloadMax = (mtu - 3).coerceIn(20, MeshtasticCodec.MAX_TO_FROM_RADIO_SIZE)
 
             val discovered = gattMutex.withLock { transport.discoverMeshtasticCharacteristics() }
             if (!discovered) {
