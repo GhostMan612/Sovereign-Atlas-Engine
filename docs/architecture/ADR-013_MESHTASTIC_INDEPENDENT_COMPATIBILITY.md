@@ -19,6 +19,8 @@ This transition exposes codec injection to the session and BLE and USB clients. 
 
 An independently developed implementation is a separate future work item. It must not be produced by translating or consulting the current adapter, generated sources, vendored schemas, or tests that derive their expression from those sources. A directory, WSL installation, agent label, or fresh conversation alone does not establish separation.
 
+The operator is a solo owner and may coordinate the roles; a second human developer is not a prerequisite. Any proposed use of a separately scoped agent must still document the actual access controls, inputs and history, and receive the process and source review described below. Those controls do not by themselves establish legal clearance.
+
 ## Required process before implementation
 
 1. Identify a requirements team and an implementation team with documented identities, access history, responsibilities and conflicts. Obtain qualified review of the proposed process and of the allowed inputs. An agent that has inspected restricted source, including inherited conversation or tool output, cannot be represented as an independently isolated implementer merely by starting another agent.
