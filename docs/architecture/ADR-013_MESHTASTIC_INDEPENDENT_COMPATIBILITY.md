@@ -21,6 +21,8 @@ An independently developed implementation is a separate future work item. It mus
 
 The operator is a solo owner and may coordinate the roles; a second human developer is not a prerequisite. Any proposed use of a separately scoped agent must still document the actual access controls, inputs and history, and receive the process and source review described below. Those controls do not by themselves establish legal clearance.
 
+The operator approved evaluating Google's `protobuf-javalite` 3.25.5 in a standalone, non-distributed generic wire-primitives project. That evaluation may use local integration code and independent generic tests. It does not approve the runtime or wrapper for an Atlas artifact and does not relax the independent provenance process for Meshtastic-specific message definitions. Preserve the existing distribution hold and assess the exact runtime, its notices, dependency graph and artifact contents before any later integration.
+
 ## Required process before implementation
 
 1. Identify a requirements team and an implementation team with documented identities, access history, responsibilities and conflicts. Obtain qualified review of the proposed process and of the allowed inputs. An agent that has inspected restricted source, including inherited conversation or tool output, cannot be represented as an independently isolated implementer merely by starting another agent.
