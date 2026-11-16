@@ -14,10 +14,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
 
 class MeshtasticProtocolSession(
-    private val wireAdapter: MeshtasticWireAdapter = MeshtasticWireAdapter(),
+    private val wireAdapter: MeshtasticCodec,
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     private val acknowledgementTimeoutMs: Long = 120_000L,
 ) {
+    constructor() : this(MeshtasticWireAdapter(), { System.currentTimeMillis() }, 120_000L)
+
+    constructor(
+        wireAdapter: MeshtasticWireAdapter = MeshtasticWireAdapter(),
+        clockMs: () -> Long = { System.currentTimeMillis() },
+        acknowledgementTimeoutMs: Long = 120_000L,
+    ) : this(MeshtasticLegacyCodec(wireAdapter), clockMs, acknowledgementTimeoutMs)
+
     data class PreparedTransmission(
         val packet: MeshPacket,
         val toRadioBytes: ByteArray,
@@ -117,7 +125,7 @@ class MeshtasticProtocolSession(
 
     fun prepareOutgoingPacket(
         packet: MeshPacket,
-        maxEnvelopeBytes: Int = MeshtasticWireAdapter.MAX_TO_FROM_RADIO_SIZE,
+        maxEnvelopeBytes: Int = MeshtasticCodec.MAX_TO_FROM_RADIO_SIZE,
     ): PreparedTransmission? {
         val normalized: MeshPacket
         synchronized(lock) {
