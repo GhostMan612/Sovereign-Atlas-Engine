@@ -22,6 +22,8 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,15 +131,22 @@ fun SharingIndicatorCompact(
     policy: WaypointSharingPolicy,
     modifier: Modifier = Modifier,
 ) {
+    // The fuller indicator description lives on the ROW's semantics, not on the
+    // Icon. Two focus targets announcing the same string is worse than either
+    // alone: screen readers call the composition twice ("Sharing: permitted for
+    // team peers ... Team"). Announcing it once, from the row, is what a screen
+    // reader is supposed to hear when the operator tabs to the badge.
     val tint = sharingTintFor(policy)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.testTag("sharing-badge-${policy.storedValue}"),
+        modifier = modifier
+            .testTag("sharing-badge-${policy.storedValue}")
+            .semantics { contentDescription = WaypointSharingUi.indicatorDescriptionFor(policy) },
     ) {
         Icon(
             imageVector = sharingIconFor(policy),
-            contentDescription = WaypointSharingUi.indicatorDescriptionFor(policy),
+            contentDescription = null,
             tint = tint,
             modifier = Modifier.size(16.dp),
         )

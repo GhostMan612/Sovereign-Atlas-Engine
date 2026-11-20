@@ -225,21 +225,24 @@ fun AtlasTelemetryHud(
                         borderColor = Color(0x80F4B85C),
                     )
                 } else {
-                    if (verdict.status == LoSStatus.Clear) {
-                        HudTelemetryPill(
-                            text = "CLEAR",
-                            textColor = Color(0xFF39FF14),
-                            borderColor = Color(0x8039FF14),
-                            iconRes = R.drawable.ic_tool_los,
-                        )
-                    } else {
-                        HudTelemetryPill(
-                            text = "OBSTRUCTED at ${verdict.blockingDistanceMeters?.toInt()}m",
-                            textColor = Color(0xFFFF4444),
-                            borderColor = Color(0x80FF4444),
-                            iconRes = R.drawable.ic_tool_los,
-                        )
-                    }
+                    // The HUD reads LosRenderStyle.label — the canonical short verdict.
+                    // Before this change it had "CLEAR" / "OBSTRUCTED at Xm", the
+                    // sheet had "CLEAR LINE OF SIGHT" / "LINE OF SIGHT BLOCKED", and
+                    // the chart read longer captions — three words for one verdict.
+                    // One source now.
+                    val style = LosRenderStyle.forStatus(verdict.status)
+                    HudTelemetryPill(
+                        text = if (verdict.status == LoSStatus.BlockedTerrain &&
+                            verdict.blockingDistanceMeters != null
+                        ) {
+                            "${style.label} at ${verdict.blockingDistanceMeters.toInt()}m"
+                        } else {
+                            style.label
+                        },
+                        textColor = style.color,
+                        borderColor = style.color.copy(alpha = 0.5f),
+                        iconRes = R.drawable.ic_tool_los,
+                    )
                 }
             }
         }

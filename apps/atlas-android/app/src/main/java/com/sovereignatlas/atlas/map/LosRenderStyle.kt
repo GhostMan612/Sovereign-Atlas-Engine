@@ -49,12 +49,21 @@ enum class LosRenderStyle(
      * Worth recording so the next edit does not repeat it.
      */
     val lineDashArray: Array<Float>?,
+    /**
+     * Short HUD label.
+     *
+     * The compaction distinct from [captionFor]: the HUD pill shows the verdict in
+     * a handful of characters; the drop sheet reads sentences. The two must not say
+     * different things about the same verdict — which is why the wording is defined
+     * once here and both surfaces read it.
+     */
+    val label: String,
 ) {
     /** Measured everywhere, ray clears. The only unqualified green on this map. */
-    CLEAR("#39FF14", 3.0f, null),
+    CLEAR("#39FF14", 3.0f, null, "CLEAR"),
 
     /** Measured everywhere, terrain blocks. Red asserts a terrain finding. */
-    BLOCKED("#FF0000", 3.0f, null),
+    BLOCKED("#FF0000", 3.0f, null, "BLOCKED"),
 
     /**
      * A DEM answered but not everywhere along the path.
@@ -64,7 +73,7 @@ enum class LosRenderStyle(
      * engine ABORTED over the gap rather than guessing, and the paint says the same
      * thing the verdict said.
      */
-    INCOMPLETE("#9E9E9E", 3.0f, arrayOf(6.0f, 4.0f)),
+    INCOMPLETE("#9E9E9E", 3.0f, arrayOf(6.0f, 4.0f), "PARTLY MEASURED"),
 
     /**
      * No elevation source. Amber, and deliberately the ONLY amber.
@@ -72,7 +81,7 @@ enum class LosRenderStyle(
      * This is the status that means an action is available: mount an offline DEM.
      * Sharing a colour with the error states would hide that.
      */
-    NO_TERRAIN_DATA("#FFA500", 3.0f, arrayOf(2.0f, 3.0f)),
+    NO_TERRAIN_DATA("#FFA500", 3.0f, arrayOf(2.0f, 3.0f), "NO TERRAIN DATA"),
 
     /**
      * The geometry was degenerate, or the provider broke its contract.
@@ -82,11 +91,24 @@ enum class LosRenderStyle(
      * error Phase 9 §9.5 forbids. It must not read as "blocked" and must not read
      * as "you could shoot through this".
      */
-    UNRELIABLE("#7A6E9E", 2.0f, arrayOf(3.0f, 3.0f)),
+    UNRELIABLE("#7A6E9E", 2.0f, arrayOf(3.0f, 3.0f), "UNRELIABLE"),
 
     /** No calculation has run. Thin, so it is visibly a placeholder. */
-    UNKNOWN("#4A4A4A", 1.5f, arrayOf(1.0f, 4.0f)),
+    UNKNOWN("#4A4A4A", 1.5f, arrayOf(1.0f, 4.0f), "NOT CALCULATED"),
     ;
+
+    /**
+     * Compose [Color] form, for HUD/sheet/chart paint.
+     *
+     * Built by hand rather than `Color.parseColor`: that API is `androidx.compose.ui.
+     * graphics.Color` companion's, which the pure-geo purity scan has historically
+     * been fine with but nobody had exercised yet, and the hex strings here are
+     * opaque six-digits by construction — parsing buys nothing.
+     */
+    val color: androidx.compose.ui.graphics.Color
+        get() = androidx.compose.ui.graphics.Color(
+            lineColor.removePrefix("#").toLong(16) or 0xFF000000L,
+        )
 
     companion object {
         /**

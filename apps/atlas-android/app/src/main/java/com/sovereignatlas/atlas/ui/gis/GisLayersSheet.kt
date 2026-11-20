@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,6 +40,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -84,6 +86,10 @@ fun GisLayersSheet(
     onUpdateStyle: (String, GisStyle) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Set when the operator taps the red Delete on a dataset; confirmed before
+    // onDeleteDataset runs. Destructive with no confirmation (previously the
+    // difference between "open in a new tab" and "all my layers gone").
+    var deleteTarget by remember { mutableStateOf<GisDataset?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -177,7 +183,7 @@ fun GisLayersSheet(
                         GisDatasetCard(
                             dataset = dataset,
                             onToggleVisibility = { isVis -> onToggleVisibility(dataset.id, isVis) },
-                            onDelete = { onDeleteDataset(dataset.id) },
+                            onDelete = { deleteTarget = dataset },
                             onStyleChange = { newStyle -> onUpdateStyle(dataset.id, newStyle) },
                         )
                     }
@@ -185,6 +191,48 @@ fun GisLayersSheet(
             }
         }
     }
+
+    val target = deleteTarget
+    if (target != null) {
+        ConfirmDeleteDatasetDialog(
+            dataset = target,
+            onConfirm = {
+                onDeleteDataset(target.id)
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDeleteDatasetDialog(
+    dataset: GisDataset,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete dataset", color = Color.White) },
+        text = {
+            Text(
+                text = "Permanently delete \"${dataset.name}\" (${dataset.featureCount} features)?",
+                color = MutedText,
+                fontSize = 13.sp,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
