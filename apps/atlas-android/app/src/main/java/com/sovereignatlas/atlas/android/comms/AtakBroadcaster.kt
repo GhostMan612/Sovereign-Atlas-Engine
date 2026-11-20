@@ -7,28 +7,23 @@ package com.sovereignatlas.atlas.android.comms
 
 import com.sovereignatlas.atlas.android.mesh.MeshTransportSupervisor
 import com.sovereignatlas.atlas.android.settings.SettingsRepository
+import com.sovereignatlas.atlas.android.settings.CloudPolicySnapshot
 import com.sovereignatlas.atlas.geo.cot.ChatMessage
 import com.sovereignatlas.atlas.geo.cot.CotProtobufGenerator
 import com.sovereignatlas.atlas.geo.cot.PliBroadcastScheduler
 import com.sovereignatlas.atlas.geo.cot.SyncProvider
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
-import com.sovereignatlas.atlas.tactical.mesh.RadioConnectionState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class AtakBroadcaster(
     private val listener: AtakMulticastListener,
     private val localUid: String,
     private val settingsRepository: SettingsRepository,
-    private val syncProvider: SyncProvider? = null,
+    private val syncProvider: () -> SyncProvider = { OfflineSyncProvider },
     private val scheduler: PliBroadcastScheduler = PliBroadcastScheduler(),
     private val meshSupervisor: MeshTransportSupervisor? = null,
 ) {
-    private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     suspend fun broadcastPli(
         lat: Double,
         lon: Double,
@@ -36,7 +31,8 @@ class AtakBroadcaster(
         ce: Double?,
         fixTimeMillis: Long,
     ) {
-        val profile = settingsRepository.networkProfile.value
+        val snapshot = settingsRepository.cloudPolicy.snapshot()
+        val profile = snapshot.profile
         if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ||
             profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY) {
             return
@@ -62,26 +58,26 @@ class AtakBroadcaster(
             geoPoint = geoPoint,
             ceFallback = ce,
         )
-        listener.sendMulticast(payload)
+        settingsRepository.cloudPolicy.meshPermit(snapshot).submit { listener.sendMulticast(payload) }
         val supervisor = meshSupervisor
         if (supervisor != null && supervisor.canTransmit()) {
             val radio = supervisor.radioClient
             if (radio.isReady.value) {
                 val myNode = supervisor.activeRadioInfo.value?.nodeNum ?: 0L
-                radio.transmitPacket(
+                supervisor.sendPacket(
                     MeshPacket(
                         from = myNode,
                         to = 0xFFFFFFFFL,
                         portNum = PortNum.PORTNUM_ATAK_PLUGIN,
                         payload = payload,
-                    )
+                    ), snapshot
                 )
             }
         }
     }
 
-    suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double): MarkerSendResult {
-        val profile = settingsRepository.networkProfile.value
+    suspend fun sendMarker(type: String, callsign: String, lat: Double, lon: Double, snapshot: CloudPolicySnapshot = settingsRepository.cloudPolicy.snapshot()): MarkerSendResult {
+        val profile = snapshot.profile
         if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE ||
             profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY) {
             throw IllegalStateException("Markers require an active mesh profile")
@@ -95,31 +91,32 @@ class AtakBroadcaster(
             geoPoint = geoPoint,
             markerUid = markerUid
         )
-        val sentMulticast = listener.sendMulticast(payload)
+        val sentMulticast = settingsRepository.cloudPolicy.meshPermit(snapshot).submit { listener.sendMulticast(payload) } ?: false
         val supervisor = meshSupervisor
-        val sentMesh = if (supervisor != null && supervisor.canTransmit()) {
+        val meshOutcome = if (supervisor != null && supervisor.canTransmit()) {
             runCatching {
-                supervisor.sendCotMarker(type, callsign, lat, lon)
-            }.getOrDefault(false)
+                supervisor.sendCotMarkerOutcome(type, callsign, lat, lon, snapshot)
+            }.getOrDefault(TransmissionOutcome.UNCONFIRMED)
         } else {
-            false
+            TransmissionOutcome.NOT_SUBMITTED
         }
-        return MarkerSendResult(markerUid, sentMulticast || sentMesh)
+        return MarkerSendResult(markerUid, sentMulticast || meshOutcome == TransmissionOutcome.SUBMITTED, meshOutcome)
     }
 
     suspend fun sendChatMessage(
         text: String,
         currentGeoPoint: com.sovereignatlas.atlas.geo.GeoPoint?,
+        snapshot: CloudPolicySnapshot,
         targetUid: String? = null,
-    ): ChatMessage {
-        val profile = settingsRepository.networkProfile.value
+        messageId: String = java.util.UUID.randomUUID().toString(),
+    ): ChatSendResult {
+        val profile = snapshot.profile
         if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.RADIO_SILENCE) {
             throw IllegalStateException("Radio Silence (EMCON) is Active")
         }
         if (currentGeoPoint == null) throw IllegalStateException("No GPS fix")
 
         val callsign = settingsRepository.callsign.value
-        val messageId = java.util.UUID.randomUUID().toString()
         val chatroom = "All Chat Rooms"
         val remarksTo = targetUid ?: chatroom
 
@@ -133,11 +130,6 @@ class AtakBroadcaster(
             targetUid = targetUid,
         )
 
-        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.MESH_ONLY ||
-            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
-            listener.sendMulticast(payload)
-        }
-
         val sent = ChatMessage(
             messageId = messageId,
             senderUid = localUid,
@@ -148,15 +140,17 @@ class AtakBroadcaster(
             timestampMillis = System.currentTimeMillis(),
             isSelf = true,
         )
-        if (profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.CLOUD_ONLY ||
-            profile == com.sovereignatlas.atlas.android.settings.NetworkProfile.HYBRID_BRIDGE) {
-            pushScope.launch {
-                syncProvider?.pushChatMessage(sent)
-            }
+        return deliverChat(profile, sent, settingsRepository.cloudPolicy, syncProvider, snapshot.authorization, settingsRepository.chatOutbox) {
+            settingsRepository.cloudPolicy.meshPermit(snapshot).submit { listener.sendMulticast(payload) } ?: false
         }
-        return sent
+    }
+
+    suspend fun retryCloudMessage(message: ChatMessage, snapshot: CloudPolicySnapshot): ChatSendResult {
+        require(message.senderUid == localUid)
+        require(settingsRepository.chatOutbox.pending.value.contains(message))
+        return deliverChat(snapshot.profile, message, settingsRepository.cloudPolicy, syncProvider, snapshot.authorization, settingsRepository.chatOutbox) { false }
     }
 }
 
 /** Outcome of a marker drop: the wire uid plus whether the radio actually sent. */
-data class MarkerSendResult(val uid: String, val transmitted: Boolean)
+data class MarkerSendResult(val uid: String, val transmitted: Boolean, val meshOutcome: TransmissionOutcome = TransmissionOutcome.NOT_SUBMITTED)

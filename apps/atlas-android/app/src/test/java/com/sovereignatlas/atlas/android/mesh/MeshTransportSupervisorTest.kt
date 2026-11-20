@@ -6,13 +6,16 @@
 package com.sovereignatlas.atlas.android.mesh
 
 import com.sovereignatlas.atlas.android.settings.NetworkProfile
+import com.sovereignatlas.atlas.android.settings.CloudPolicyCoordinator
 import com.sovereignatlas.atlas.geo.cot.CotMessageRouter
 import com.sovereignatlas.atlas.geo.cot.MarkerStore
 import com.sovereignatlas.atlas.geo.cot.MessageStore
 import com.sovereignatlas.atlas.geo.cot.PliStore
 import com.sovereignatlas.atlas.tactical.dtn.FragmentStore
+import com.sovereignatlas.atlas.tactical.dtn.FragmentTier
 import com.sovereignatlas.atlas.tactical.mesh.ChunkPacketCodec
 import com.sovereignatlas.atlas.tactical.mesh.FragmentAckCodec
+import com.sovereignatlas.atlas.tactical.mesh.FragmentAckReport
 import com.sovereignatlas.atlas.tactical.mesh.MeshPacket
 import com.sovereignatlas.atlas.tactical.mesh.MockMeshRadioClient
 import com.sovereignatlas.atlas.tactical.mesh.PortNum
@@ -31,13 +34,19 @@ class MeshTransportSupervisorTest {
 
     private class TestHarness(
         scope: kotlinx.coroutines.CoroutineScope,
-        var activeProfile: NetworkProfile = NetworkProfile.MESH_ONLY,
+        initialProfile: NetworkProfile = NetworkProfile.MESH_ONLY,
+        clock: () -> Long = System::currentTimeMillis,
     ) : java.io.Closeable {
+        private val policy = CloudPolicyCoordinator(initialProfile)
+        var activeProfile: NetworkProfile = initialProfile
+            set(value) {
+                policy.transition(value) { field = value }
+            }
         val mockRadio = MockMeshRadioClient(initialState = RadioConnectionState.CONNECTED)
         val pliStore = PliStore(localDeviceUid = "test-node")
         val markerStore = MarkerStore(scope)
         val messageStore = MessageStore(localDeviceUid = "test-node")
-        val fragmentStore = FragmentStore()
+        val fragmentStore = FragmentStore(clock = clock)
 
         val cotRouter = CotMessageRouter(
             pliStore = pliStore,
@@ -53,6 +62,7 @@ class MeshTransportSupervisorTest {
             fragmentStore = fragmentStore,
             localUid = "test-node",
             scope = scope,
+            transmissionPolicy = policy,
         )
 
         override fun close() {
@@ -63,7 +73,7 @@ class MeshTransportSupervisorTest {
 
     @Test
     fun strictEmconBlocksTransmissions() = runTest {
-        val harness = TestHarness(scope = backgroundScope, activeProfile = NetworkProfile.RADIO_SILENCE)
+        val harness = TestHarness(scope = backgroundScope, initialProfile = NetworkProfile.RADIO_SILENCE)
         try {
             assertFalse(harness.supervisor.canTransmit())
 
@@ -90,7 +100,7 @@ class MeshTransportSupervisorTest {
 
     @Test
     fun cloudOnlyProfileBlocksTransmissions() = runTest {
-        val harness = TestHarness(scope = backgroundScope, activeProfile = NetworkProfile.CLOUD_ONLY)
+        val harness = TestHarness(scope = backgroundScope, initialProfile = NetworkProfile.CLOUD_ONLY)
         try {
             assertFalse(harness.supervisor.canTransmit())
 
@@ -109,7 +119,7 @@ class MeshTransportSupervisorTest {
 
     @Test
     fun meshOnlyProfileAllowsTransmissions() = runTest {
-        val harness = TestHarness(scope = backgroundScope, activeProfile = NetworkProfile.MESH_ONLY)
+        val harness = TestHarness(scope = backgroundScope, initialProfile = NetworkProfile.MESH_ONLY)
         try {
             assertTrue(harness.supervisor.canTransmit())
 
@@ -231,6 +241,49 @@ class MeshTransportSupervisorTest {
         } finally {
             sender.close()
             receiver.close()
+        }
+    }
+
+    @Test
+    fun existingInboundTransferWithoutPermitCannotAcquireFreshAuthorization() = runTest {
+        val epoch = System.currentTimeMillis()
+        val receiver = TestHarness(scope = backgroundScope, clock = { epoch + testScheduler.currentTime })
+        try {
+            testScheduler.runCurrent()
+            receiver.fragmentStore.registerInbound("old-transfer", 0, 3, FragmentTier.PUBLIC, "peer", epoch + 600_000L, byteArrayOf(1))
+            receiver.activeProfile = NetworkProfile.RADIO_SILENCE
+            receiver.activeProfile = NetworkProfile.MESH_ONLY
+            val chunk = ChunkPacketCodec.encode("old-transfer", 1, 3, byteArrayOf(2))!!
+            receiver.mockRadio.simulateInboundPacket(MeshPacket(from = 2, to = 1, portNum = PortNum.PORTNUM_ATAK_PLUGIN, payload = chunk))
+            val fresh = ChunkPacketCodec.encode("fresh-transfer", 0, 3, byteArrayOf(3))!!
+            receiver.mockRadio.simulateInboundPacket(MeshPacket(from = 2, to = 1, portNum = PortNum.PORTNUM_ATAK_PLUGIN, payload = fresh))
+            testScheduler.runCurrent()
+            testScheduler.advanceTimeBy(5_001L)
+            testScheduler.runCurrent()
+            val sent = receiver.mockRadio.transmittedPackets.toList()
+            assertEquals(1, sent.size)
+            assertEquals("fresh-transfer", FragmentAckCodec.decode(sent.single().payload)!!.single().transferId)
+        } finally {
+            receiver.close()
+        }
+    }
+
+    @Test
+    fun repairDoesNotReuseAuthorizationAfterRadioSilence() = runTest {
+        val sender = TestHarness(scope = backgroundScope)
+        try {
+            testScheduler.runCurrent()
+            assertTrue(sender.supervisor.sendCotMarker("a-h-G", "LONG-".repeat(300), 37.77, -122.41))
+            val original = sender.mockRadio.transmittedPackets.toList()
+            val first = ChunkPacketCodec.decode(original.first().payload)!!
+            val report = FragmentAckReport(first.transferId, 1, first.totalChunks, 0, 0, booleanArrayOf(true))
+            sender.activeProfile = NetworkProfile.RADIO_SILENCE
+            sender.activeProfile = NetworkProfile.MESH_ONLY
+            sender.mockRadio.simulateInboundPacket(MeshPacket(from = 2, to = 1, portNum = PortNum.PORTNUM_ATAK_PLUGIN, payload = FragmentAckCodec.encode(listOf(report))))
+            testScheduler.runCurrent()
+            assertEquals(original.size, sender.mockRadio.transmittedPackets.size)
+        } finally {
+            sender.close()
         }
     }
 

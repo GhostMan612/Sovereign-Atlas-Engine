@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -136,11 +137,16 @@ fun WorkspaceQuickChip(
         animationSpec = tween(animMs),
         label = "chipContent",
     )
+    // defaultMinSize, not padding tweaks: ~11sp text is ~15dp, so at
+    // vertical padding 5+5 the component is ~25dp tall — below the 48dp
+    // minimum a 2-9mm finger target requires. Android's standard is to
+    // guarantee the touch area, not just to enlarge the glyph.
     Surface(
         onClick = onClick,
         color = fill,
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, border),
+        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
     ) {
         Text(
             text = label,

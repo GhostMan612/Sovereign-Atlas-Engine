@@ -41,6 +41,7 @@ All wire marshaling and protocol state live in pure JVM package `com.sovereignat
   - Negotiated ATT payload capacity `(mtu - 3).coerceAtLeast(20)` (capped at `512`) is enforced prior to writing `ToRadio`.
   - After enabling notifications and writing `ToRadio(want_config_id)`, and on every `FromNum` notification, the client drains `FromRadio` via sequential reads until `FromRadio` returns an empty byte array (`0` bytes).
 - **USB Serial (`AndroidUsbSerialRadioClient` + `UsbSerialTransport`):**
+  - FTDI vendor `0x0403` is unsupported: its input status bytes and vendor-specific initialization are not implemented. Reject it even when it advertises a CDC interface. Other hardware support remains subject to real-device acceptance.
   - Uses `MeshtasticFrameCodec` (`0x94 0xC3` magic + 2-byte big-endian length, maximum `512` bytes) for both `ToRadio` writes and `FromRadio` reads, prefixed on connect by a 32-byte `0xC3` wake preamble (`StreamAPI` compatible).
   - Read loop begins before transmitting `want_config_id` so early handshake frames are never dropped.
   - Reassembles partial/split USB bulk transfers across read calls and distinguishes benign read poll timeouts from terminal I/O / detach errors.

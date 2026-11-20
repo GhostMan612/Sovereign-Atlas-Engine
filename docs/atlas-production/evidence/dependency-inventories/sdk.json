@@ -1,0 +1,213 @@
+{
+    "schema": "atlas-distribution-inventory/v1",
+    "configuration": "runtimeClasspath",
+    "artifacts": [
+        {
+            "group": "com.squareup.okio",
+            "name": "okio-jvm",
+            "version": "3.17.0",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "3b13dcc3e1573047c2d507fc4f7fcb0bb0cbcd9d395da21d20e09406e2cd6a73",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "com.squareup.wire",
+            "name": "wire-runtime-jvm",
+            "version": "6.4.7",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "83d56e2b348429ebc975aad62870c1b1e3dd1e9dc6eab6d618abacbeee66280f",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "org.jetbrains.kotlin",
+            "name": "kotlin-stdlib",
+            "version": "2.2.21",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "org.jetbrains.kotlinx",
+            "name": "kotlinx-coroutines-core-jvm",
+            "version": "1.10.1",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "069c5988633230e074ec0d39321ec3cdaa4547c49e90ba936c63d8fc91c8c00d",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "org.jetbrains.kotlinx",
+            "name": "kotlinx-serialization-core-jvm",
+            "version": "1.7.3",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "f0adde45864144475385cf4aa7e0b7feb27f61fcf9472665ed98cc971b06b1eb",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "org.jetbrains.kotlinx",
+            "name": "kotlinx-serialization-json-jvm",
+            "version": "1.7.3",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "b1e9138499ed8d20375edda3f2b1c95f3103a258eff6af9edc5ea07100f2b29c",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        },
+        {
+            "group": "org.jetbrains",
+            "name": "annotations",
+            "version": "23.0.0",
+            "classifier": null,
+            "extension": "jar",
+            "sha256": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05",
+            "licenseMetadata": "UNREVIEWED",
+            "provenance": "UNREVIEWED"
+        }
+    ],
+    "dependencies": [
+        {
+            "from": "com.squareup.okio:okio-jvm:3.17.0",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.1.21",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "com.squareup.okio:okio:3.17.0",
+            "requested": "com.squareup.okio:okio-jvm:3.17.0",
+            "selected": "com.squareup.okio:okio-jvm:3.17.0"
+        },
+        {
+            "from": "com.squareup.wire:wire-runtime-jvm:6.4.7",
+            "requested": "com.squareup.okio:okio:3.17.0",
+            "selected": "com.squareup.okio:okio:3.17.0"
+        },
+        {
+            "from": "com.squareup.wire:wire-runtime-jvm:6.4.7",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.0.21",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "com.squareup.wire:wire-runtime:6.4.7",
+            "requested": "com.squareup.wire:wire-runtime-jvm:6.4.7",
+            "selected": "com.squareup.wire:wire-runtime-jvm:6.4.7"
+        },
+        {
+            "from": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+            "requested": "org.jetbrains:annotations:13.0",
+            "selected": "org.jetbrains:annotations:23.0.0"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.1",
+            "requested": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1",
+            "selected": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.1",
+            "requested": "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
+            "selected": "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.1.0",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1",
+            "requested": "org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.1",
+            "selected": "org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.1"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1",
+            "requested": "org.jetbrains:annotations:23.0.0",
+            "selected": "org.jetbrains:annotations:23.0.0"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
+            "requested": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1",
+            "selected": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.0.20",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.0.20",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-bom:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3"
+        },
+        {
+            "from": "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3"
+        },
+        {
+            "from": "project :atlas-sdk",
+            "requested": "com.squareup.wire:wire-runtime:6.4.7",
+            "selected": "com.squareup.wire:wire-runtime:6.4.7"
+        },
+        {
+            "from": "project :atlas-sdk",
+            "requested": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+            "selected": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21"
+        },
+        {
+            "from": "project :atlas-sdk",
+            "requested": "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1",
+            "selected": "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1"
+        },
+        {
+            "from": "project :atlas-sdk",
+            "requested": "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3",
+            "selected": "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+        }
+    ]
+}

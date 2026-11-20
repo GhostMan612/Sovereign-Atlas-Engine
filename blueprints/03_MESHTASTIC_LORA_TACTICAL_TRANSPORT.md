@@ -71,7 +71,7 @@ A raw XML CoT marker can be 600–1200 bytes, exceeding the 237-byte LoRa physic
 ### 3.3 Hardware Drivers (`android/mesh/hardware/`)
 * **USB-Serial Driver:**
   - Implements Android USB Host API (`UsbManager`, `UsbDeviceConnection`).
-  - Supports CH340, CP2102, FTDI, and CDC-ACM without root permissions.
+  - FTDI is unsupported until its status-byte framing and vendor initialization are implemented; device-specific USB driver support requires physical acceptance. CDC-ACM uses Android USB Host without root permissions.
   - Default baud: 115200 8N1.
 * **BLE Driver:**
   - Background BLE scanner and GATT client targeting the Meshtastic BLE Service UUID.

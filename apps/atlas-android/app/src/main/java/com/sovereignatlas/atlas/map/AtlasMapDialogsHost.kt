@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -121,7 +123,9 @@ fun AtlasCommandCenterSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                // 17+ ToolRows on a ~4" phone overflow; scrollable like LayersDialog.
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
@@ -385,17 +389,13 @@ fun AtlasTargetDropSheet(
                     )
                 } else {
                     TerrainProfileChart(profile = losProfile)
+                    // Reads the canonical caption from LosRenderStyle. before
+                    // this, this said "CLEAR LINE OF SIGHT" / "LINE OF SIGHT BLOCKED"
+                    // / "LINE OF SIGHT UNDETERMINED" while the HUD said "CLEAR" and
+                    // the chart read "Clear — measured". One source now.
                     Text(
-                        text = when (losProfile.lineOfSight.status) {
-                            LoSStatus.Clear -> "CLEAR LINE OF SIGHT"
-                            LoSStatus.BlockedTerrain -> "LINE OF SIGHT BLOCKED"
-                            else -> "LINE OF SIGHT UNDETERMINED"
-                        },
-                        color = when (losProfile.lineOfSight.status) {
-                            LoSStatus.Clear -> Color.Green
-                            LoSStatus.BlockedTerrain -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.tertiary
-                        },
+                        text = LosRenderStyle.captionFor(losProfile.lineOfSight.status),
+                        color = LosRenderStyle.forStatus(losProfile.lineOfSight.status).color,
                         modifier = Modifier.padding(bottom = 16.dp),
                     )
                 }
@@ -529,8 +529,9 @@ fun AtlasMapDialogsHost(
             networkProfile = networkProfile,
             nodes = nodes,
             onPingNode = { nodeNum ->
+                val snapshot = services.settingsRepository.cloudPolicy.snapshot()
                 scope.launch {
-                    services.meshSupervisor?.pingNode(nodeNum)
+                    services.meshSupervisor?.pingNode(nodeNum, snapshot)
                 }
             },
             onDirectTargetDrop = { node ->

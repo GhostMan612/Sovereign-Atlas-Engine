@@ -6,6 +6,7 @@
 package com.sovereignatlas.atlas.android
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -15,52 +16,40 @@ class ReleasePipelineContractTest {
     private fun findRepoRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".").canonicalFile
         val root = generateSequence(start) { it.parentFile }.firstOrNull { dir ->
-            File(dir, ".github/workflows/atlas.yaml").isFile &&
+            File(dir, ".github/workflows/atlas-ci-safe.yml").isFile &&
                 File(dir, "apps/atlas-android/app/build.gradle").isFile
         }
-        assertNotNull("Expected repository root containing .github/workflows/atlas.yaml", root)
+        assertNotNull("Expected repository root containing .github/workflows/atlas-ci-safe.yml", root)
         return root!!
     }
 
     private fun readWorkflow(): String {
-        return File(findRepoRoot(), ".github/workflows/atlas.yaml")
+        return File(findRepoRoot(), ".github/workflows/atlas-ci-safe.yml")
             .readText(Charsets.UTF_8)
             .replace("\r\n", "\n")
     }
 
-    private fun releaseJobBlock(workflow: String): String {
-        val idx = workflow.indexOf("\n  release:\n")
-        assertTrue("Expected release job in .github/workflows/atlas.yaml", idx >= 0)
-        return workflow.substring(idx)
-    }
-
     @Test
-    fun workflowDeclaresDispatchAndConstrainedReleaseTriggers() {
+    fun workflowRunsOnlyDevelopmentVerification() {
         val workflow = readWorkflow()
         val header = workflow.substringBefore("\njobs:")
-        assertTrue(header.contains("workflow_dispatch:"))
-        assertTrue(header.contains("dry_run:"))
-        assertTrue(header.contains("release_version:"))
         assertTrue(header.contains("- main"))
-        assertTrue(header.contains("- 'v*'"))
-        assertFalse("Arbitrary wildcard tags must not trigger release", header.contains("- '**'"))
+        assertFalse(header.contains("tags:"))
+        assertFalse(header.contains("workflow_dispatch:"))
         assertTrue(header.contains("permissions:\n  contents: read"))
     }
 
     @Test
-    fun releaseJobRequiresPassingTestGatesAndScopedBranches() {
+    fun candidateWorkflowCannotSignOrPublishReleaseArtifacts() {
         val workflow = readWorkflow()
-        val release = releaseJobBlock(workflow)
-
-        assertTrue(release.contains("- verify"))
-        assertTrue(release.contains("- sdk-consumer-maven"))
-        assertTrue(release.contains("startsWith(github.ref, 'refs/tags/v')"))
-        assertTrue(release.contains("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'"))
-        assertTrue(release.contains("contents: write"))
-        assertTrue(release.contains("timeout-minutes:"))
-        assertTrue(release.contains("if-no-files-found: error"))
-        assertTrue(release.contains("retention-days: 90"))
-        assertTrue(release.contains("is_dry_run != 'true' && steps.meta.outputs.is_tag_release == 'true'"))
+        assertTrue(workflow.contains("\n  verify:\n"))
+        assertTrue(workflow.contains("\n  sdk-consumer-maven:\n"))
+        assertFalse(workflow.contains("\n  release:\n"))
+        assertFalse(workflow.contains("contents: write"))
+        assertFalse(workflow.contains("gh release create"))
+        assertFalse(workflow.contains(":app:assemblePlayRelease"))
+        assertFalse(workflow.contains(":app:assembleEnterpriseRelease"))
+        assertFalse(workflow.contains("secrets."))
     }
 
     @Test
@@ -91,28 +80,35 @@ class ReleasePipelineContractTest {
     }
 
     @Test
-    fun workflowEnforcesSecretRedactionCleanupAndApkSignatureVerification() {
-        val release = releaseJobBlock(readWorkflow())
-        val requiredFragments = listOf(
-            "set +x",
-            "umask 077",
-            "mktemp -d",
-            "trap cleanup EXIT",
-            "rm -f app/google-services.json",
-            "rm -f apps/atlas-android/app/google-services.json",
-            ":app:assemblePlayRelease :app:assembleEnterpriseRelease",
-            "*-unsigned.apk",
-            "apksigner",
-            "verify --verbose --print-certs",
-            "SHA256SUMS.txt",
-            "release-manifest.json",
-            "FAIL-CLOSED",
-            "dry-run-manifest.json",
-            "apks_published",
-        )
-        for (fragment in requiredFragments) {
-            assertTrue("Expected release pipeline guard '$fragment'", release.contains(fragment))
+    fun candidateWorkflowDoesNotAccessReleaseCredentials() {
+        val workflow = readWorkflow()
+        for (name in listOf("RELEASE_KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "GOOGLE_SERVICES_JSON_BASE64")) {
+            assertFalse("Candidate workflow must not access $name", workflow.contains(name))
         }
+    }
+
+    @Test
+    fun safeCiDoesNotPersistCheckoutTokensOrUseMutableActionRefs() {
+        val workflow = readWorkflow()
+        val uses = Regex("(?m)^\\s*-?\\s*uses:\\s*([^\\s]+)").findAll(workflow).map { it.groupValues[1] }.toList()
+        assertTrue("Expected third-party actions in CI", uses.isNotEmpty())
+        for (ref in uses) {
+            assertTrue("Action must use an immutable commit SHA: $ref", Regex("^[^@]+@[0-9a-f]{40}$").matches(ref))
+        }
+        assertEquals(2, Regex("(?m)^\\s*persist-credentials:\\s*false\\s*$").findAll(workflow).count())
+        assertFalse(File(findRepoRoot(), ".github/workflows/atlas.yaml").exists())
+        assertTrue(workflow.contains("python3 -B -m unittest discover -s tools/a4/tests -v"))
+    }
+
+    @Test
+    fun standaloneConsumerPipelinePropagatesGradleFailure() {
+        val step = readWorkflow().substringAfter("- name: Verify standalone Maven consumer in isolated directory")
+            .substringBefore("- name: Upload Standalone Consumer Test Reports")
+        val pipeline = "./gradlew test --no-daemon --no-build-cache --rerun-tasks"
+        assertTrue("Expected standalone consumer test pipeline", step.contains(pipeline))
+        assertTrue("Pipe failures must affect the captured status", step.substringBefore(pipeline).contains("set -o pipefail"))
+        assertTrue("Expected captured pipeline status", step.substringAfter(pipeline).contains("EXIT=\$?"))
+        assertTrue("Expected captured pipeline status to determine step result", step.contains("exit \"\$EXIT\""))
     }
 
     @Test

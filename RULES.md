@@ -12,12 +12,19 @@
 
 1. **NO PIECEMEALING.** Only full code: complete files, never snippets, half-functions, or "insert here" instructions.
 2. **NO EXTRA COMMENTS IN CODE.** Zero conversational or explanatory comments inside code. Explanations belong in chat, not the file.
-3. **GENESIS HEADER MANDATORY.** The only permitted comments are the genesis signature. Every new `.dart` / `.kt` / `.py` file begins with exactly:
+3. **GENESIS HEADER MANDATORY.** The only permitted comments are the genesis signature. Every new `.dart` / `.kt` file begins with exactly:
    ```
    // ============================================================
    // As Above, So Below. As Within, So Without.
    // The Future Dictates the Past and the Past is Always Present.
    // ============================================================
+   ```
+   Every new `.py` file begins with the same signature using Python comment syntax:
+   ```
+   # ============================================================
+   # As Above, So Below. As Within, So Without.
+   # The Future Dictates the Past and the Past is Always Present.
+   # ============================================================
    ```
 4. **ABSOLUTE — no grandfathering** (operator directive 2026-09-10).
    All 117 `.dart` files were stripped to genesis-header-only in one

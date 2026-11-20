@@ -131,9 +131,10 @@ Subagents: `atlas-boundary-auditor`, `atlas-gatekeeper`, `atlas-device-smoker`,
   source but nothing draws.
 - `getSourceAs<GeoJsonSource>(id)` returns null instead of throwing, so a style push is a
   silent no-op.
-- CI `.github/workflows/atlas.yaml` runs `verify` (the four host suites matching local gate),
-  `sdk-consumer-maven` (isolated binary artifact consumer), and gated `release` (`v*` semver tags
-  or `workflow_dispatch` on `main`). `verify` has been green since run #72 (2026-09-29);
-  judge a red run by per-step conclusions, not the job conclusion. Reads of CI
+- The proposed local `.github/workflows/atlas-ci-safe.yml` runs the four host suites,
+  the distribution-hold test, A4 candidate checks and the isolated Maven consumer. It has
+  no release job. The historical remote `atlas.yaml` workflow remains disabled; the
+  proposed replacement has not been pushed or run in GitHub Actions. Judge a red run by
+  per-step conclusions, not the job conclusion. Reads of CI
   output need a signed-in human: the step log is sign-in gated, the REST logs
   endpoint returns 403, and artifact download returns 401.

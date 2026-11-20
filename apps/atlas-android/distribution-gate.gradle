@@ -1,0 +1,185 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
+
+apply from: 'distribution-evidence.gradle'
+apply from: 'distribution-gate-tests.gradle'
+
+def digest = { File f ->
+    MessageDigest.getInstance('SHA-256').digest(f.bytes).encodeHex().toString()
+}
+
+ext.validateMeshtasticPin = { File base ->
+    def pinFile = new File(base, 'meshtastic/UPSTREAM_PIN.json')
+    def failures = []
+    if (!pinFile.isFile()) return ['Meshtastic UPSTREAM_PIN.json missing']
+    def pinDigest = MessageDigest.getInstance('SHA-256').digest(
+        pinFile.getText('UTF-8').replace('\r\n', '\n').getBytes('UTF-8')).encodeHex().toString()
+    if (pinDigest != 'a491e2ec8dfc7f0d155da2f6b2bcd4026f3c3398dc99ffde861bb07e9de18327') {
+        failures << 'Meshtastic pin manifest differs from audited manifest'
+    }
+    def pin = new JsonSlurper().parse(pinFile)
+    if (pin.repository != 'https://github.com/meshtastic/protobufs' ||
+        pin.commit != 'ffd5ad428da6db4a7ddfe62e06548718cc2603e0' || pin.tag != 'v2.8.2') {
+        failures << 'Meshtastic upstream identity differs from reviewed pin'
+    }
+    def expected = pin.files.keySet() as Set
+    def actual = fileTree(base).matching { include '**/*.proto' }.files.collect {
+        base.toPath().toAbsolutePath().normalize().relativize(it.toPath().toAbsolutePath().normalize()).toString().replace('\\', '/')
+    } as Set
+    def basePath = base.toPath().toAbsolutePath().normalize()
+    def paths = Files.walk(basePath)
+    try {
+        paths.forEach { path ->
+            def attrs = Files.readAttributes(path, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+            if (attrs.isSymbolicLink() || attrs.isOther() || path.toRealPath(LinkOption.NOFOLLOW_LINKS) != path.toRealPath()) {
+                failures << "Schema tree contains link or reparse entry: ${path}"
+            }
+        }
+    } finally { paths.close() }
+    if (actual != expected) failures << 'Meshtastic proto file set differs from pin'
+    pin.files.each { name, info ->
+        def candidate = new File(base, name)
+        if (!candidate.isFile() || candidate.length() != info.bytes || digest(candidate) != info.sha256) {
+            failures << "Meshtastic pin mismatch: ${name}"
+        }
+    }
+    def license = new File(base, 'meshtastic/LICENSE-GPL-3.0.txt')
+    if (!license.isFile() || digest(license) != pin.licenseSha256) failures << 'Meshtastic GPL license pin mismatch'
+    failures
+}
+
+ext.hashDistributionArtifact = { File artifact, String component ->
+    if (!artifact.isFile()) throw new GradleException("Missing resolved artifact: ${component}")
+    digest(artifact)
+}
+
+ext.validateDistributionInventory = { Map inventory ->
+    def failures = []
+    if (!(inventory.artifacts instanceof Collection) || inventory.artifacts.isEmpty()) failures << 'Resolved artifact inventory is empty'
+    else {
+      def identities = [] as Set
+      inventory.artifacts.each { artifact ->
+        def component = "${artifact.group}:${artifact.name}:${artifact.version}"
+        def identity = [artifact.group, artifact.name, artifact.version, artifact.classifier, artifact.extension]
+        if (!identities.add(identity)) failures << "Duplicate resolved artifact: ${component}"
+        if (!(artifact.sha256 instanceof String) || !(artifact.sha256 ==~ /[0-9a-f]{64}/)) failures << "Missing or invalid artifact SHA-256: ${component}"
+      }
+    }
+    if (!(inventory.dependencies instanceof Collection)) failures << 'Resolved dependency graph missing'
+    else inventory.dependencies.each { edge ->
+        if (!(edge.selected instanceof String) || edge.selected == 'UNRESOLVED' || edge.selected.trim().isEmpty()) failures << "Unresolved dependency: ${edge.from} -> ${edge.requested}"
+    }
+    failures
+}
+
+ext.generateDistributionInventories = { Map configs, File output ->
+        output.mkdirs()
+        configs.each { label, pair ->
+            def configuration = pair[0].configurations.getByName(pair[1])
+            def artifacts = configuration.resolvedConfiguration.resolvedArtifacts.collect { artifact ->
+                [group: artifact.moduleVersion.id.group, name: artifact.name,
+                 version: artifact.moduleVersion.id.version, classifier: artifact.classifier,
+                 extension: artifact.extension, sha256: project.ext.hashDistributionArtifact(artifact.file, "${artifact.moduleVersion.id.group}:${artifact.name}:${artifact.moduleVersion.id.version}"),
+                 licenseMetadata: 'UNREVIEWED', provenance: 'UNREVIEWED']
+            }.sort { a, b -> "${a.group}:${a.name}:${a.version}:${a.classifier}" <=> "${b.group}:${b.name}:${b.version}:${b.classifier}" }
+            def graph = configuration.incoming.resolutionResult.allDependencies.collect { dep ->
+                [from: dep.from.id.displayName, requested: dep.requested.displayName,
+                 selected: dep.hasProperty('selected') ? dep.selected.id.displayName : 'UNRESOLVED']
+            }.sort { a, b -> "${a.from}:${a.requested}:${a.selected}" <=> "${b.from}:${b.requested}:${b.selected}" }
+            def inventory = [schema: 'atlas-distribution-inventory/v1', configuration: pair[1], artifacts: artifacts, dependencies: graph]
+            def errors = project.ext.validateDistributionInventory(inventory)
+            if (!errors.isEmpty()) throw new GradleException("${label}: " + errors.join('; '))
+            new File(output, "${label}.json").text = JsonOutput.prettyPrint(JsonOutput.toJson(inventory)) + '\n'
+        }
+}
+
+def productionInventories = {
+    def configs = [sdk: [project(':atlas-sdk'), 'runtimeClasspath'],
+                   play: [project(':app'), 'playReleaseRuntimeClasspath'],
+                   enterprise: [project(':app'), 'enterpriseReleaseRuntimeClasspath']]
+    project.ext.generateDistributionInventories(configs, layout.buildDirectory.dir('reports/distribution').get().asFile)
+}
+
+tasks.register('atlasDistributionInventory') {
+    doLast { productionInventories() }
+}
+
+def runDistributionGate = { List variants ->
+        def blockers = ['Candidate-controlled verifier cannot authorize distribution; independent trusted publisher required']
+        def report = layout.buildDirectory.file('reports/distribution/gate.json').get().asFile
+        report.parentFile.mkdirs()
+        try {
+            productionInventories()
+            blockers.addAll(project.ext.validateMeshtasticPin(file('atlas-sdk/src/main/proto')))
+            def gitRoot = rootProject.projectDir
+            def runGit = { List args ->
+                def process = new ProcessBuilder(['git'] + args).directory(gitRoot).redirectErrorStream(true).start()
+                def output = process.inputStream.getText('UTF-8').trim()
+                if (process.waitFor() != 0) throw new GradleException("git ${args.join(' ')} failed: ${output}")
+                output
+            }
+            gitRoot = new File(runGit(['rev-parse', '--show-toplevel']))
+            def revision = runGit(['rev-parse', 'HEAD'])
+            def tree = runGit(['rev-parse', 'HEAD^{tree}'])
+            def status = runGit(['status', '--porcelain', '--untracked-files=normal'])
+            def dirty = status.readLines().findAll { it != '?? release-artifacts/' }
+            if (!dirty.isEmpty()) blockers << 'Source checkout is not clean'
+            def names = ['sdk', 'play', 'enterprise']
+            def inventories = names.collectEntries { label -> [(label): digest(new File(report.parentFile, "${label}.json"))] }
+            def trustId = System.getenv('ATLAS_REVIEWER_ID')
+            def trustKey = System.getenv('ATLAS_REVIEWER_PUBLIC_KEY')
+            def evidenceDir = System.getenv('ATLAS_EVIDENCE_DIR')
+            def sourceFile = System.getenv('ATLAS_SOURCE_ARCHIVE')
+            def trustMissing = !trustId || !trustKey || !evidenceDir || !sourceFile
+            if (trustMissing) blockers << 'External reviewer trust, evidence directory, or source archive missing'
+            variants.each { variant ->
+                    def inventory = new JsonSlurper().parse(new File(report.parentFile, "${variant}.json"))
+                    def sdkInventory = new JsonSlurper().parse(new File(report.parentFile, 'sdk.json'))
+                    def components = (inventory.artifacts + sdkInventory.artifacts).collect { "${it.group}:${it.name}:${it.version}" }.unique()
+                    components.addAll(['atlas-sdk', 'meshtastic-generated'])
+                    if (variant != 'sdk') components.addAll(['android-app', 'app-tak-generated'])
+                    components = components.unique().sort()
+                    if (trustMissing) {
+                        blockers.addAll(components.collect { "${variant}: unreviewed distribution rights for ${it}" })
+                    } else {
+                        def artifactPath = System.getenv("ATLAS_${variant.toUpperCase()}_ARTIFACT")
+                        def result = project.ext.validateDistributionEvidence([
+                            approval: new File(evidenceDir, "${variant}.json"), signature: new File(evidenceDir, "${variant}.sig"),
+                            artifact: artifactPath ? new File(artifactPath) : null, sourceArchive: new File(sourceFile),
+                            trustedReviewers: [(trustId): trustKey], expected: [revision: revision, sourceTree: tree,
+                            pin: digest(file('atlas-sdk/src/main/proto/meshtastic/UPSTREAM_PIN.json')),
+                            flavor: variant, inventories: inventories, components: components]])
+                        blockers.addAll(result.collect { "${variant}: ${it}" })
+                        if (!result.isEmpty()) blockers.addAll(components.collect { "${variant}: distribution evidence incomplete for ${it}" })
+                    }
+            }
+        } catch (Exception ex) {
+            blockers << "Distribution evidence or inventory unavailable: ${ex.class.simpleName}: ${ex.message}"
+        }
+        report.text = JsonOutput.prettyPrint(JsonOutput.toJson([schema: 'atlas-distribution-gate/v2', status: blockers.isEmpty() ? 'ALLOW' : 'HOLD', blockers: blockers])) + '\n'
+        if (!blockers.isEmpty()) throw new GradleException('FAIL-CLOSED distribution HOLD:\n - ' + blockers.join('\n - '))
+}
+
+tasks.register('atlasDistributionGate') {
+    doLast { runDistributionGate(['play', 'enterprise']) }
+}
+
+tasks.register('atlasSdkDistributionGate') {
+    doLast { runDistributionGate(['sdk']) }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def fixedRepo = rootProject.layout.buildDirectory.dir('atlas-private-verification/repository').get().asFile.toURI().normalize()
+    def externalPublish = graph.allTasks.findAll { task ->
+        task instanceof org.gradle.api.publish.maven.tasks.PublishToMavenLocal ||
+            (task instanceof org.gradle.api.publish.maven.tasks.PublishToMavenRepository &&
+            !(task.repository.name == 'verification' && task.repository.url.normalize() == fixedRepo))
+    }
+    if (!externalPublish.isEmpty()) {
+        throw new GradleException('FAIL-CLOSED distribution HOLD: remote Maven publication is prohibited pending reviewed rights and notices. Tasks: ' + externalPublish*.path.join(', '))
+    }
+}

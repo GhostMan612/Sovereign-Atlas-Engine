@@ -1,0 +1,119 @@
+import groovy.json.JsonSlurper
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
+import java.security.KeyFactory
+import java.security.MessageDigest
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.time.Instant
+import java.util.zip.ZipFile
+
+ext.validateVerificationPath = { File candidate, File root ->
+    def failures = []
+    try {
+        def raw = candidate.toPath()
+        def base = root.toPath()
+        if (!raw.isAbsolute() || !base.isAbsolute() || raw.toString().startsWith('\\\\') || base.toString().startsWith('\\\\') ||
+            raw.any { it.toString() == '..' || it.toString() == '.' } ||
+            base.any { it.toString() == '..' || it.toString() == '.' } || raw.normalize() != base.normalize().resolve('repository')) {
+            failures << 'Verification repository must be the isolated repository within its private root'
+        }
+        def current = raw.root
+        raw.each { part ->
+            current = current.resolve(part)
+            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                def attrs = Files.readAttributes(current, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+                if (attrs.isSymbolicLink() || attrs.isOther() || current.toRealPath(LinkOption.NOFOLLOW_LINKS) != current.toRealPath()) {
+                    failures << "Verification path contains link or reparse entry: ${current}"
+                }
+            }
+        }
+        if (Files.exists(raw, LinkOption.NOFOLLOW_LINKS)) {
+            def stream = Files.walk(raw)
+            try {
+                stream.forEach { path ->
+                    def attrs = Files.readAttributes(path, BasicFileAttributes, LinkOption.NOFOLLOW_LINKS)
+                    if (attrs.isSymbolicLink() || attrs.isOther() || path.toRealPath(LinkOption.NOFOLLOW_LINKS) != path.toRealPath()) {
+                        failures << "Verification repository contains link or reparse entry: ${path}"
+                    }
+                }
+            } finally { stream.close() }
+        }
+    } catch (Exception ex) {
+        failures << "Invalid verification path: ${ex.message}"
+    }
+    failures
+}
+
+ext.validateDistributionEvidence = { Map request ->
+    def failures = []
+    def sha = { File f -> MessageDigest.getInstance('SHA-256').digest(f.bytes).encodeHex().toString() }
+    def nonblank = { value -> value instanceof String && !value.trim().isEmpty() }
+    try {
+        File approval = request.approval as File
+        File signature = request.signature as File
+        File artifact = request.artifact as File
+        File sourceArchive = request.sourceArchive as File
+        if (!approval?.isFile() || !signature?.isFile()) return ['Signed approval evidence missing']
+        def bytes = approval.bytes
+        def doc = new JsonSlurper().parseText(new String(bytes, 'UTF-8'))
+        if (!(doc instanceof Map) || doc.schema != 'atlas-distribution-approval/v1') return ['Malformed approval schema']
+        def keyText = request.trustedReviewers instanceof Map ? request.trustedReviewers[doc.reviewer] : null
+        if (!nonblank(doc.reviewer) || !nonblank(keyText)) return ['Unauthorized reviewer or missing external trust anchor']
+        def key = KeyFactory.getInstance('Ed25519').generatePublic(new X509EncodedKeySpec(Base64.decoder.decode(keyText)))
+        def verifier = Signature.getInstance('Ed25519')
+        verifier.initVerify(key)
+        verifier.update(bytes)
+        if (!verifier.verify(Base64.decoder.decode(signature.getText('UTF-8').trim()))) return ['Invalid approval signature']
+        if (!nonblank(doc.recordId)) failures << 'Approval record identifier missing'
+        try {
+            def issued = Instant.parse(doc.approvedAt as String)
+            def expires = Instant.parse(doc.expiresAt as String)
+            if (issued.isAfter(Instant.now()) || !expires.isAfter(issued)) failures << 'Approval validity interval malformed'
+            if (!expires.isAfter(Instant.now())) failures << 'Approval expired'
+        } catch (Exception ignored) { failures << 'Approval expiry malformed' }
+        def expected = request.expected
+        if (!(expected instanceof Map)) return failures + ['Expected distribution identity missing']
+        ['revision', 'sourceTree', 'pin', 'flavor'].each { name ->
+            if (!nonblank(expected[name]) || doc[name] != expected[name]) failures << "Approval ${name} mismatch"
+        }
+        if (!(expected.inventories instanceof Map) || expected.inventories.isEmpty() || doc.inventories != expected.inventories) failures << 'Dependency graph inventory mismatch'
+        if (!artifact?.isFile() || doc.artifactSha256 != sha(artifact)) failures << 'Artifact SHA-256 mismatch or missing artifact'
+        if (!(expected.components instanceof Collection) || expected.components.isEmpty() || !(doc.rights instanceof Map) || (doc.rights.keySet() as Set) != (expected.components as Set)) {
+            failures << 'Third-party component disposition coverage mismatch'
+        } else {
+            doc.rights.each { component, rights ->
+                if (!(rights instanceof Map) || !nonblank(rights.license) || (rights.license.trim().toUpperCase(Locale.ROOT) in ['UNKNOWN', 'UNREVIEWED']) || !nonblank(rights.evidence) || !(rights.disposition in ['LICENSED', 'PERMISSION', 'REVIEWED'])) failures << "Incomplete rights disposition: ${component}"
+            }
+        }
+        if (doc.noticeDisposition != 'COMPLETE' || !(doc.notices instanceof List) || doc.notices.isEmpty()) {
+            failures << 'Bundled notices missing'
+        } else if (artifact?.isFile()) {
+            try {
+                def zip = new ZipFile(artifact)
+                try {
+                    def noticePaths = [] as Set
+                    doc.notices.each { notice ->
+                        if (!(notice instanceof Map) || !nonblank(notice.path) || notice.path.startsWith('/') || notice.path.tokenize('/').contains('..')) {
+                            failures << 'Malformed notice path'
+                        } else if (!noticePaths.add(notice.path)) {
+                            failures << "Duplicate notice path: ${notice.path}"
+                        } else {
+                            def entries = zip.entries().findAll { it.name == notice.path }
+                            if (entries.size() != 1 || entries[0].directory) failures << "Bundled notice missing or ambiguous: ${notice.path}"
+                            else {
+                                def actual = MessageDigest.getInstance('SHA-256').digest(zip.getInputStream(entries[0]).bytes).encodeHex().toString()
+                                if (actual != notice.sha256) failures << "Bundled notice hash mismatch: ${notice.path}"
+                            }
+                        }
+                    }
+                } finally { zip.close() }
+            } catch (Exception ex) { failures << "Artifact archive cannot be inspected: ${ex.message}" }
+        }
+        if (!(doc.sourceDelivery instanceof Map) || !nonblank(doc.sourceDelivery.evidence) || !nonblank(doc.sourceDelivery.url) || !doc.sourceDelivery.url.startsWith('https://') || !sourceArchive?.isFile() || doc.sourceDelivery.sha256 != sha(sourceArchive)) failures << 'Corresponding source delivery evidence missing or mismatched'
+    } catch (Exception ex) {
+        failures << "Malformed or unverifiable distribution evidence: ${ex.class.simpleName}: ${ex.message}"
+    }
+    failures
+}

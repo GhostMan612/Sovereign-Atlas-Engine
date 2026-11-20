@@ -1,3 +1,12 @@
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermissions
+import java.nio.file.attribute.AclFileAttributeView
+import java.nio.file.attribute.AclEntry
+import java.nio.file.attribute.AclEntryType
+import java.nio.file.attribute.AclEntryPermission
+import java.nio.file.attribute.AclEntryFlag
+
 plugins {
     id 'java-library'
     id 'org.jetbrains.kotlin.jvm'
@@ -31,11 +40,11 @@ dependencies {
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1'
 }
 
-def atlasVerifyRepoProp = providers.gradleProperty('atlasVerifyRepo').orNull
-def atlasVerifyRepoUri = (atlasVerifyRepoProp != null && !atlasVerifyRepoProp.trim().isEmpty()) ? {
-    def candidate = new File(atlasVerifyRepoProp.trim())
-    return (candidate.isAbsolute() ? candidate : new File(rootProject.projectDir, atlasVerifyRepoProp.trim())).toURI()
-}() : layout.buildDirectory.dir('verification-repo').get().asFile.toURI()
+if (providers.gradleProperty('atlasVerifyRepo').isPresent()) {
+    throw new GradleException('Custom verification repository paths are prohibited')
+}
+def verificationRoot = rootProject.layout.buildDirectory.dir('atlas-private-verification').get().asFile.absoluteFile
+def verificationRepo = new File(verificationRoot, 'repository')
 
 publishing {
     publications {
@@ -49,7 +58,40 @@ publishing {
     repositories {
         maven {
             name = 'verification'
-            url = atlasVerifyRepoUri
+            url = verificationRepo.toURI()
+        }
+    }
+}
+
+tasks.withType(org.gradle.api.publish.maven.tasks.PublishToMavenRepository).configureEach {
+    doFirst {
+        def problems = rootProject.ext.validateVerificationPath(verificationRepo, verificationRoot)
+        if (!problems.isEmpty()) throw new GradleException(problems.join('; '))
+        Files.createDirectories(verificationRoot.toPath())
+        problems = rootProject.ext.validateVerificationPath(verificationRepo, verificationRoot)
+        if (!problems.isEmpty()) throw new GradleException(problems.join('; '))
+        def store = Files.getFileStore(verificationRoot.toPath())
+        def type = store.type().toLowerCase(Locale.ROOT)
+        if (type.contains('nfs') || type.contains('cifs') || type.contains('smb') || type.contains('sshfs') || store.name().startsWith('\\\\')) {
+            throw new GradleException('Verification repository must use a local private filesystem')
+        }
+        def path = verificationRoot.toPath()
+        def user = path.fileSystem.userPrincipalLookupService.lookupPrincipalByName(System.getProperty('user.name'))
+        if (Files.getOwner(path) != user) {
+            throw new GradleException('Verification repository owner differs from the current user')
+        }
+        def posix = Files.getFileAttributeView(path, PosixFileAttributeView)
+        def acl = Files.getFileAttributeView(path, AclFileAttributeView)
+        if (posix != null) {
+            posix.setPermissions(PosixFilePermissions.fromString('rwx------'))
+        } else if (acl != null) {
+            def owner = Files.getOwner(path)
+            def entry = AclEntry.newBuilder().setType(AclEntryType.ALLOW)
+                .setPrincipal(owner).setPermissions(AclEntryPermission.values() as Set)
+                .setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT).build()
+            acl.setAcl([entry])
+        } else {
+            throw new GradleException('Cannot establish private permissions for verification repository')
         }
     }
 }

@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -296,6 +297,9 @@ private fun PacksTab(
     cartoKey: StateFlow<String?>,
     onUsePack: (String) -> Unit,
 ) {
+    // "Del" first opens this; the second dialog below deletes. Previously the
+    // button deleted immediately - a single tap to wipe a downloaded area.
+    var confirmDeleteId by remember { mutableStateOf<String?>(null) }
     val packs = store.packs()
     // Read inside the click, not here. A download started from a tab composed
     // before the key was saved must still use the key stored at the moment of the
@@ -381,7 +385,7 @@ private fun PacksTab(
                                 }
                             }
                             TextButton(
-                                onClick = { store.removePack(pack.packId) },
+                                onClick = { confirmDeleteId = pack.packId },
                             ) {
                                 Text("Del")
                             }
@@ -390,6 +394,24 @@ private fun PacksTab(
                 )
             }
         }
+    }
+    confirmDeleteId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteId = null },
+            title = { Text("Delete pack") },
+            text = {
+                val label = store.packs().firstOrNull { it.packId == id }?.providerTitle ?: id
+                Text("Permanently delete \"$label\"?")
+            },
+            confirmButton = {
+                Button(onClick = { store.removePack(id); confirmDeleteId = null }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteId = null }) { Text("Cancel") }
+            },
+        )
     }
     val events = store.events().take(8)
     if (events.isNotEmpty()) {

@@ -250,6 +250,10 @@ fun TrackDetailDialog(
         return
     }
     val points = trackPointCount(record.geometry)
+    // Delete was the confirm button here; a single tap destroyed the stored track.
+    // Now it opens a confirm dialog below. The two-step matters because TracksDialog
+    // is the only other destructive action with this problem.
+    var pendingDelete by remember(id) { mutableStateOf(false) }
     var profile by remember(id) { mutableStateOf<TrackProfile?>(null) }
     var profileMissing by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id) {
@@ -279,12 +283,7 @@ fun TrackDetailDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    scope.launch {
-                        trackRepository.deleteTrack(id)
-                    }
-                    onClose()
-                },
+                onClick = { pendingDelete = true },
                 modifier = Modifier.testTag("track-delete"),
             ) {
                 Text("Delete")
@@ -296,4 +295,26 @@ fun TrackDetailDialog(
             }
         },
     )
+    if (pendingDelete) {
+        AlertDialog(
+            onDismissRequest = { pendingDelete = false },
+            title = { Text("Delete track") },
+            text = { Text("Permanently delete \"${record.name.ifEmpty { record.id }}\" ($points pts)?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            trackRepository.deleteTrack(id)
+                        }
+                        onClose()
+                    },
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
 }

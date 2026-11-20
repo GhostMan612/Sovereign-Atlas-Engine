@@ -35,6 +35,7 @@ enum class PacketDeliveryStage {
     QUEUED,
     RADIO_ACCEPTED,
     PEER_DELIVERED,
+    UNCONFIRMED,
     FAILED,
 }
 
