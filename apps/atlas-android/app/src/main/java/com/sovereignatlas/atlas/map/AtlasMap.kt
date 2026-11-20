@@ -1604,7 +1604,11 @@ fun AtlasMapScreen(
                         }
                         targetDropPoint.value = null
                     } catch (e: Exception) {
-                        Unit
+                        // Previously a bare `Unit`. The dialog closed and the
+                        // operator saw nothing — indistinguishable from success,
+                        // the exact failure mode an audit should catch.
+                        activityBannerLabel.value = "Marker not sent: ${e.message ?: "unknown error"}"
+                        Toast.makeText(context, activityBannerLabel.value, Toast.LENGTH_LONG).show()
                     }
                 }
             },

@@ -44,7 +44,7 @@ fun SettingsDialog(
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Settings") },
+        title = { Text("API Keys & Credentials") },
         text = {
             Column {
                 Text("API Keys")
