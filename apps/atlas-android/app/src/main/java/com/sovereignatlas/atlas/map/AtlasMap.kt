@@ -261,6 +261,13 @@ fun AtlasMapScreen(
     }
     val hudAccent = androidx.compose.ui.graphics.Color(0xFF39C5F3)
     val following = remember { mutableStateOf(false) }
+    // Set while our own HUD buttons drive the camera, so the follow-cancel
+    // listener ignores our own animateCamera. Bug: previously onFaceNorth()
+    // and onResetNorthAndLocate() called animateCamera/moveCamera, which fires
+    // OnCameraMoveStartedListener(REASON_API_GESTURE), which cancelled follow
+    // mode — so the locate button silently ended "Follow" the same way a finger
+    // drag would, even though it was not the operator's gesture.
+    val hudNavGuard = remember { mutableStateOf(false) }
     val showLayers = remember { mutableStateOf(false) }
     val showLink = remember { mutableStateOf(false) }
     val showFence = remember { mutableStateOf(false) }
@@ -636,7 +643,10 @@ fun AtlasMapScreen(
                 // is called out as a known follow-up in the commit message.
                 map.setMaxZoomPreference(24.0)
                 map.addOnCameraMoveStartedListener { reason ->
-                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE &&
+                        !hudNavGuard.value
+                    ) {
+                        // Real operator gestures cancel follow. Ours don't.
                         services.behavior.markUserInteracted()
                         following.value = false
                     }
@@ -903,6 +913,16 @@ fun AtlasMapScreen(
                     true
                 }
                 map.addOnMapLongClickListener { point ->
+                    // Bug: a long-press opened the "Drop Tactical Marker" sheet
+                    // even when a drawing/measure mode was active — the very
+                    // gesture the mode was owned by. While one is active, a
+                    // long press is the mode's tool being used, not an intent
+                    // to drop a marker.
+                    if (drawingModeFlow.value != DrawingMode.NONE ||
+                        services.measure.isActive()
+                    ) {
+                        return@addOnMapLongClickListener false
+                    }
                     onHaptic()
                     targetDropPoint.value = point
                     activeTerrainProfile.value = null
@@ -1147,7 +1167,14 @@ fun AtlasMapScreen(
                     map.cameraPosition.bearing,
                 )
             ) {
-                is LocateOutcome.Applied -> applyCameraIntent(map, outcome.intent)
+                is LocateOutcome.Applied -> {
+                    hudNavGuard.value = true
+                    try {
+                        applyCameraIntent(map, outcome.intent)
+                    } finally {
+                        hudNavGuard.value = false
+                    }
+                }
                 LocateOutcome.Pending, LocateOutcome.Ignored -> Unit
             }
         }
@@ -1164,10 +1191,15 @@ fun AtlasMapScreen(
                 .tilt(map.cameraPosition.tilt)
                 .build()
             val durationMs = if (reducedMotion) 0 else 300
-            if (durationMs > 0) {
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
-            } else {
-                map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
+            hudNavGuard.value = true
+            try {
+                if (durationMs > 0) {
+                    map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
+                } else {
+                    map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
+                }
+            } finally {
+                hudNavGuard.value = false
             }
         }
     }
@@ -1193,10 +1225,15 @@ fun AtlasMapScreen(
                 .tilt(map.cameraPosition.tilt)
                 .build()
             val durationMs = if (reducedMotion) 0 else 300
-            if (durationMs > 0) {
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
-            } else {
-                map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
+            hudNavGuard.value = true
+            try {
+                if (durationMs > 0) {
+                    map.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), durationMs)
+                } else {
+                    map.moveCamera(CameraUpdateFactory.newCameraPosition(targetCamera))
+                }
+            } finally {
+                hudNavGuard.value = false
             }
         }
     }
