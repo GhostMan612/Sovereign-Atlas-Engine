@@ -215,12 +215,9 @@ class CompassInteractionTest {
 
     @Test
     fun reducedMotionHonorsZeroAnimationDuration() {
-        fun cameraAnimationDurationMs(reducedMotion: Boolean): Int {
-            return if (reducedMotion) 0 else 300
-        }
-
-        assertEquals(0, cameraAnimationDurationMs(reducedMotion = true))
-        assertEquals(300, cameraAnimationDurationMs(reducedMotion = false))
+        // Calls the production helper, not a local re-implementation.
+        assertEquals(0, AtlasMotionMath.cameraAnimationDurationMs(reducedMotion = true))
+        assertEquals(300, AtlasMotionMath.cameraAnimationDurationMs(reducedMotion = false))
     }
 
     @Test

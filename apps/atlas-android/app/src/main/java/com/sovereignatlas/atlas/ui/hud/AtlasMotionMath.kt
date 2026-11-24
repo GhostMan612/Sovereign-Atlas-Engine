@@ -20,6 +20,15 @@ object AtlasMotionMath {
         return currentUnwrappedDeg + shortestAngleDeltaDeg(normalizedCurrent, normalizedTarget)
     }
 
+    /**
+     * The camera-animate duration the compass HUD uses: 0 with reduced motion,
+     * 300 ms otherwise. One source — previously the string-anchored
+     * `"Reduced Motion (Snap Compass 5°)"` text lived in this file while the
+     * duration literal lived in AtlasMap, so a change to one never reached the
+     * other.
+     */
+    fun cameraAnimationDurationMs(reducedMotion: Boolean): Int = if (reducedMotion) 0 else 300
+
     fun packDownloadFraction(receivedTiles: Int, totalTiles: Int): Float {
         if (totalTiles <= 0) return 0f
         return (receivedTiles.toFloat() / totalTiles.toFloat()).coerceIn(0f, 1f)
