@@ -27,7 +27,6 @@
       "*installRelease*": "deny",
       "gradlew.bat *assemble*": "deny",
       "gradlew *assemble*": "deny",
-      "adb*install*": "deny",
       "adb*uninstall*": "deny",
       "adb*root*": "deny",
       "adb*push*": "deny",
