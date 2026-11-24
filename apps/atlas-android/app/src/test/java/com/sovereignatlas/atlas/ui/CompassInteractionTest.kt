@@ -119,13 +119,8 @@ class CompassInteractionTest {
         }
 
         assertNotNull(validFix)
-        val targetCenter = validFix!!
-        val resetCamera = AtlasCameraState(
-            center = targetCenter,
-            zoom = initialCamera.zoom,
-            bearing = 0.0,
-            pitch = initialCamera.pitch,
-        )
+        // Now calls the production reset helper — not a hand-rolled duplicate.
+        val resetCamera = AtlasMotionMath.resetNorthCameraState(initialCamera, validFix)
 
         assertFalse(headingUp)
         assertFalse(pendingHeadingUp)
