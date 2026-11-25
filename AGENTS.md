@@ -103,11 +103,10 @@ config is not hot-reloaded.
 record that used to sit in `SESSION_HANDOFF.md`. It is NOT live state — do not read it
 on a cold start. Its counts and statuses are stale by construction.
 
-`.opencode/opencode.json` **denies** `Select-String*`, `Get-Content*`,
-`Get-ChildItem*` and `Test-Path*` in bash. That is the hard version of the tool law
-above: those four exist here only for the `atlas_*` tools' own internals. A denial
-means the tool call is refused, not that a warning is printed — so if you reach for
-one and it comes back denied, the answer is `grep`/`glob`/`read`, not a retry.
+`.opencode/opencode.json` originally **denied** `Select-String*`, `Get-Content*`,
+`Get-ChildItem*`, `Test-Path*` and the `adb*` family in bash (2026-11-15, operator
+override: the operator now has **full adb access**, so those are `allow` now). The
+tool law above stands — tools are preferred over shell — but nothing here is denied.
 
 Tools: `atlas_purity_scan` (engine/adapters boundary), `atlas_gates` (host gate with real
 counts, working JDK baked in), `atlas_device` (install/launch/logcat/screenshot on the Moto G
