@@ -137,10 +137,12 @@ Subagents: `atlas-boundary-auditor`, `atlas-gatekeeper`, `atlas-device-smoker`,
   source but nothing draws.
 - `getSourceAs<GeoJsonSource>(id)` returns null instead of throwing, so a style push is a
   silent no-op.
-- The proposed local `.github/workflows/atlas-ci-safe.yml` runs the four host suites,
-  the distribution-hold test, A4 candidate checks and the isolated Maven consumer. It has
-  no release job. The historical remote `atlas.yaml` workflow remains disabled; the
-  proposed replacement has not been pushed or run in GitHub Actions. Judge a red run by
-  per-step conclusions, not the job conclusion. Reads of CI
-  output need a signed-in human: the step log is sign-in gated, the REST logs
-  endpoint returns 403, and artifact download returns 401.
+- The sole active workflow is `.github/workflows/atlas-ci-safe.yml` (verified with
+  `gh workflow list`: `active`). It runs the four host suites, the distribution-hold
+  test, A4 candidate checks and the isolated Maven consumer, has no release job, and
+  both jobs are green on `main`. The historical `atlas.yaml` was removed locally in
+  `90c4ca1`; "proposed / not pushed / disabled" descriptions of it are stale. Judge a
+  red run by per-step conclusions, not the job conclusion. The signed-in `gh` CLI can
+  read job conclusions and full failing-step logs (`gh run view <id> --log-failed`,
+  `gh api .../jobs`) — proven on the PR #17 `verify` failure. Unauthenticated REST
+  logs and artifact download may still return 403 / 401.

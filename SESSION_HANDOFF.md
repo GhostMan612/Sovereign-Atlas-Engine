@@ -10,6 +10,33 @@
 > (byte-identical, moved with `git mv`). Read it only when chasing a specific
 > past decision. Do not read it on a normal cold start.
 
+## Repo reconciliation, 2026-11-27
+
+Read-back of live remote state (authenticated `gh`), superseding the older
+2026-11-15 entries below where they differ:
+
+- **CI:** `.github/workflows/atlas.yaml` was removed locally by `90c4ca1`
+  ("Prepare isolated CI workflow"). The sole active workflow is
+  `.github/workflows/atlas-ci-safe.yml` (`gh workflow list`: `active`); it has
+  jobs `verify` (four host suites, A4 candidate checks, distribution hold) and
+  `sdk-consumer-maven` (isolated Maven binary consumer). No release job. On the
+  merged head `28ca38a` / merge `5ec618c` both jobs passed (run `46079514403`).
+  Older "proposed / not pushed / `atlas.yaml` disabled" statements below are
+  historical, not live state; `AGENTS.md`, `README.md` and the CI-triage agent
+  were corrected to match.
+- **Issues:** #9, #10 and #16 are OPEN. #9's engineering work merged in
+  `ea9f03d` but physical BLE/USB radio acceptance is still on hold (no radio
+  available); #10's workflow work merged in `05d0f78` but that workflow was
+  superseded and no signing credentials exist, so signed-artifact delivery is
+  unverified; #16 needs a qualified licensing disposition. Reconciliation
+  comments were added to each; none was closed because acceptance is unmet.
+- **Secrets:** `GOOGLE_SERVICES_JSON_BASE64` is the only Actions secret; the
+  four release signing secrets remain absent. No signing material was added,
+  removed or rotated.
+- **Rulesets:** tag ruleset 27326032 and main ruleset 27326190 are active. Main
+  was toggled to `disabled` only long enough to merge PR #17 and push the
+  handoff, then restored to `active` (read back). Release remains **NO-GO**.
+
 ## Operator authorization & PR #17 merge, 2026-11-27
 
 - **Full operator authorization granted 2026-11-27:** every `bash` permission in
@@ -74,12 +101,12 @@
   name ambiguous, and Gradle fails it with *"task 'testDebugUnitTest' is ambiguous
   in project ':app'"*. Confirmed by `--dry-run`. Do not quote that task name; it is
   the single most-repeated error in this repo's docs.
-- **Last measured 2026-11-14 (WO-16-A3 checkpoint): 1,770 tests, 0 failures, 0 errors, 0 skipped across all four host modules:**
+- **Historical measurement 2026-11-14 (WO-16-A3 checkpoint): 1,770 tests, 0 failures, 0 errors, 0 skipped across all four host modules.** Superseded by the green 2026-11-27 four-suite gate and CI run `46079514403`; the per-module counts below are the archived measurement, not a current claim.
   - `:atlas-sdk:test`: 44 tests (11 XML suites)
   - `:sdk-consumer:test`: 8 tests (1 XML suite, in-tree `apps/atlas-android/sdk-consumer`)
   - `:app:testPlayDebugUnitTest`: 859 tests (107 XML suites)
   - `:app:testEnterpriseDebugUnitTest`: 859 tests (107 XML suites)
-  Counts recorded from JUnit XML across module build directories; unchanged tasks may have been up-to-date. Both `atlas_gates` (local host gate) and GitHub Actions (`atlas.yaml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
+  Counts recorded from JUnit XML across module build directories; unchanged tasks may have been up-to-date. Both `atlas_gates` (local host gate) and GitHub Actions (`atlas-ci-safe.yml` `verify` job) run all four tasks; CI also runs `sdk-consumer-maven` for isolated Maven artifact consumption.
 - The gate runs **once per phase** (RULES.md §1A, §3), never per edit. Point-in-time Phase 4
   cadence history is archived in `docs/atlas-production/evidence/GATE_MATRIX.md`.
 - Pure boundary scan passes: 131 Kotlin files across `:app` pure packages (80), `:atlas-sdk`
@@ -95,7 +122,7 @@
 
 ## CI
 
-- **`verify` and `sdk-consumer-maven` are the jobs in the sole workflow (`.github/workflows/atlas.yaml`); `verify` has been green since run #72 (2026-09-29).**
+- **`verify` and `sdk-consumer-maven` are the jobs in the sole active workflow (`.github/workflows/atlas-ci-safe.yml`); both passed on the PR #17 merge head in run `46079514403` (2026-11-27).**
   Judge a red run by per-step conclusions, not the job conclusion.
   `sdk-consumer-maven` publishes `:atlas-sdk` (`1.1.0`) to a temporary Maven repo,
   copies `samples/sdk-consumer` into an isolated directory, verifies missing-repo/missing-JAR/missing-metadata

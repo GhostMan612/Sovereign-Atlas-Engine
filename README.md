@@ -42,7 +42,7 @@ See `AGENTS.md` for the one-gate-per-phase local rule.
 
 ## Release Packaging
 
-Release distribution remains **NO-GO** pending rights review and an independently controlled publisher. No workflow in this checkout signs or publishes a release. The proposed local `.github/workflows/atlas-ci-safe.yml` runs development verification only, including the host suites, A4 candidate checks, distribution-hold checks and the isolated Maven consumer. It has a separate identity from the historical `atlas.yaml` workflow, which remains disabled remotely; changing this checkout cannot secure historical refs.
+Release distribution remains **NO-GO** pending rights review and an independently controlled publisher. No workflow in this checkout signs or publishes a release. The sole active workflow is `.github/workflows/atlas-ci-safe.yml` (development verification only: host suites, A4 candidate checks, distribution-hold checks and the isolated Maven consumer); its `verify` and `sdk-consumer-maven` jobs are green on `main`. The historical `atlas.yaml` workflow was removed locally in `90c4ca1`; it is not restored by changing this checkout, and any historical refs or credentials still require external revocation.
 
 Release APK builds remain subject to `RULES.md` §1.6. The Gradle signing guard is not distribution authorization. Do not add signing credentials to the candidate repository or re-enable the historical workflow. See `docs/atlas-production/evidence/DISTRIBUTION_GATE.md` for the unresolved release controls.
 
