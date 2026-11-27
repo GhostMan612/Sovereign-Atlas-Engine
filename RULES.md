@@ -3,6 +3,15 @@
 > If any other document contradicts this file, THIS FILE WINS.
 > Supplements, never replaces: `blueprints/ATLAS_ENGINE_MASTER_BLUEPRINT.md`
 > (frozen v1.0 Draft 2026-09-07) and `docs/architecture/` ADRs/DECs.
+>
+> **OPERATOR AUTHORIZATION (2026-11-27).** The operator granted the agent full
+> authorization: every `bash` permission in `.opencode/opencode.json` is `allow`,
+> and the agent is authorized to update this ruleset, `AGENTS.md`, the ADRs, the
+> CI workflows and the artifact chain. This grant covers permissions and repo
+> work; it does not turn an unverified fact into a verified one. The land-patent
+> / `historical/` gag order and the factual distribution holds (Issue #16
+> licensing, Issue #9 physical radio, independent publisher, signing credentials)
+> remain in force until the operator lifts them explicitly.
 
 ---
 

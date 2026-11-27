@@ -10,6 +10,22 @@
 > (byte-identical, moved with `git mv`). Read it only when chasing a specific
 > past decision. Do not read it on a normal cold start.
 
+## Operator authorization & PR #17 CI blocker, 2026-11-27
+
+- **Full operator authorization granted 2026-11-27:** every `bash` permission in
+  `.opencode/opencode.json` is `allow`; the agent is authorized to update
+  RULES.md, AGENTS.md, ADRs, CI workflows and the artifact chain. The grant
+  covers permissions and repo work; it does **not** lift the land-patent /
+  `historical/` gag order or convert any distribution hold (Issue #16, Issue #9,
+  independent publisher, signing credentials) into a release approval.
+- **PR #17 merge blocked by a failing CI check:** `atlas-ci-safe` `verify`
+  concluded FAILURE on 2026-11-27 (run `46066757233`, job `140733815702`);
+  `sdk-consumer-maven` in the same run passed. PR is `MERGEABLE` but
+  `mergeStateStatus: BLOCKED`. Local four-suite gate is green (880 tests/flavor,
+  0 failures), so the failure is in a CI-only step. First-failing-step triage is
+  in progress. No merge until `verify` is green. Direct `main` pushes are also
+  rejected by protected-ref ruleset 27326190; a PR merge is the only path.
+
 ## WO-16-A3 — implementation checkpoint, distribution HOLD
 
 - **WO-C-02A.1 library-backed evaluation, 2026-11-16:** The operator stopped model retries and authorized a standalone generic implementation using `protobuf-javalite:3.25.5`. `tools/generic-protobuf-author/standalone/` is separate from the SDK and app and implements only uint64 varints and field keys. It accepts valid nonminimal encodings and wire-level reserved field numbers as required by the original acceptance suite, unlike the operator's illustrative strict candidate. Explicit tenth-byte overflow checks precede runtime decoding; validated nonminimal encodings are normalized because the cached runtime misdecoded a ten-byte nonminimal case. The initial run failed 2/13 tests, then the corrected standalone passed 14/14 with no failures/errors/skips, including the original eight tests and 5,000 deterministic round trips. The host gate passed 50 / 8 / 880 / 880 = 1,818 tests, no failures/errors/skips. Cached JAR SHA-256 is `79a3ff51ac2a8b1be7fffa228483d64974f17f3effffd966b054d87179e45634`; its POM and upstream license identify BSD-3-Clause, but cache authenticity and distribution notices remain unreviewed. Name scans of the standalone output JAR and runtime JAR found zero `meshtastic` entries, not a provenance or full artifact audit. Fixed fields, bounded nested parsing, unknown-field handling, Meshtastic message definitions, compatibility and production dependency decisions remain incomplete. All four rejected local model runs were copied byte-for-byte to `tools/generic-protobuf-author/local-evidence/` (Git-ignored; 26 files verified), outside cleanable build output. The original D: response remains untouched. The legacy adapter and distribution hold remain unchanged.

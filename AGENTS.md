@@ -108,6 +108,13 @@ on a cold start. Its counts and statuses are stale by construction.
 override: the operator now has **full adb access**, so those are `allow` now). The
 tool law above stands — tools are preferred over shell — but nothing here is denied.
 
+**2026-11-27 operator grant:** full authorization for all repo work, for
+updating RULES.md / AGENTS.md / ADRs / CI workflows / the artifact chain, and for
+all tool permissions (every `bash` entry in `.opencode/opencode.json` is `allow`).
+The grant does **not** lift the land-patent / `historical/` gag order and does
+**not** convert a distribution hold (Issue #16, Issue #9, independent publisher,
+signing credentials) into a release approval — those need explicit operator action.
+
 Tools: `atlas_purity_scan` (engine/adapters boundary), `atlas_gates` (host gate with real
 counts, working JDK baked in), `atlas_device` (install/launch/logcat/screenshot on the Moto G
 `ZT4222BMWN`, wireless-TCP transport), `atlas_maplibre_probe` (javap against the Gradle
