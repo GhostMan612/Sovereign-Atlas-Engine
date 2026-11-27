@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +58,7 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
     val hasGps by viewModel.hasGpsFix.collectAsStateWithLifecycle()
     val networkProfile by viewModel.networkProfile.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val pendingCloudMessages by viewModel.pendingCloudMessages.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     val newestId = messages.lastOrNull()?.messageId
@@ -77,12 +79,21 @@ fun GeoChatScreen(viewModel: GeoChatViewModel) {
             .consumeWindowInsets(WindowInsets.ime)
             .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
     ) {
+        if (!viewModel.cloudOutboxAvailable) {
+            Text("Cloud outbox unavailable; cloud writes are blocked.", color = MaterialTheme.colorScheme.error)
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             reverseLayout = true,
             verticalArrangement = Arrangement.spacedBy(space = 8.dp),
         ) {
+            items(pendingCloudMessages.asReversed(), key = { "pending-${it.messageId}" }) { msg ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Cloud unconfirmed: ${msg.text}", modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    TextButton(onClick = { viewModel.retryCloudMessage(msg) }) { Text("Retry") }
+                }
+            }
             items(messages.asReversed(), key = { it.messageId }) { msg ->
                 ChatBubble(msg)
             }

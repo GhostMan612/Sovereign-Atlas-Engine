@@ -20,48 +20,6 @@ import org.meshtastic.proto.ToRadio
 import org.meshtastic.proto.User
 import java.io.IOException
 
-sealed class DecodedFromRadio {
-    data class MyInfo(
-        val myNodeNum: Long,
-        val rebootCount: Long,
-        val nodedbCount: Int,
-        val pioEnv: String?,
-    ) : DecodedFromRadio()
-
-    data class Metadata(
-        val firmwareVersion: String?,
-        val hardwareModelCode: Int?,
-        val hardwareModelName: String?,
-    ) : DecodedFromRadio()
-
-    data class LoraRegion(
-        val regionCode: Int,
-        val frequencyBand: String?,
-    ) : DecodedFromRadio()
-
-    data class DiscoveredNode(
-        val node: MeshNodeInfo,
-    ) : DecodedFromRadio()
-
-    data class InboundPacket(
-        val packet: MeshPacket,
-    ) : DecodedFromRadio()
-
-    data class QueueAck(
-        val meshPacketId: Long,
-        val result: Int,
-        val free: Int,
-        val maxlen: Int,
-    ) : DecodedFromRadio()
-
-    data class ConfigComplete(
-        val configCompleteId: Long,
-    ) : DecodedFromRadio()
-
-    data object Rebooted : DecodedFromRadio()
-    data object Ignored : DecodedFromRadio()
-}
-
 class MeshtasticWireAdapter {
 
     fun encodeWantConfig(configId: Long): ByteArray {
@@ -216,7 +174,7 @@ class MeshtasticWireAdapter {
             val portNum = decodedData.portnum.value
             val routingError: Int? = if (decodedData.portnum == ProtoPortNum.ROUTING_APP) {
                 if (payloadBytes.isEmpty()) {
-                    ProtoRouting.Error.NONE.value
+                    null
                 } else {
                     val routing = try {
                         ProtoRouting.ADAPTER.decode(payloadBytes)
@@ -225,7 +183,6 @@ class MeshtasticWireAdapter {
                     }
                     when {
                         routing.error_reason != null -> routing.error_reason.value
-                        routing.route_request == null && routing.route_reply == null -> ProtoRouting.Error.NONE.value
                         else -> null
                     }
                 }
@@ -348,19 +305,19 @@ class MeshtasticWireAdapter {
     }
 
     data class DecodedUser(
-        val shortName: String?,
-        val longName: String?,
-    )
+        override val shortName: String?,
+        override val longName: String?,
+    ) : MeshtasticDecodedUser
 
     data class DecodedPosition(
-        val latitude: Double,
-        val longitude: Double,
-        val altitudeMeters: Int?,
-    )
+        override val latitude: Double,
+        override val longitude: Double,
+        override val altitudeMeters: Int?,
+    ) : MeshtasticDecodedPosition
 
     data class DecodedTelemetry(
-        val batteryLevel: Int,
-    )
+        override val batteryLevel: Int,
+    ) : MeshtasticDecodedTelemetry
 
     companion object {
         const val MAX_TO_FROM_RADIO_SIZE: Int = 512

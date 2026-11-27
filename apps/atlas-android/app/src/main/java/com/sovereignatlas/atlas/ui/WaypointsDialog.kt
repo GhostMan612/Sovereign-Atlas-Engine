@@ -71,6 +71,9 @@ fun WaypointsDialog(
                                                 record.longitude,
                                             ),
                                         )
+                                        if (!record.notes.isNullOrBlank()) {
+                                            Text(record.notes)
+                                        }
                                         // At-a-glance exposure. Placed under the
                                         // coordinates rather than replacing them: the
                                         // operator scanning this list is asking "what

@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +56,7 @@ fun WaypointEditorSheet(
             var errorMessage by remember(activeWaypoint.id) {
                 mutableStateOf<String?>(null)
             }
+            var confirmDelete by remember(activeWaypoint.id) { mutableStateOf(false) }
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = name,
@@ -132,15 +136,12 @@ fun WaypointEditorSheet(
                     }
                     Button(
                         onClick = {
-                            scope.launch {
-                                errorMessage = null
-                                try {
-                                    waypointRepository.deleteWaypoint(activeWaypoint.id)
-                                    selection.clearWaypointSelection()
-                                } catch (error: Exception) {
-                                    errorMessage = "Failed to delete: ${error.message}"
-                                }
-                            }
+                            // Single tap is not a delete. The destructive step opens
+                            // a confirm dialog below; deleteWaypoint runs only there.
+                            // This mirrors every other destructive action in the app
+                            // (tracks, offline packs, GIS datasets): a mis-tap on a
+                            // different button cannot have deleted the waypoint.
+                            confirmDelete = true
                         },
                     ) {
                         Text("Delete")
@@ -158,6 +159,39 @@ fun WaypointEditorSheet(
                         Text("Go-To")
                     }
                 }
+            }
+            if (confirmDelete) {
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = false },
+                    title = { Text("Delete waypoint") },
+                    text = {
+                        Text(
+                            "Permanently delete \"${activeWaypoint.name.ifEmpty { activeWaypoint.id }}\"?",
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                confirmDelete = false
+                                scope.launch {
+                                    errorMessage = null
+                                    try {
+                                        waypointRepository.deleteWaypoint(activeWaypoint.id)
+                                        selection.clearWaypointSelection()
+                                    } catch (error: Exception) {
+                                        errorMessage = "Failed to delete: ${error.message}"
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                    },
+                )
             }
         }
     }

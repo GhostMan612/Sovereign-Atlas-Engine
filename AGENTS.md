@@ -103,11 +103,17 @@ config is not hot-reloaded.
 record that used to sit in `SESSION_HANDOFF.md`. It is NOT live state — do not read it
 on a cold start. Its counts and statuses are stale by construction.
 
-`.opencode/opencode.json` **denies** `Select-String*`, `Get-Content*`,
-`Get-ChildItem*` and `Test-Path*` in bash. That is the hard version of the tool law
-above: those four exist here only for the `atlas_*` tools' own internals. A denial
-means the tool call is refused, not that a warning is printed — so if you reach for
-one and it comes back denied, the answer is `grep`/`glob`/`read`, not a retry.
+`.opencode/opencode.json` originally **denied** `Select-String*`, `Get-Content*`,
+`Get-ChildItem*`, `Test-Path*` and the `adb*` family in bash (2026-11-15, operator
+override: the operator now has **full adb access**, so those are `allow` now). The
+tool law above stands — tools are preferred over shell — but nothing here is denied.
+
+**2026-11-27 operator grant:** full authorization for all repo work, for
+updating RULES.md / AGENTS.md / ADRs / CI workflows / the artifact chain, and for
+all tool permissions (every `bash` entry in `.opencode/opencode.json` is `allow`).
+The grant does **not** lift the land-patent / `historical/` gag order and does
+**not** convert a distribution hold (Issue #16, Issue #9, independent publisher,
+signing credentials) into a release approval — those need explicit operator action.
 
 Tools: `atlas_purity_scan` (engine/adapters boundary), `atlas_gates` (host gate with real
 counts, working JDK baked in), `atlas_device` (install/launch/logcat/screenshot on the Moto G
@@ -131,9 +137,10 @@ Subagents: `atlas-boundary-auditor`, `atlas-gatekeeper`, `atlas-device-smoker`,
   source but nothing draws.
 - `getSourceAs<GeoJsonSource>(id)` returns null instead of throwing, so a style push is a
   silent no-op.
-- CI `.github/workflows/atlas.yaml` runs `verify` (the four host suites matching local gate),
-  `sdk-consumer-maven` (isolated binary artifact consumer), and gated `release` (`v*` semver tags
-  or `workflow_dispatch` on `main`). `verify` has been green since run #72 (2026-09-29);
-  judge a red run by per-step conclusions, not the job conclusion. Reads of CI
+- The proposed local `.github/workflows/atlas-ci-safe.yml` runs the four host suites,
+  the distribution-hold test, A4 candidate checks and the isolated Maven consumer. It has
+  no release job. The historical remote `atlas.yaml` workflow remains disabled; the
+  proposed replacement has not been pushed or run in GitHub Actions. Judge a red run by
+  per-step conclusions, not the job conclusion. Reads of CI
   output need a signed-in human: the step log is sign-in gated, the REST logs
   endpoint returns 403, and artifact download returns 401.

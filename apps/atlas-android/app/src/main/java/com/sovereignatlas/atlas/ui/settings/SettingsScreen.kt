@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -135,7 +137,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         Text("Display & Accessibility", style = MaterialTheme.typography.titleMedium)
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Dark Theme (Charcoal/Chrome)" },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -147,7 +151,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Reduced Motion (Snap Compass 5°)" },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -163,7 +169,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         Text("Active Workspaces (Navigate Always On)", style = MaterialTheme.typography.titleMedium)
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Explorer Workspace (Encyclopedia & Packs)" },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -175,7 +183,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Tactical Workspace (MGRS, Reticle, Ops Draw)" },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -187,7 +197,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Studio Workspace (Measure & Survey Tools)" },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {

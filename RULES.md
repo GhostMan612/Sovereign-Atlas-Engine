@@ -3,6 +3,15 @@
 > If any other document contradicts this file, THIS FILE WINS.
 > Supplements, never replaces: `blueprints/ATLAS_ENGINE_MASTER_BLUEPRINT.md`
 > (frozen v1.0 Draft 2026-09-07) and `docs/architecture/` ADRs/DECs.
+>
+> **OPERATOR AUTHORIZATION (2026-11-27).** The operator granted the agent full
+> authorization: every `bash` permission in `.opencode/opencode.json` is `allow`,
+> and the agent is authorized to update this ruleset, `AGENTS.md`, the ADRs, the
+> CI workflows and the artifact chain. This grant covers permissions and repo
+> work; it does not turn an unverified fact into a verified one. The land-patent
+> / `historical/` gag order and the factual distribution holds (Issue #16
+> licensing, Issue #9 physical radio, independent publisher, signing credentials)
+> remain in force until the operator lifts them explicitly.
 
 ---
 
@@ -12,12 +21,19 @@
 
 1. **NO PIECEMEALING.** Only full code: complete files, never snippets, half-functions, or "insert here" instructions.
 2. **NO EXTRA COMMENTS IN CODE.** Zero conversational or explanatory comments inside code. Explanations belong in chat, not the file.
-3. **GENESIS HEADER MANDATORY.** The only permitted comments are the genesis signature. Every new `.dart` / `.kt` / `.py` file begins with exactly:
+3. **GENESIS HEADER MANDATORY.** The only permitted comments are the genesis signature. Every new `.dart` / `.kt` file begins with exactly:
    ```
    // ============================================================
    // As Above, So Below. As Within, So Without.
    // The Future Dictates the Past and the Past is Always Present.
    // ============================================================
+   ```
+   Every new `.py` file begins with the same signature using Python comment syntax:
+   ```
+   # ============================================================
+   # As Above, So Below. As Within, So Without.
+   # The Future Dictates the Past and the Past is Always Present.
+   # ============================================================
    ```
 4. **ABSOLUTE — no grandfathering** (operator directive 2026-09-10).
    All 117 `.dart` files were stripped to genesis-header-only in one
@@ -89,7 +105,7 @@ Do not install software, modify system settings, or write outside the work area 
 
 | Law | Rule |
 |-----|------|
-| Shell is the last resort | A dedicated tool exists for nearly every read, search, and edit. Use `read`/`grep`/`glob`/`edit`/`write` and the `atlas_*` tools. NEVER reach for a shell read/search/edit cmdlet (`Select-String`, `Get-Content`, `Get-ChildItem`, `Test-Path`, `cat`, `grep`, `rg`, `findstr`, `dir`, `ls`, `head`, `tail`, `more`, `type`, `sed`) or write cmdlet (`Set-Content`, `Add-Content`, `Out-File`, `echo >`) to do work a tool already does. These are denied in `.opencode/opencode.json`. |
+| Shell is the last resort | A dedicated tool exists for nearly every read, search, and edit. Use `read`/`grep`/`glob`/`edit`/`write` and the `atlas_*` tools. Prefer those over shell equivalents (`Select-String`, `Get-Content`, `Get-ChildItem`, `Test-Path`, `cat`, `grep`, `rg`, `findstr`, `dir`, `ls`, `head`, `tail`, `more`, `type`, `sed`). All these are now allowed in `.opencode/opencode.json` (operator-override, full access). |
 | One shell per phase | Shell out ONCE per task, at the end, for gates and git. Never per edit, never per compile error, never to re-inspect one line. A gate failure is fixed with editor tools, then confirmed by the next single gate run. If a phase genuinely cannot be completed without mid-flight verification, report it as a blocked item and wait — do not self-authorise repeated runs. |
 | Dead docs do not bind | `blueprints/MASTER_OPERATING_DIRECTIVE.md`, `blueprints/phase-0/build-toolchain-spec.md` §2, and `blueprints/camera-layers-sprint.md` §6 are RETIRED and marked as such in-file. They demanded a build per prompt and per-workstream gates, contradicting 1.6 and §1A. Read them as history; do not implement their gate wording. |
 | PowerShell edits | NEVER modify source through PS text pipelines (`Get-Content/-replace/Set-Content`, `Out-File`). Editor tools only; Python `encoding='utf-8'` if scripted. |

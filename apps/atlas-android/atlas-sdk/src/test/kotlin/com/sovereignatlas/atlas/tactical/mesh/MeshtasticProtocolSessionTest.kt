@@ -244,6 +244,71 @@ class MeshtasticProtocolSessionTest {
     }
 
     @Test
+    fun routingAcknowledgementRequiresOutstandingUnicastAndExpectedPeer() {
+        var now = 1_000L
+        val session = MeshtasticProtocolSession(clockMs = { now }, acknowledgementTimeoutMs = 100L)
+        session.beginConnecting()
+        session.beginHandshake(isUsb = false, configNonce = 88L)
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(id = 1, my_info = MyNodeInfo(my_node_num = 1))))
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(id = 2, config_complete_id = 88)))
+        fun send(id: Long, to: Long = 2L, wantAck: Boolean = true) = session.prepareOutgoingPacket(
+            MeshPacket(from = 0, to = to, portNum = PortNum.PORTNUM_TEXT_MESSAGE_APP, payload = byteArrayOf(1), id = id, wantAck = wantAck),
+        )
+        fun routing(id: Int, from: Int = 2, to: Int = 1, channel: Int = 0, payload: ByteArray = Routing.ADAPTER.encode(Routing(error_reason = Routing.Error.NONE))) {
+            session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(packet = ProtoMeshPacket(
+                from = from, to = to, channel = channel,
+                decoded = Data(portnum = ProtoPortNum.ROUTING_APP, request_id = id, payload = ByteString.of(*payload)),
+            ))))
+        }
+        routing(50)
+        assertNull(session.deliveryStates.value[50L])
+        assertNotNull(send(51))
+        routing(51, from = 3)
+        routing(51, to = 4)
+        routing(51, channel = 1)
+        routing(51, payload = byteArrayOf())
+        routing(51, payload = Routing.ADAPTER.encode(Routing(route_request = org.meshtastic.proto.RouteDiscovery())))
+        routing(51, payload = Routing.ADAPTER.encode(Routing(route_reply = org.meshtastic.proto.RouteDiscovery())))
+        assertEquals(PacketDeliveryStage.QUEUED, session.deliveryStates.value[51L]?.stage)
+        session.markTransportWriteUnconfirmed(51, "write completion missing")
+        assertEquals(PacketDeliveryStage.UNCONFIRMED, session.deliveryStates.value[51L]?.stage)
+        routing(51)
+        assertEquals(PacketDeliveryStage.PEER_DELIVERED, session.deliveryStates.value[51L]?.stage)
+        routing(51, payload = Routing.ADAPTER.encode(Routing(error_reason = Routing.Error.NO_ROUTE)))
+        assertEquals(PacketDeliveryStage.PEER_DELIVERED, session.deliveryStates.value[51L]?.stage)
+        assertNull(send(51))
+        assertNotNull(send(52, to = 0xFFFFFFFFL))
+        routing(52)
+        assertEquals(PacketDeliveryStage.QUEUED, session.deliveryStates.value[52L]?.stage)
+        assertNotNull(send(53, wantAck = false))
+        routing(53)
+        assertEquals(PacketDeliveryStage.QUEUED, session.deliveryStates.value[53L]?.stage)
+        assertNotNull(send(54))
+        now += 100
+        routing(54)
+        assertEquals(PacketDeliveryStage.UNCONFIRMED, session.deliveryStates.value[54L]?.stage)
+        assertEquals("Delivery acknowledgment timed out", session.deliveryStates.value[54L]?.errorMessage)
+        assertNull(send(54))
+    }
+
+    @Test
+    fun staleQueueAndRoutingRepliesCannotOverwriteTerminalFailure() {
+        val session = MeshtasticProtocolSession()
+        session.beginConnecting()
+        session.beginHandshake(isUsb = false, configNonce = 44L)
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(my_info = MyNodeInfo(my_node_num = 1))))
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(config_complete_id = 44)))
+        val packet = MeshPacket(from = 0, to = 2, portNum = PortNum.PORTNUM_TEXT_MESSAGE_APP, payload = byteArrayOf(1), id = 71, wantAck = true)
+        assertNotNull(session.prepareOutgoingPacket(packet))
+        session.markTransportWriteFailed(71, "failed")
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(queueStatus = QueueStatus(mesh_packet_id = 71, res = 0))))
+        val payload = Routing.ADAPTER.encode(Routing(error_reason = Routing.Error.NONE))
+        session.onFromRadioBytes(FromRadio.ADAPTER.encode(FromRadio(packet = ProtoMeshPacket(from = 2, to = 1,
+            decoded = Data(portnum = ProtoPortNum.ROUTING_APP, request_id = 71, payload = ByteString.of(*payload))))))
+        assertEquals(PacketDeliveryStage.FAILED, session.deliveryStates.value[71L]?.stage)
+    }
+
+    @Test
     fun livePacketsEnrichDiscoveredNodesAndMalformedOrRebootResetsCleanly() {
         var fakeClock = 5_000L
         val session = MeshtasticProtocolSession(clockMs = { fakeClock })

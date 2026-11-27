@@ -15,6 +15,8 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionPermit
+import com.sovereignatlas.atlas.tactical.mesh.TransmissionOutcome
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -49,8 +51,22 @@ interface BleGattTransport {
     suspend fun discoverMeshtasticCharacteristics(): Boolean
     suspend fun enableFromNumNotifications(): Boolean
     suspend fun writeToRadio(bytes: ByteArray): Boolean
+    suspend fun writeToRadio(bytes: ByteArray, permit: TransmissionPermit): Boolean = false
+    suspend fun writeToRadioOutcome(bytes: ByteArray, permit: TransmissionPermit?): TransmissionOutcome =
+        if (if (permit == null) writeToRadio(bytes) else writeToRadio(bytes, permit)) TransmissionOutcome.SUBMITTED else TransmissionOutcome.UNCONFIRMED
     suspend fun readFromRadio(): ByteArray?
     fun close()
+}
+
+internal class GattWriteFence {
+    @Volatile
+    private var quarantined = false
+
+    fun canWrite(): Boolean = !quarantined
+
+    fun quarantine() {
+        quarantined = true
+    }
 }
 
 class AndroidBleGattTransport(
@@ -62,6 +78,7 @@ class AndroidBleGattTransport(
     private var fromRadioChar: BluetoothGattCharacteristic? = null
     private var fromNumChar: BluetoothGattCharacteristic? = null
     private var callbacks: BleGattCallbacks? = null
+    private val writeFence = GattWriteFence()
 
     @Volatile
     private var connectDeferred: CompletableDeferred<Boolean>? = null
@@ -78,6 +95,7 @@ class AndroidBleGattTransport(
 
     @SuppressLint("MissingPermission")
     override suspend fun connect(callbacks: BleGattCallbacks): Boolean {
+        if (!writeFence.canWrite()) return false
         if (!hasBlePermissions()) return false
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             ?: return false
@@ -305,13 +323,23 @@ class AndroidBleGattTransport(
     }
 
     @SuppressLint("MissingPermission")
-    override suspend fun writeToRadio(bytes: ByteArray): Boolean {
-        val activeGatt = gatt ?: return false
-        val char = toRadioChar ?: return false
+    override suspend fun writeToRadio(bytes: ByteArray): Boolean = writeToRadioOutcome(bytes, null) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun writeToRadio(bytes: ByteArray, permit: TransmissionPermit): Boolean = writeToRadioOutcome(bytes, permit) == TransmissionOutcome.SUBMITTED
+
+    override suspend fun writeToRadioOutcome(bytes: ByteArray, permit: TransmissionPermit?): TransmissionOutcome {
+        if (!writeFence.canWrite()) return TransmissionOutcome.NOT_SUBMITTED
+        val activeGatt = gatt ?: return TransmissionOutcome.NOT_SUBMITTED
+        val char = toRadioChar ?: return TransmissionOutcome.NOT_SUBMITTED
         val deferred = CompletableDeferred<Boolean>()
         writeDeferred = deferred
+        var attempted = false
+        var initiatedWrite = false
+        var completedWrite = false
         return try {
-            val initiated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val startWrite = {
+              attempted = true
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 activeGatt.writeCharacteristic(
                     char,
                     bytes,
@@ -323,12 +351,23 @@ class AndroidBleGattTransport(
                 char.value = bytes
                 @Suppress("DEPRECATION")
                 activeGatt.writeCharacteristic(char)
+              }
             }
-            if (!initiated) return false
-            withTimeoutOrNull(5_000L) { deferred.await() } == true
+            val initiated = if (permit == null) startWrite() else permit.submit(startWrite)
+            if (initiated != true) return TransmissionOutcome.NOT_SUBMITTED
+            initiatedWrite = true
+            completedWrite = withTimeoutOrNull(5_000L) { deferred.await() } == true
+            if (completedWrite) TransmissionOutcome.SUBMITTED else {
+                writeFence.quarantine()
+                TransmissionOutcome.UNCONFIRMED
+            }
         } catch (_: SecurityException) {
-            false
+            if (attempted) {
+                writeFence.quarantine()
+                TransmissionOutcome.UNCONFIRMED
+            } else TransmissionOutcome.NOT_SUBMITTED
         } finally {
+            if (initiatedWrite && !completedWrite) writeFence.quarantine()
             writeDeferred = null
         }
     }
@@ -351,6 +390,7 @@ class AndroidBleGattTransport(
 
     @SuppressLint("MissingPermission")
     override fun close() {
+        writeFence.quarantine()
         completeAllPendingWithFailure()
         callbacks = null
         toRadioChar = null

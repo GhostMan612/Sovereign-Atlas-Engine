@@ -37,4 +37,16 @@ class ReleaseSigningGuardTest {
         }.orEmpty()
         assertTrue(keystoreFiles.isEmpty())
     }
+
+    @Test
+    fun candidateBuildTypeIsExplicitlyUnsignedWithoutRelaxingReleaseGuard() {
+        val content = File(resolveAppModuleDir(), "build.gradle").readText(Charsets.UTF_8)
+        val candidate = Regex("(?s)candidate\\s*\\{([^}]*)}").find(content)?.groupValues?.get(1)
+        assertTrue(candidate != null)
+        assertTrue(candidate!!.contains("initWith release"))
+        assertTrue(candidate.contains("signingConfig null"))
+        assertTrue(candidate.contains("matchingFallbacks = ['release']"))
+        assertTrue(content.contains("if (isRelease && !hasReleaseSigning)"))
+        assertTrue(content.contains("signingConfig signingConfigs.release"))
+    }
 }

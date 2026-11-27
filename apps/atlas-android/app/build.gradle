@@ -94,6 +94,11 @@ android {
                 signingConfig signingConfigs.release
             }
         }
+        candidate {
+            initWith release
+            signingConfig null
+            matchingFallbacks = ['release']
+        }
     }
 
     // Fail-closed: any release task in the execution graph without complete,

@@ -1,0 +1,9 @@
+# Generic protobuf author request
+
+This helper prepares one fresh Responses API request for the generic wire-format assignment. It sends the bounded instruction and the draft's content starting at `## Scope`; it does not include earlier conversation, repository contents, or the draft's provenance notes. It explicitly supplies an empty tools list, does not supply a conversation or previous response, and sets `store` to `false`. The service and model cannot be assumed independent of their training data. Legal and provenance review remain open.
+
+Run `python -B tools/generic-protobuf-author/request_author.py` from the repository root to preview the exact input and request hashes without making a network request. After reviewing the instruction and requirements, supply `--send --expected-input-sha256 <reviewed-hash>` to make the billable request using `OPENAI_API_KEY` from the process environment; never paste a key into chat or write it to the repository. The helper refuses a missing or mismatched input hash. `--model` overrides the default model. The helper writes the exact request, raw response, extracted output and their SHA-256 hashes under the ignored `apps/atlas-android/build/wo-c-02a-author/` directory. An incomplete or failed call is not an author deliverable.
+
+Review generated code and provenance, copy it only into a standalone development project, and run independent tests before considering integration. The output is untrusted text and is not executed by this helper. No tool configuration or passing test constitutes legal clearance.
+
+`request_ollama_varint.py` records the historical local-model request method used for the rejected C-02A.1 attempts. The operator has stopped those retries. The locally preserved rejected request and response files are under `local-evidence/`, excluded from Git and separate from build output.

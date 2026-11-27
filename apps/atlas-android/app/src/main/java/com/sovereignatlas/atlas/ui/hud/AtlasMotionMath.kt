@@ -5,6 +5,9 @@
 
 package com.sovereignatlas.atlas.ui.hud
 
+import com.sovereignatlas.atlas.camera.AtlasCameraState
+import com.sovereignatlas.atlas.geo.AtlasCoordinate
+
 object AtlasMotionMath {
     fun shortestAngleDeltaDeg(fromDeg: Float, toDeg: Float): Float {
         var delta = (toDeg - fromDeg) % 360f
@@ -19,6 +22,27 @@ object AtlasMotionMath {
         val normalizedTarget = ((targetDeg % 360f) + 360f) % 360f
         return currentUnwrappedDeg + shortestAngleDeltaDeg(normalizedCurrent, normalizedTarget)
     }
+
+    /**
+     * The camera-animate duration the compass HUD uses: 0 with reduced motion,
+     * 300 ms otherwise. One source — previously the string-anchored
+     * `"Reduced Motion (Snap Compass 5°)"` text lived in this file while the
+     * duration literal lived in AtlasMap, so a change to one never reached the
+     * other.
+     */
+    fun cameraAnimationDurationMs(reducedMotion: Boolean): Int = if (reducedMotion) 0 else 300
+
+    /**
+     * The double-tap / reset-north state change: new center (operator's GPS fix, or
+     * the map's target when there is none), bearing zeroed, zoom and pitch
+     * preserved. Previously the production version in AtlasMap built this with a
+     * compound assignment the test hand-copied, so a change to the reset rule
+     * never touched the test.
+     */
+    fun resetNorthCameraState(
+        current: AtlasCameraState,
+        validFix: AtlasCoordinate?,
+    ): AtlasCameraState = current.copyWith(center = validFix ?: current.center, bearing = 0.0)
 
     fun packDownloadFraction(receivedTiles: Int, totalTiles: Int): Float {
         if (totalTiles <= 0) return 0f

@@ -1,0 +1,173 @@
+name: atlas-ci-safe
+'on':
+  push:
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Report toolchain
+        run: |
+          java -version
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          sdkmanager --list_installed
+      - name: Unit tests
+        id: unit-tests
+        timeout-minutes: 30
+        working-directory: apps/atlas-android
+        run: |
+          chmod +x ./gradlew
+          set +e
+          set -o pipefail
+          ./gradlew :atlas-sdk:test :sdk-consumer:test \
+            :app:testPlayDebugUnitTest :app:testEnterpriseDebugUnitTest \
+            --console=plain \
+            --continue \
+            --stacktrace \
+            --rerun-tasks \
+            --no-build-cache \
+            2>&1 | tee gradle-out.log
+          EXIT=$?
+          set -e
+          exit $EXIT
+      - name: Test A4 candidate checks
+        run: python3 -B -m unittest discover -s tools/a4/tests -v
+      - name: Test distribution hold
+        working-directory: apps/atlas-android
+        run: ./gradlew atlasDistributionGateTest --console=plain
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-test-reports
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            apps/atlas-android/app/build/reports/tests/
+            apps/atlas-android/app/build/test-results/
+            apps/atlas-android/atlas-sdk/build/reports/tests/
+            apps/atlas-android/atlas-sdk/build/test-results/
+            apps/atlas-android/sdk-consumer/build/reports/tests/
+            apps/atlas-android/sdk-consumer/build/test-results/
+            apps/atlas-android/gradle-out.log
+  sdk-consumer-maven:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Android SDK for publishing host build
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Publish atlas-sdk to temporary Maven repository
+        id: publish-sdk
+        working-directory: apps/atlas-android
+        run: |
+          chmod +x ./gradlew
+          REPO_DIR="$GITHUB_WORKSPACE/apps/atlas-android/build/atlas-private-verification/repository"
+          ./gradlew :atlas-sdk:publishMavenJavaPublicationToVerificationRepository \
+            --console=plain \
+            --no-build-cache \
+            --no-daemon
+          ARTIFACT_DIR="$REPO_DIR/com/sovereignatlas/atlas-sdk/1.1.0"
+          test -f "$ARTIFACT_DIR/atlas-sdk-1.1.0.jar"
+          test -f "$ARTIFACT_DIR/atlas-sdk-1.1.0.pom"
+          test -f "$ARTIFACT_DIR/atlas-sdk-1.1.0.module"
+          echo "repo_dir=$REPO_DIR" >> "$GITHUB_OUTPUT"
+      - name: Verify standalone Maven consumer in isolated directory
+        run: |
+          REPO_DIR="${{ steps.publish-sdk.outputs.repo_dir }}"
+          ISO_BASE=$(mktemp -d)
+          ISO_CONSUMER="$ISO_BASE/sdk-consumer"
+          EMPTY_REPO="$ISO_BASE/empty-repo"
+          NO_JAR_REPO="$ISO_BASE/no-jar-repo"
+          NO_META_REPO="$ISO_BASE/no-meta-repo"
+          mkdir -p "$ISO_CONSUMER" "$EMPTY_REPO" "$NO_JAR_REPO" "$NO_META_REPO"
+          cp -R samples/sdk-consumer/. "$ISO_CONSUMER/"
+          cp -R "$REPO_DIR/." "$NO_JAR_REPO/"
+          cp -R "$REPO_DIR/." "$NO_META_REPO/"
+          rm -f "$NO_JAR_REPO"/com/sovereignatlas/atlas-sdk/1.1.0/*.jar*
+          rm -f "$NO_META_REPO"/com/sovereignatlas/atlas-sdk/1.1.0/*.pom*
+          rm -f "$NO_META_REPO"/com/sovereignatlas/atlas-sdk/1.1.0/*.module*
+          rm -f "$NO_META_REPO"/com/sovereignatlas/atlas-sdk/maven-metadata*
+
+          unset ANDROID_HOME ANDROID_SDK_ROOT
+          cd "$ISO_CONSUMER"
+          chmod +x ./gradlew
+          ! grep -rnE "project\(':atlas-sdk'\)|includeBuild\(" settings.gradle build.gradle
+
+          assert_resolution_fails() {
+            local label="$1"
+            shift
+            set +e
+            local out
+            out=$("$@" 2>&1)
+            local rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then
+              echo "ERROR: Expected resolution failure ($label) but Gradle exited 0"
+              echo "$out"
+              exit 1
+            fi
+            if ! printf '%s' "$out" | grep -qE "Could not (find|resolve) (com\.sovereignatlas:atlas-sdk|atlas-sdk-1\.1\.0)"; then
+              echo "ERROR: Failure ($label) did not report missing SDK artifact or metadata"
+              echo "$out"
+              exit 1
+            fi
+            echo "PASS negative check ($label): failed cleanly"
+          }
+
+          assert_resolution_fails "no-repo" ./gradlew test --no-daemon --console=plain
+          assert_resolution_fails "empty-repo" ./gradlew test --no-daemon --console=plain -PatlasSdkRepo="$EMPTY_REPO"
+          assert_resolution_fails "missing-jar" ./gradlew test --no-daemon --console=plain -PatlasSdkRepo="$NO_JAR_REPO"
+          assert_resolution_fails "missing-metadata" ./gradlew test --no-daemon --console=plain -PatlasSdkRepo="$NO_META_REPO"
+
+          ./gradlew dependencies --configuration runtimeClasspath --no-daemon --console=plain -PatlasSdkRepo="$REPO_DIR" > runtime-deps.txt
+          grep -q "com.sovereignatlas:atlas-sdk:1.1.0" runtime-deps.txt
+          ! grep -qiE "com\.android\.|androidx\.|org\.maplibre|com\.google\.firebase" runtime-deps.txt
+
+          set +e
+          set -o pipefail
+          ./gradlew test --no-daemon --no-build-cache --rerun-tasks --console=plain -PatlasSdkRepo="$REPO_DIR" 2>&1 | tee gradle-out.log
+          EXIT=$?
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/sdk-consumer-maven-reports"
+          cp -R build/reports/tests "$GITHUB_WORKSPACE/sdk-consumer-maven-reports/reports-tests" || true
+          cp -R build/test-results "$GITHUB_WORKSPACE/sdk-consumer-maven-reports/test-results" || true
+          cp runtime-deps.txt gradle-out.log "$GITHUB_WORKSPACE/sdk-consumer-maven-reports/" || true
+          exit "$EXIT"
+      - name: Upload Standalone Consumer Test Reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-sdk-consumer-maven-reports
+          if-no-files-found: error
+          retention-days: 7
+          path: sdk-consumer-maven-reports/

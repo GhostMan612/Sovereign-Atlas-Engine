@@ -119,13 +119,8 @@ class CompassInteractionTest {
         }
 
         assertNotNull(validFix)
-        val targetCenter = validFix!!
-        val resetCamera = AtlasCameraState(
-            center = targetCenter,
-            zoom = initialCamera.zoom,
-            bearing = 0.0,
-            pitch = initialCamera.pitch,
-        )
+        // Now calls the production reset helper — not a hand-rolled duplicate.
+        val resetCamera = AtlasMotionMath.resetNorthCameraState(initialCamera, validFix)
 
         assertFalse(headingUp)
         assertFalse(pendingHeadingUp)
@@ -215,12 +210,9 @@ class CompassInteractionTest {
 
     @Test
     fun reducedMotionHonorsZeroAnimationDuration() {
-        fun cameraAnimationDurationMs(reducedMotion: Boolean): Int {
-            return if (reducedMotion) 0 else 300
-        }
-
-        assertEquals(0, cameraAnimationDurationMs(reducedMotion = true))
-        assertEquals(300, cameraAnimationDurationMs(reducedMotion = false))
+        // Calls the production helper, not a local re-implementation.
+        assertEquals(0, AtlasMotionMath.cameraAnimationDurationMs(reducedMotion = true))
+        assertEquals(300, AtlasMotionMath.cameraAnimationDurationMs(reducedMotion = false))
     }
 
     @Test

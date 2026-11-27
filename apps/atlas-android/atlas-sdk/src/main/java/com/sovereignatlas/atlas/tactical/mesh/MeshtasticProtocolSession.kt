@@ -14,15 +14,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
 
 class MeshtasticProtocolSession(
-    private val wireAdapter: MeshtasticWireAdapter = MeshtasticWireAdapter(),
+    private val wireAdapter: MeshtasticCodec,
     private val clockMs: () -> Long = { System.currentTimeMillis() },
+    private val acknowledgementTimeoutMs: Long = 120_000L,
 ) {
+    constructor() : this(MeshtasticWireAdapter(), { System.currentTimeMillis() }, 120_000L)
+
+    constructor(
+        wireAdapter: MeshtasticWireAdapter = MeshtasticWireAdapter(),
+        clockMs: () -> Long = { System.currentTimeMillis() },
+        acknowledgementTimeoutMs: Long = 120_000L,
+    ) : this(MeshtasticLegacyCodec(wireAdapter), clockMs, acknowledgementTimeoutMs)
+
     data class PreparedTransmission(
         val packet: MeshPacket,
         val toRadioBytes: ByteArray,
     )
 
     private val lock = Any()
+    private data class PendingDelivery(val local: Long, val peer: Long, val channel: Int, val wantsAck: Boolean, val queuedAt: Long)
+    private val pendingDeliveries = LinkedHashMap<Long, PendingDelivery>()
     private val packetIdSeq = AtomicLong((clockMs() and 0x3FFFFFFFL).coerceAtLeast(1L))
     private val configNonceSeq = AtomicLong(1000L)
 
@@ -62,6 +73,7 @@ class MeshtasticProtocolSession(
 
     fun beginConnecting() {
         synchronized(lock) {
+            pendingDeliveries.clear()
             activeConfigNonce = null
             myNodeNum = null
             metadata = null
@@ -113,7 +125,7 @@ class MeshtasticProtocolSession(
 
     fun prepareOutgoingPacket(
         packet: MeshPacket,
-        maxEnvelopeBytes: Int = MeshtasticWireAdapter.MAX_TO_FROM_RADIO_SIZE,
+        maxEnvelopeBytes: Int = MeshtasticCodec.MAX_TO_FROM_RADIO_SIZE,
     ): PreparedTransmission? {
         val normalized: MeshPacket
         synchronized(lock) {
@@ -123,6 +135,7 @@ class MeshtasticProtocolSession(
                 return null
             }
             val resolvedId = if (packet.id != 0L) (packet.id and 0xFFFFFFFFL) else allocatePacketId()
+            if (resolvedId == 0L || _deliveryStates.value.containsKey(resolvedId)) return null
             val resolvedFrom = if (packet.from != 0L) (packet.from and 0xFFFFFFFFL) else (myNodeNum ?: 0L)
             normalized = packet.copy(from = resolvedFrom, id = resolvedId)
         }
@@ -141,25 +154,46 @@ class MeshtasticProtocolSession(
             return null
         }
 
-        recordDeliveryUpdate(
-            PacketDeliveryUpdate(
+        val queued = PacketDeliveryUpdate(
                 packetId = normalized.id,
                 stage = PacketDeliveryStage.QUEUED,
                 timestampMs = clockMs(),
             )
-        )
+        synchronized(lock) {
+            if (!_isReady.value || _deliveryStates.value.containsKey(normalized.id)) return null
+            pendingDeliveries[normalized.id] = PendingDelivery(normalized.from, normalized.to and 0xFFFFFFFFL, normalized.channel, normalized.wantAck, queued.timestampMs)
+            _deliveryStates.value = _deliveryStates.value + (normalized.id to queued)
+        }
+        _deliveryUpdates.tryEmit(queued)
         return PreparedTransmission(normalized, toRadioBytes)
     }
 
     fun markTransportWriteFailed(packetId: Long, reason: String) {
-        recordDeliveryUpdate(
-            PacketDeliveryUpdate(
-                packetId = packetId and 0xFFFFFFFFL,
+        val id = packetId and 0xFFFFFFFFL
+        val update: PacketDeliveryUpdate
+        synchronized(lock) {
+            if (pendingDeliveries.remove(id) == null) return
+            update = PacketDeliveryUpdate(
+                packetId = id,
                 stage = PacketDeliveryStage.FAILED,
                 errorMessage = reason,
                 timestampMs = clockMs(),
             )
-        )
+            _deliveryStates.value = _deliveryStates.value + (id to update)
+        }
+        _deliveryUpdates.tryEmit(update)
+    }
+
+    fun markTransportWriteUnconfirmed(packetId: Long, reason: String) {
+        val id = packetId and 0xFFFFFFFFL
+        val update: PacketDeliveryUpdate
+        synchronized(lock) {
+            if (!pendingDeliveries.containsKey(id)) return
+            if (_deliveryStates.value[id]?.stage != PacketDeliveryStage.QUEUED) return
+            update = PacketDeliveryUpdate(id, PacketDeliveryStage.UNCONFIRMED, errorMessage = reason, timestampMs = clockMs())
+            _deliveryStates.value = _deliveryStates.value + (id to update)
+        }
+        _deliveryUpdates.tryEmit(update)
     }
 
     fun buildPingPacket(targetNodeNum: Long): MeshPacket {
@@ -189,6 +223,7 @@ class MeshtasticProtocolSession(
         var rebooted = false
 
         synchronized(lock) {
+            expirePendingDeliveriesLocked(clockMs(), extraDeliveryFailures)
             when (decoded) {
                 is DecodedFromRadio.MyInfo -> {
                     myNodeNum = decoded.myNodeNum
@@ -214,7 +249,9 @@ class MeshtasticProtocolSession(
                 }
                 is DecodedFromRadio.QueueAck -> {
                     val existing = _deliveryStates.value[decoded.meshPacketId]
+                    val pending = pendingDeliveries[decoded.meshPacketId]
                     val update = when {
+                        pending == null || (existing?.stage != PacketDeliveryStage.QUEUED && existing?.stage != PacketDeliveryStage.UNCONFIRMED && existing?.stage != PacketDeliveryStage.RADIO_ACCEPTED) -> null
                         decoded.result != 0 -> PacketDeliveryUpdate(
                             packetId = decoded.meshPacketId,
                             stage = PacketDeliveryStage.FAILED,
@@ -222,7 +259,7 @@ class MeshtasticProtocolSession(
                             errorMessage = "Radio queue error ${decoded.result}",
                             timestampMs = clockMs(),
                         )
-                        existing == null || existing.stage == PacketDeliveryStage.QUEUED -> PacketDeliveryUpdate(
+                        existing?.stage == PacketDeliveryStage.QUEUED || existing?.stage == PacketDeliveryStage.UNCONFIRMED -> PacketDeliveryUpdate(
                             packetId = decoded.meshPacketId,
                             stage = PacketDeliveryStage.RADIO_ACCEPTED,
                             timestampMs = clockMs(),
@@ -230,6 +267,9 @@ class MeshtasticProtocolSession(
                         else -> null
                     }
                     if (update != null) {
+                        if (update.stage == PacketDeliveryStage.FAILED || !pending!!.wantsAck || pending.peer == 0xFFFFFFFFL || pending.peer == 0L) {
+                            pendingDeliveries.remove(update.packetId)
+                        }
                         _deliveryStates.value = _deliveryStates.value + (update.packetId to update)
                         deliveryToEmit = update
                     }
@@ -255,9 +295,14 @@ class MeshtasticProtocolSession(
                     if (_isReady.value && _connectionState.value == RadioConnectionState.CONNECTED) {
                         _connectionState.value = RadioConnectionState.STREAMING
                     }
-                    if (packet.portNum == PortNum.PORTNUM_ROUTING_APP && packet.requestId != 0L) {
+                    val pending = pendingDeliveries[packet.requestId]
+                    if (packet.portNum == PortNum.PORTNUM_ROUTING_APP && packet.requestId != 0L &&
+                        pending != null && pending.wantsAck && pending.peer != 0L && pending.peer != 0xFFFFFFFFL &&
+                        packet.from == pending.peer && packet.to == pending.local && packet.channel == pending.channel &&
+                        packet.routingError != null
+                    ) {
                         val err = packet.routingError
-                        val stage = if (err == null || err == 0) {
+                        val stage = if (err == 0) {
                             PacketDeliveryStage.PEER_DELIVERED
                         } else {
                             PacketDeliveryStage.FAILED
@@ -269,6 +314,7 @@ class MeshtasticProtocolSession(
                             timestampMs = clockMs(),
                         )
                         _deliveryStates.value = _deliveryStates.value + (update.packetId to update)
+                        pendingDeliveries.remove(update.packetId)
                         deliveryToEmit = update
                     }
                     if (packet.from != 0L && packet.from != myNodeNum) {
@@ -295,13 +341,14 @@ class MeshtasticProtocolSession(
         out: MutableList<PacketDeliveryUpdate>,
     ) {
         val nextMap = LinkedHashMap(_deliveryStates.value)
-        for ((packetId, existing) in _deliveryStates.value) {
-            if (existing.stage == PacketDeliveryStage.QUEUED ||
+        for (packetId in pendingDeliveries.keys) {
+            val existing = _deliveryStates.value[packetId] ?: continue
+            if (existing.stage == PacketDeliveryStage.QUEUED || existing.stage == PacketDeliveryStage.UNCONFIRMED ||
                 existing.stage == PacketDeliveryStage.RADIO_ACCEPTED
             ) {
                 val failed = PacketDeliveryUpdate(
                     packetId = packetId,
-                    stage = PacketDeliveryStage.FAILED,
+                    stage = PacketDeliveryStage.UNCONFIRMED,
                     errorMessage = reason,
                     timestampMs = timestampMs,
                 )
@@ -309,9 +356,31 @@ class MeshtasticProtocolSession(
                 out.add(failed)
             }
         }
+        pendingDeliveries.clear()
         if (out.isNotEmpty()) {
             _deliveryStates.value = nextMap
         }
+    }
+
+    fun expireDeliveryTimeouts() {
+        val expired = ArrayList<PacketDeliveryUpdate>()
+        synchronized(lock) { expirePendingDeliveriesLocked(clockMs(), expired) }
+        expired.forEach { _deliveryUpdates.tryEmit(it) }
+    }
+
+    private fun expirePendingDeliveriesLocked(now: Long, out: MutableList<PacketDeliveryUpdate>) {
+        val iterator = pendingDeliveries.iterator()
+        val next = LinkedHashMap(_deliveryStates.value)
+        while (iterator.hasNext()) {
+            val (id, pending) = iterator.next()
+            if (now < pending.queuedAt || now - pending.queuedAt >= acknowledgementTimeoutMs) {
+                iterator.remove()
+                val update = PacketDeliveryUpdate(id, PacketDeliveryStage.UNCONFIRMED, errorMessage = "Delivery acknowledgment timed out", timestampMs = now)
+                next[id] = update
+                out.add(update)
+            }
+        }
+        if (out.isNotEmpty()) _deliveryStates.value = next
     }
 
     private fun enrichNodeFromPacketLocked(packet: MeshPacket) {

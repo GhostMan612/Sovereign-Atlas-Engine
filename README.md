@@ -42,13 +42,9 @@ See `AGENTS.md` for the one-gate-per-phase local rule.
 
 ## Release Packaging
 
-Release APK builds remain gated by `RULES.md` §1.6: AI sessions here run host unit tests only and never assemble release APKs or store keystore secrets. Humans build/sign locally in Android Studio using gitignored `apps/atlas-android/app/keystore.properties` and `apps/atlas-android/app/google-services.json` (or `-PKEYSTORE_*` / `KEYSTORE_*` environment variables).
+Release distribution remains **NO-GO** pending rights review and an independently controlled publisher. No workflow in this checkout signs or publishes a release. The proposed local `.github/workflows/atlas-ci-safe.yml` runs development verification only, including the host suites, A4 candidate checks, distribution-hold checks and the isolated Maven consumer. It has a separate identity from the historical `atlas.yaml` workflow, which remains disabled remotely; changing this checkout cannot secure historical refs.
 
-Automated signed releases run in `.github/workflows/atlas.yaml` (`release` job, gated by `needs: [verify, sdk-consumer-maven]`):
-
-- **Triggers:** semver tag pushes (`v*`, validated as `vMAJOR.MINOR.PATCH[-PRERELEASE]`) or manual `workflow_dispatch` restricted strictly to `refs/heads/main`.
-- **Fail-closed signing:** `apps/atlas-android/app/build.gradle` rejects any release task before packaging if `storeFile`/`KEYSTORE_PATH`, `storePassword`/`KEYSTORE_PASSWORD`, `keyAlias`/`KEY_ALIAS`, or `keyPassword`/`KEY_PASSWORD` is missing/empty or the keystore file is missing/empty. No unsigned APKs are ever published.
-- **Verification & delivery:** release builds run with `set +x`, `umask 077`, and exit cleanup of ephemeral keystore/Firebase files; verify both `app-play-release.apk` and `app-enterprise-release.apk` with `apksigner verify --verbose --print-certs`; check APK entries for zero secret artifacts; emit `SHA256SUMS.txt` and `release-manifest.json`; upload with `if-no-files-found: error` (`retention-days: 90`); and publish a GitHub Release for semver tags. Manual `workflow_dispatch` with `dry_run=true` verifies the fail-closed Gradle guard safely without credentials or APK output.
+Release APK builds remain subject to `RULES.md` §1.6. The Gradle signing guard is not distribution authorization. Do not add signing credentials to the candidate repository or re-enable the historical workflow. See `docs/atlas-production/evidence/DISTRIBUTION_GATE.md` for the unresolved release controls.
 
 ## Lineage
 
