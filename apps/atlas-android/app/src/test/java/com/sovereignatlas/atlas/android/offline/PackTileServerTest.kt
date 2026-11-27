@@ -689,6 +689,47 @@ final class PackTileServerTest {
     }
 
     @Test
+    fun stopDrainsClientsWhileWorkersRemoveThemConcurrently() {
+        repeat(8) {
+            val server = PackTileServer(
+                packsDir = { seededDir() },
+                limits = PackTileServerLimits(
+                    maxWorkers = 8,
+                    maxQueuedRequests = 8,
+                    socketReadTimeoutMs = 30_000,
+                    requestTotalTimeoutMs = 30_000L,
+                ),
+            )
+            val port = server.start()
+            val stalled = mutableListOf<Socket>()
+            try {
+                repeat(8) {
+                    val client = Socket("127.0.0.1", port)
+                    stalled += client
+                    client.getOutputStream().write(
+                        "GET /pack-000001/10/1/2.png HTTP/1.1\r\n".toByteArray(Charsets.US_ASCII),
+                    )
+                    client.getOutputStream().flush()
+                }
+                val deadline = System.nanoTime() + 2_000_000_000L
+                while (server.activeConnectionCount() < 8 && System.nanoTime() < deadline) {
+                    Thread.sleep(2)
+                }
+                server.stop()
+                assertEquals(0, server.activeConnectionCount())
+            } finally {
+                for (client in stalled) {
+                    try {
+                        client.close()
+                    } catch (_: Throwable) {
+                        Unit
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun abruptClientDisconnectsDoNotLeakConnectionsOrWorkers() {
         val server = PackTileServer(packsDir = { seededDir() })
         val port = server.start()

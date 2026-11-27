@@ -174,10 +174,10 @@ class PackTileServer(
             acceptThread = null
         }
         closeQuietly(serverToClose)
-        for (client in activeClients.toList()) {
-            activeClients.remove(client)
+        activeClients.forEach(java.util.function.Consumer<Socket> { client ->
             closeQuietly(client)
-        }
+        })
+        activeClients.clear()
         if (poolToShutdown != null) {
             poolToShutdown.shutdownNow()
             try {
